@@ -178,8 +178,7 @@ struct SidebarView: View {
                             .contextMenu {
                                 Button("查看整组") { store.scope = group.id; store.showGroupOverview = true }
                                 Button("重命名…") { store.renameGroup = group }
-                                Button("确认全景") { store.scope = group.id; store.confirmGroup() }.disabled(store.isReadingMetadata)
-                                Button("归档整组…") { store.archiveGroup = group }.disabled(!store.canArchive)
+                                Button("移动整组到新文件夹…") { store.archiveGroup = group }.disabled(!store.canArchive)
                                 Button("取消分组") { store.dissolveGroup(group) }.disabled(store.isReadingMetadata)
                             }
                     }
