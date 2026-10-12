@@ -33,7 +33,7 @@ private struct BrowserSession: Codable {
     private var previewTask: Task<Void, Never>?
     private var previewID = UUID()
     private var previewQueue: [PhotoFile] = []
-    @Published var status = "选择照片目录开始浏览"
+    @Published var status = L10n.text("选择照片目录开始浏览")
     @Published var errorMessage: String?
     @Published var archiveGroup: PhotoGroup?
     @Published var showHistory = false
@@ -120,7 +120,7 @@ private struct BrowserSession: Codable {
         guard !isMoving else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
-        panel.prompt = "打开照片目录"; panel.directoryURL = directory
+        panel.prompt = L10n.text("打开照片目录"); panel.directoryURL = directory
         if panel.runModal() == .OK, let url = panel.url { load(url) }
     }
 
@@ -131,7 +131,7 @@ private struct BrowserSession: Codable {
         if isFullscreenPreview { closeFullscreenPreview() }
         metadataJob?.cancel(); metadataJob = nil; isReadingMetadata = false; metadataID = UUID()
         let ticket = UUID(); loadID = ticket
-        directory = url; isLoading = true; status = "扫描照片并合并同名格式…"
+        directory = url; isLoading = true; status = L10n.text("扫描照片并合并同名格式…")
         selectedFolderID = nil
         navigationScrollTarget = nil
         assets = []; groups = []; subdirectories = []; selection = []; focusedID = nil; preferredFileID = nil; scope = "all"; search = ""; showGroupOverview = false
@@ -158,12 +158,12 @@ private struct BrowserSession: Codable {
                                 photos[index].metadata = saved.value
                             }
                         }
-                        note = "已恢复保存的分组"
+                        note = L10n.text("已恢复保存的分组")
                     } else {
                         let csv = url.appendingPathComponent("全景素材筛选/全景候选文件清单.csv")
                         if FileManager.default.fileExists(atPath: csv.path) {
                             imported = try Grouping.importCSV(Data(contentsOf: csv), assets: photos)
-                            note = "已导入已有全景清单"
+                            note = L10n.text("已导入已有全景清单")
                         }
                     }
                     return (photos, imported, note, folders)
@@ -182,14 +182,14 @@ private struct BrowserSession: Codable {
                 focusedID = assets.first?.id
                 if let focusedID { selection = [focusedID] }
                 isLoading = false
-                status = "\(assets.count) 张照片 · \(totalFiles) 个图像文件 · \(groups.count) 个分组" + (result.2.isEmpty ? "" : " · \(result.2)")
+                status = L10n.text("\(assets.count) 张照片 · \(totalFiles) 个图像文件 · \(groups.count) 个分组") + (result.2.isEmpty ? "" : " · \(result.2)")
                 UserDefaults.standard.set(url.path, forKey: "lastDirectory")
                 try saveSession()
                 refreshHistory()
                 startPreviewGeneration()
             } catch {
                 guard loadID == ticket else { return }
-                isLoading = false; status = "目录加载失败"; report(error)
+                isLoading = false; status = L10n.text("目录加载失败"); report(error)
             }
         }
     }
@@ -230,7 +230,7 @@ private struct BrowserSession: Codable {
             guard previewID == ticket, !Task.isCancelled else { return }
             do { try await thumbnails.trim(protecting: assets.map(\.preferred)) }
             catch is CancellationError { return }
-            catch { previewFailureDetails += "\n缓存清理失败：\(error.localizedDescription)" }
+            catch { previewFailureDetails += L10n.text("\n缓存清理失败：\(error.localizedDescription)") }
             guard previewID == ticket, !Task.isCancelled else { return }
             isGeneratingPreviews = false; previewTask = nil
         }
@@ -266,15 +266,15 @@ private struct BrowserSession: Codable {
     func editPath() { pathText = directory?.path ?? ""; editingPath = true }
     func openTypedPath() {
         let path = (pathText.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
-        guard path.hasPrefix("/") else { report(BrowserFailure.message("请输入绝对路径，例如 /Volumes/照片库，或 ~/Pictures。")); return }
+        guard path.hasPrefix("/") else { report(BrowserFailure.message(L10n.text("请输入绝对路径，例如 /Volumes/照片库，或 ~/Pictures。"))); return }
         load(URL(fileURLWithPath: path, isDirectory: true))
     }
     func rename(_ group: PhotoGroup, to input: String) {
         guard !isMoving, let index = groups.firstIndex(where: { $0.id == group.id }) else { return }
         let name = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, !name.contains("\0"), !name.contains("\n") else { report(BrowserFailure.message("请输入有效的分组名称。")); return }
+        guard !name.isEmpty, !name.contains("\0"), !name.contains("\n") else { report(BrowserFailure.message(L10n.text("请输入有效的分组名称。"))); return }
         groups[index].name = name; renameGroup = nil
-        persistChanges("分组已重命名为“\(name)”")
+        persistChanges(L10n.text("分组已重命名为“\(name)”"))
     }
     func toggleFullscreenPreview() {
         guard !isMoving, selectedFolderID == nil, focusedFile != nil else { return }
@@ -371,11 +371,11 @@ private struct BrowserSession: Codable {
 
     func createGroup() {
         let ids = visibleAssets.filter { selection.contains($0.id) }.map(\.id)
-        guard ids.count >= 2 else { report(BrowserFailure.message("请选择至少两张照片。⌘ 点击可多选，⇧ 点击可选择连续范围。")); return }
+        guard ids.count >= 2 else { report(BrowserFailure.message(L10n.text("请选择至少两张照片。⌘ 点击可多选，⇧ 点击可选择连续范围。"))); return }
         removeMembership(ids)
-        let group = PhotoGroup(name: "手动组 \(groups.count + 1)", assetIDs: ids)
+        let group = PhotoGroup(name: L10n.text("手动组 \(groups.count + 1)"), assetIDs: ids)
         groups.append(group); scope = group.id; showGroupOverview = true
-        persistChanges("已创建分组，共 \(ids.count) 张照片")
+        persistChanges(L10n.text("已创建分组，共 \(ids.count) 张照片"))
     }
 
     func splitGroup() {
@@ -384,7 +384,7 @@ private struct BrowserSession: Codable {
             let split = try Grouping.split(group, at: id)
             guard let index = groups.firstIndex(where: { $0.id == group.id }) else { return }
             groups.replaceSubrange(index...index, with: split); scope = split[1].id
-            persistChanges("已从当前照片处分成两组")
+            persistChanges(L10n.text("已从当前照片处分成两组"))
         } catch { report(error) }
     }
 
@@ -394,27 +394,27 @@ private struct BrowserSession: Codable {
         let merged = PhotoGroup(name: group.name + " + " + target.name, assetIDs: assets.filter { combined.contains($0.id) }.map(\.id))
         groups.removeAll { $0.id == group.id || $0.id == target.id }
         groups.append(merged); scope = merged.id; showMerge = false
-        persistChanges("已合并两个分组")
+        persistChanges(L10n.text("已合并两个分组"))
     }
 
     func removeFromGroup() {
         guard let group = currentGroup, let index = groups.firstIndex(where: { $0.id == group.id }) else { return }
         groups[index].assetIDs.removeAll { selection.contains($0) }
         if groups[index].assetIDs.isEmpty { groups.remove(at: index); scope = "ungrouped" }
-        changeScope(); persistChanges("已将所选照片移出分组，原文件未移动")
+        changeScope(); persistChanges(L10n.text("已将所选照片移出分组，原文件未移动"))
     }
 
     func dissolveGroup(_ group: PhotoGroup) {
         groups.removeAll { $0.id == group.id }
         if scope == group.id { scope = "all"; changeScope() }
-        persistChanges("已取消分组，原文件未移动")
+        persistChanges(L10n.text("已取消分组，原文件未移动"))
     }
 
     func autoGroup() {
         guard let directory, !isReadingMetadata, !isMoving, !assets.isEmpty else { return }
         let snapshot = assets, job = MetadataReader(), ticket = UUID()
         metadataJob = job; metadataID = ticket; isReadingMetadata = true
-        status = "读取 \(snapshot.count) 张照片的拍摄信息…NAS 首次读取可能需要几分钟，可继续浏览"
+        status = L10n.text("读取 \(snapshot.count) 张照片的拍摄信息…NAS 首次读取可能需要几分钟，可继续浏览")
         Task {
             do {
                 let metadata = try await Task.detached(priority: .utility) { try job.read(directory: directory, assets: snapshot) }.value
@@ -422,18 +422,18 @@ private struct BrowserSession: Codable {
                 for index in assets.indices { assets[index].metadata = metadata[assets[index].id] }
                 groups = Grouping.candidates(assets)
                 scope = "all"; showGroupOverview = false; metadataJob = nil; isReadingMetadata = false
-                persistChanges("生成 \(groups.count) 个候选组；请检查画面重叠，自动分组不代表已确认全景")
+                persistChanges(L10n.text("生成 \(groups.count) 个候选组；请检查画面重叠，自动分组不代表已确认全景"))
             } catch {
                 guard metadataID == ticket else { return }
                 metadataJob = nil; isReadingMetadata = false
-                if error is CancellationError { status = "已取消自动分组" } else { status = "自动分组失败"; report(error) }
+                if error is CancellationError { status = L10n.text("已取消自动分组") } else { status = L10n.text("自动分组失败"); report(error) }
             }
         }
     }
 
     func cancelMetadata() {
         metadataID = UUID(); metadataJob?.cancel(); metadataJob = nil; isReadingMetadata = false
-        status = "已取消自动分组，已有分组保留"
+        status = L10n.text("已取消自动分组，已有分组保留")
     }
 
     func importCSV() {
@@ -441,7 +441,7 @@ private struct BrowserSession: Codable {
         if panel.runModal() == .OK, let url = panel.url {
             do {
                 groups = try Grouping.importCSV(Data(contentsOf: url), assets: assets)
-                scope = "all"; changeScope(); persistChanges("已导入 \(groups.count) 个分组")
+                scope = "all"; changeScope(); persistChanges(L10n.text("已导入 \(groups.count) 个分组"))
             } catch { report(error) }
         }
     }
@@ -459,9 +459,9 @@ private struct BrowserSession: Codable {
     }
 
     func archive(_ plan: ArchivePlan) {
-        guard canArchive else { report(BrowserFailure.message("请先完成当前任务或恢复未完成的移动记录。")); return }
+        guard canArchive else { report(BrowserFailure.message(L10n.text("请先完成当前任务或恢复未完成的移动记录。"))); return }
         cancelPreviewGeneration()
-        isMoving = true; archiveGroup = nil; status = "正在移动整组文件，请勿退出…"
+        isMoving = true; archiveGroup = nil; status = L10n.text("正在移动整组文件，请勿退出…")
         let worker = engine
         Task {
             do {
@@ -477,17 +477,17 @@ private struct BrowserSession: Codable {
                 selection = []; scope = "all"; focusedID = assets.first?.id; preferredFileID = nil; showGroupOverview = false
                 if let focusedID { selection = [focusedID] }
                 selectionAnchorID = focusedID; rangeSelectionBase = nil
-                isMoving = false; persistChanges("已移动 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件，可在移动记录中撤销")
+                isMoving = false; persistChanges(L10n.text("已移动 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件，可在移动记录中撤销"))
                 refreshHistory()
                 startPreviewGeneration()
-            } catch { isMoving = false; startPreviewGeneration(); status = "移动失败，请查看提示和移动记录"; report(error); refreshHistory() }
+            } catch { isMoving = false; startPreviewGeneration(); status = L10n.text("移动失败，请查看提示和移动记录"); report(error); refreshHistory() }
         }
     }
 
     func undo(_ record: ArchiveRecord) {
         guard !isMoving else { return }
         cancelPreviewGeneration()
-        isMoving = true; status = "正在撤销移动…"; let worker = engine
+        isMoving = true; status = L10n.text("正在撤销移动…"); let worker = engine
         Task {
             do {
                 let restored = try await Task.detached(priority: .userInitiated) { try worker.undo(record) }.value
@@ -514,7 +514,7 @@ private struct BrowserSession: Codable {
     }
 
     private func persistChanges(_ message: String) {
-        do { try saveSession(); status = message } catch { report(error); status = "操作已执行，但分组保存失败，请勿退出" }
+        do { try saveSession(); status = message } catch { report(error); status = L10n.text("操作已执行，但分组保存失败，请勿退出") }
     }
 
     private func sessionURL(for directory: URL) -> URL {

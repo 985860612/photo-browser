@@ -41,13 +41,13 @@ public actor ThumbnailCache {
             try check()
             guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
                   var cg = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {
-                throw BrowserFailure.message("系统无法解码 \(file.format) 高清原图。请切换同名 HIF/JPG，或在 Camera Raw 中打开。")
+                throw BrowserFailure.message(L10n.text("系统无法解码 \(file.format) 高清原图。请切换同名 HIF/JPG，或在 Camera Raw 中打开。"))
             }
             let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]
             let orientation = (properties?[kCGImagePropertyOrientation as String] as? NSNumber)?.int32Value ?? 1
             if orientation != 1 {
                 let ci = CIImage(cgImage: cg).oriented(forExifOrientation: orientation)
-                guard let rotated = context.createCGImage(ci, from: ci.extent) else { throw BrowserFailure.message("无法校正高清照片方向。") }
+                guard let rotated = context.createCGImage(ci, from: ci.extent) else { throw BrowserFailure.message(L10n.text("无法校正高清照片方向。")) }
                 cg = rotated
             }
             try check()
@@ -146,17 +146,17 @@ public actor ThumbnailCache {
             }
         }
         if source == nil { source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) }
-        guard let source else { throw BrowserFailure.message("无法读取 \(file.url.lastPathComponent)") }
+        guard let source else { throw BrowserFailure.message(L10n.text("无法读取 \(file.url.lastPathComponent)")) }
         let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
                                       kCGImageSourceThumbnailMaxPixelSize: maximum,
                                       kCGImageSourceCreateThumbnailWithTransform: true,
                                       kCGImageSourceShouldCacheImmediately: true]
         guard var cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            throw BrowserFailure.message("系统无法生成 \(file.format) 预览：\(file.url.lastPathComponent)。可切换同名其他格式或在 Finder 打开原文件。")
+            throw BrowserFailure.message(L10n.text("系统无法生成 \(file.format) 预览：\(file.url.lastPathComponent)。可切换同名其他格式或在 Finder 打开原文件。"))
         }
         if embedded, orientation != 1 {
             let ci = CIImage(cgImage: cg).oriented(forExifOrientation: orientation)
-            guard let rotated = context.createCGImage(ci, from: ci.extent) else { throw BrowserFailure.message("无法校正照片方向。") }
+            guard let rotated = context.createCGImage(ci, from: ci.extent) else { throw BrowserFailure.message(L10n.text("无法校正照片方向。")) }
             cg = rotated
         }
         try check()
@@ -164,10 +164,10 @@ public actor ThumbnailCache {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let mutable = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(mutable, "public.jpeg" as CFString, 1, nil) else {
-            throw BrowserFailure.message("无法创建预览缓存：\(file.url.lastPathComponent)")
+            throw BrowserFailure.message(L10n.text("无法创建预览缓存：\(file.url.lastPathComponent)"))
         }
         CGImageDestinationAddImage(destination, cg, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else { throw BrowserFailure.message("无法保存预览缓存：\(file.url.lastPathComponent)") }
+        guard CGImageDestinationFinalize(destination) else { throw BrowserFailure.message(L10n.text("无法保存预览缓存：\(file.url.lastPathComponent)")) }
         try check()
         try (mutable as Data).write(to: cachedURL, options: .atomic)
         try check()

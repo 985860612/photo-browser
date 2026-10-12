@@ -57,7 +57,7 @@ public struct PhotoGroup: Codable, Sendable, Identifiable {
     public var assetIDs: [String]
     public var confidence: GroupConfidence
     public var reason: String
-    public init(id: String = UUID().uuidString, name: String, assetIDs: [String], confidence: GroupConfidence = .manual, reason: String = "手动选择的照片") {
+    public init(id: String = UUID().uuidString, name: String, assetIDs: [String], confidence: GroupConfidence = .manual, reason: String = L10n.text("手动选择的照片")) {
         self.id = id; self.name = name; self.assetIDs = assetIDs; self.confidence = confidence; self.reason = reason
     }
 }
