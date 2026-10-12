@@ -155,6 +155,8 @@ struct LargePreviewView: View {
                 if let failure, thumbnail != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure) }
                 Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).controlSize(.small)
                     .help(photo.map { "原图 \($0.isHDR ? "HDR" : "SDR") · \($0.bitsPerComponent) 位" } ?? "HDR / EDR 预览")
+                Toggle("RAW 优先", isOn: $store.preferRawPreview).toggleStyle(.switch).controlSize(.small)
+                    .font(.caption).help("开启时优先预览 RAW，关闭时优先预览 HIF/JPG；缺少对应格式时自动使用已有格式")
                 Button("适应") { zoom = 1 }
                 Slider(value: $zoom, in: 0.1...10).frame(width: 70).help("缩放")
                 Text("\(Int(zoom * 100))%").font(.caption2).foregroundStyle(.secondary).frame(width: 40)

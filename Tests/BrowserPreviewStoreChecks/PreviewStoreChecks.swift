@@ -84,7 +84,37 @@ import BrowserCore
         try expect(before == after, "reopening directory reuses disk entries without rewriting them")
         try expect(store.previewCompleted == 4 && store.previewFailures == 1, "repeated scan finishes with accurate counts")
         try await navigationChecks(root: root)
+        try formatPreferenceChecks(root: root)
         print("PASS all preview store and navigation checks")
+    }
+
+    @MainActor static func formatPreferenceChecks(root: URL) throws {
+        let defaults = UserDefaults.standard, previous = defaults.object(forKey: "preferRawPreview")
+        defer { if let previous { defaults.set(previous, forKey: "preferRawPreview") } else { defaults.removeObject(forKey: "preferRawPreview") } }
+        let store = BrowserStore(supportDirectory: root.appendingPathComponent("format-support"))
+        let raw = PhotoFile(url: root.appendingPathComponent("paired.ARW"), kind: .raw)
+        let hif = PhotoFile(url: root.appendingPathComponent("paired.HIF"), kind: .rendered)
+        let jpg = PhotoFile(url: root.appendingPathComponent("paired.JPG"), kind: .rendered)
+        let pair = PhotoAsset(id: "pair", name: "pair", files: [raw, hif, jpg])
+        let rawOnly = PhotoAsset(id: "raw-only", name: "raw-only", files: [raw])
+        let jpgOnly = PhotoAsset(id: "jpg-only", name: "jpg-only", files: [jpg])
+        store.assets = [pair, rawOnly, jpgOnly]; store.select(pair, modifiers: [])
+        store.preferRawPreview = false
+        try expect(store.focusedFile?.id == hif.id, "rendered preference previews the paired HIF")
+        store.preferRawPreview = true
+        try expect(store.focusedFile?.id == raw.id, "RAW preference selects the RAW original")
+        store.preferredFileID = jpg.id
+        try expect(store.focusedFile?.id == jpg.id, "manual format selection overrides the global preference for this photo")
+        store.preferRawPreview = false
+        try expect(store.preferredFileID == nil && store.focusedFile?.id == hif.id, "changing preference clears the current format override")
+        store.select(rawOnly, modifiers: [])
+        try expect(store.focusedFile?.id == raw.id, "rendered preference falls back to RAW when no rendered photo exists")
+        store.preferRawPreview = true; store.select(jpgOnly, modifiers: [])
+        try expect(store.focusedFile?.id == jpg.id, "RAW preference falls back to JPEG when no RAW exists")
+        store.select(pair, modifiers: [])
+        try expect(store.focusedFile?.id == raw.id, "navigation uses the global preference for the next photo")
+        try expect(BrowserStore(supportDirectory: root.appendingPathComponent("format-reload")).preferRawPreview,
+                   "RAW preference is remembered by a new browser")
     }
 
     @MainActor static func navigationChecks(root: URL) async throws {
