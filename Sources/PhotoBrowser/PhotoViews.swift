@@ -13,17 +13,12 @@ struct PhotoThumbnail: View {
 
     var body: some View {
         VStack(spacing: 7) {
-            ZStack(alignment: .topTrailing) {
-                ZStack {
-                    if let image { Image(nsImage: image).resizable().scaledToFit().padding(5) }
-                    else if let failure {
-                        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure)
-                    } else { ProgressView().controlSize(.small) }
-                }.frame(height: height)
-                if selected {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, .cyan).font(.system(size: 12)).padding(8)
-                }
-            }
+            ZStack {
+                if let image { Image(nsImage: image).resizable().scaledToFit().padding(5) }
+                else if let failure {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure)
+                } else { ProgressView().controlSize(.small) }
+            }.frame(maxWidth: .infinity).frame(height: height)
             Text(asset.name).font(.system(size: 11, weight: focused ? .semibold : .regular)).lineLimit(1)
             Text(asset.formatLabel).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
         }
