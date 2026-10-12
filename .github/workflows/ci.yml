@@ -26,7 +26,7 @@ jobs:
       - name: Verify app signature and architectures
         run: |
           codesign --verify --deep --strict 'dist/照片浏览器.app'
-          lipo -verify_arch arm64 x86_64 'dist/照片浏览器.app/Contents/MacOS/PhotoBrowser'
+          lipo 'dist/照片浏览器.app/Contents/MacOS/PhotoBrowser' -verify_arch arm64 x86_64
       - name: Archive app
         run: ditto -c -k --sequesterRsrc --keepParent 'dist/照片浏览器.app' dist/PhotoBrowser-macos-universal.zip
       - uses: actions/upload-artifact@v7.0.2
