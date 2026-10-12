@@ -80,6 +80,7 @@ struct FullscreenPreview: View {
             Spacer(minLength: 0)
             bottomControls
         }
+        .font(.system(size: 12)).controlSize(.mini)
         .buttonStyle(.plain).foregroundStyle(.white).tint(.white)
         .shadow(color: .black.opacity(0.9), radius: 3, x: 0, y: 1)
         .opacity(controlsVisible ? 1 : 0)
@@ -90,10 +91,10 @@ struct FullscreenPreview: View {
     private var topControls: some View {
         HStack {
             Button { store.closeFullscreenPreview() } label: { Label(L10n.text("退出全屏"), systemImage: "arrow.down.right.and.arrow.up.left") }
-            Text(store.focusedFile?.url.lastPathComponent ?? "").font(.headline).lineLimit(1)
+            Text(store.focusedFile?.url.lastPathComponent ?? "").lineLimit(1)
             Spacer()
-            Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).controlSize(.small).help(L10n.text("启用原图 HDR / EDR 显示；普通照片保持 SDR"))
-            Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch).controlSize(.small)
+            Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).help(L10n.text("启用原图 HDR / EDR 显示；普通照片保持 SDR"))
+            Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch)
                 .help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG"))
             if let asset = store.focusedAsset {
                 ForEach(asset.imageFiles) { file in
@@ -101,9 +102,9 @@ struct FullscreenPreview: View {
                         .foregroundStyle(file.id == store.focusedFile?.id ? Color.white : Color.white.opacity(0.5))
                 }
             }
-            if loading { ProgressView().controlSize(.small); Text(L10n.text("加载高清原图…")).font(.caption) }
+            if loading { ProgressView().controlSize(.small); Text(L10n.text("加载高清原图…")) }
             else if let photo {
-                Text(L10n.text("\(Int(photo.size.width)) × \(Int(photo.size.height)) · \(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位")).font(.caption).foregroundStyle(.secondary)
+                Text(L10n.text("\(Int(photo.size.width)) × \(Int(photo.size.height)) · \(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位")).foregroundStyle(.secondary)
             }
         }.padding(20).onHover { hoveringControls = $0; revealControls() }
     }
@@ -112,7 +113,7 @@ struct FullscreenPreview: View {
         HStack(spacing: 16) {
             Button { store.step(-1) } label: { Image(systemName: "chevron.left") }
                 .help(L10n.text("上一张（←）"))
-            Text("\((store.visibleAssets.firstIndex { $0.id == store.focusedID } ?? 0) + 1) / \(store.visibleAssets.count)").font(.caption)
+            Text("\((store.visibleAssets.firstIndex { $0.id == store.focusedID } ?? 0) + 1) / \(store.visibleAssets.count)").monospacedDigit()
             Button { store.step(1) } label: { Image(systemName: "chevron.right") }
                 .help(L10n.text("下一张（→）"))
             Spacer()
