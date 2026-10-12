@@ -14,7 +14,15 @@ public struct DisplayPhoto {
 
 extension ThumbnailCache {
     /// Keep the source color profile and precision through to the floating point display surface.
-    public func displayPhoto(_ file: PhotoFile, hdr: Bool, maximum: Int? = nil) throws -> DisplayPhoto {
+    public func displayPhoto(_ file: PhotoFile, hdr: Bool, maximum: Int? = nil) async throws -> DisplayPhoto {
+        // Yield this cache actor while decoding originals so cached thumbnails stay responsive.
+        try await OriginalPhotoDecoder.shared.decode(file, hdr: hdr, maximum: maximum)
+    }
+}
+
+private actor OriginalPhotoDecoder {
+    static let shared = OriginalPhotoDecoder()
+    func decode(_ file: PhotoFile, hdr: Bool, maximum: Int?) throws -> DisplayPhoto {
         try Task.checkCancellation()
         guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
             throw BrowserFailure.message("无法读取原图：\(file.url.lastPathComponent)")
@@ -39,7 +47,7 @@ extension ThumbnailCache {
         var headroom: Float = cg.colorSpace?.isHDR() == true ? 4 : 1
         if #available(macOS 15, *) { headroom = max(1, cg.contentHeadroom, sourceImage.contentHeadroom) }
         try Task.checkCancellation()
-        return DisplayPhoto(image: image, metadata: nativeMetadata(source), headroom: headroom,
+        return DisplayPhoto(image: image, metadata: ThumbnailCache.shared.nativeMetadata(source), headroom: headroom,
                             bitsPerComponent: cg.bitsPerComponent, colorSpaceName: cg.colorSpace?.name.map { $0 as String } ?? "系统色彩配置")
     }
 }

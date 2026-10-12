@@ -99,6 +99,9 @@ struct FilmstripView: View {
 struct LargePreviewView: View {
     @EnvironmentObject private var store: BrowserStore
     @State private var photo: DisplayPhoto?
+    @State private var thumbnail: NSImage?
+    @State private var displayedFileID: String?
+    @State private var loading = false
     @State private var failure: String?
     @State private var zoom: Double = 1
     @State private var fitScale: Double = 1
@@ -108,8 +111,10 @@ struct LargePreviewView: View {
             GeometryReader { geometry in
                 ZStack {
                     Color.black.opacity(0.32)
-                    if let photo {
+                    if let photo, displayedFileID == store.focusedFile?.id {
                         PhotoCanvas(photo: photo, identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale) { failure = $0 }
+                    } else if let thumbnail, displayedFileID == store.focusedFile?.id {
+                        Image(nsImage: thumbnail).resizable().scaledToFit()
                     } else if let failure {
                         ContentUnavailableView("预览加载失败", systemImage: "photo.badge.exclamationmark", description: Text(failure))
                     } else if store.focusedFile != nil { ProgressView("加载照片…") }
@@ -120,7 +125,9 @@ struct LargePreviewView: View {
                 Text(store.focusedFile?.url.lastPathComponent ?? "请选择照片").font(.caption).lineLimit(1)
                 Button { store.step(1) } label: { Image(systemName: "chevron.right") }
                 Spacer()
-                if let photo { Text("\(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位").font(.caption2).foregroundStyle(photo.isHDR ? .cyan : .secondary) }
+                if loading { ProgressView().controlSize(.small); Text("加载大图…").font(.caption2).foregroundStyle(.secondary) }
+                else if let photo { Text("\(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位").font(.caption2).foregroundStyle(photo.isHDR ? .cyan : .secondary) }
+                if let failure, thumbnail != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure) }
                 Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).controlSize(.small)
                 Button("适应") { zoom = 1 }
                 Slider(value: $zoom, in: 0.1...10).frame(width: 110)
@@ -138,14 +145,21 @@ struct LargePreviewView: View {
             }
         }
         .task(id: (store.focusedFile?.id ?? "") + "\(store.hdrPreview)") {
-            photo = nil; failure = nil; zoom = 1
-            guard let file = store.focusedFile, let assetID = store.focusedID else { return }
+            photo = nil; thumbnail = nil; displayedFileID = nil; failure = nil; zoom = 1; loading = true
+            guard let file = store.focusedFile, let assetID = store.focusedID else { loading = false; return }
+            do {
+                let quick = try await ThumbnailCache.shared.image(file, maximum: 520)
+                try Task.checkCancellation()
+                thumbnail = quick.image; displayedFileID = file.id
+                await Task.yield()
+            } catch is CancellationError { return }
+            catch { /* Continue with the original when the cached preview is unavailable. */ }
             do {
                 let result = try await ThumbnailCache.shared.displayPhoto(file, hdr: store.hdrPreview, maximum: 2800)
                 try Task.checkCancellation()
-                photo = result; store.updateMetadata(assetID, value: result.metadata)
+                photo = result; displayedFileID = file.id; loading = false; store.updateMetadata(assetID, value: result.metadata)
             } catch is CancellationError {}
-            catch { failure = error.localizedDescription }
+            catch { failure = error.localizedDescription; loading = false }
         }
     }
 }

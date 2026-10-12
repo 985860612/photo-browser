@@ -104,7 +104,7 @@ public actor ThumbnailCache {
         return LoadedPreview(image: image, metadata: metadata)
     }
 
-    func nativeMetadata(_ source: CGImageSource) -> PhotoMetadata? {
+    nonisolated func nativeMetadata(_ source: CGImageSource) -> PhotoMetadata? {
         guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
               let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] else { return nil }
         var value = PhotoMetadata()
