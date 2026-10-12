@@ -12,6 +12,18 @@ The app is called **Photo Browser** in English and **照片浏览器** in Simpli
 
 Release builds are ad-hoc signed, without Apple notarization. If macOS blocks the downloaded app, use System Settings → Privacy & Security → Open Anyway after verifying that you downloaded it from this repository. You can also build it from source.
 
+## Screenshots
+
+Examples from the Simplified Chinese interface. English is also supported.
+
+**Large photo preview and folder filmstrip**
+
+![Large photo preview with RAW/HIF format selection, capture settings, and a folder filmstrip](docs/screenshots/photo-preview.png)
+
+**Photo grid and panorama group information**
+
+![Photo grid with folder covers, panorama groups, capture counts, and file sizes](docs/screenshots/grid-and-groups.png)
+
 ## Features
 
 - **One capture, multiple formats:** pair matching RAW/HIF/JPG files and XMP sidecars. Choose a format in the inspector, or enable Prefer RAW for large previews.
