@@ -47,6 +47,8 @@ private struct BrowserSession: Codable {
     private var metadataID = UUID()
     private var metadataJob: MetadataReader?
     private var started = false
+    private var selectionAnchorID: String?
+    private var rangeSelectionBase: Set<String>?
     private let support: URL
     let engine: ArchiveEngine
 
@@ -109,6 +111,7 @@ private struct BrowserSession: Codable {
         let ticket = UUID(); loadID = ticket
         directory = url; isLoading = true; status = "扫描照片并合并同名格式…"
         assets = []; groups = []; subdirectories = []; selection = []; focusedID = nil; preferredFileID = nil; scope = "all"; search = ""; showGroupOverview = false
+        selectionAnchorID = nil; rangeSelectionBase = nil
         pathText = url.path; editingPath = false
         let sessionURL = sessionURL(for: url)
         Task {
@@ -218,27 +221,42 @@ private struct BrowserSession: Codable {
         selection = []; focusedID = visibleAssets.first?.id; preferredFileID = nil
         if let focusedID { selection = [focusedID] }
         showGroupOverview = currentGroup != nil
+        selectionAnchorID = focusedID; rangeSelectionBase = nil
     }
 
     func select(_ asset: PhotoAsset, modifiers: NSEvent.ModifierFlags = NSEvent.modifierFlags) {
-        if modifiers.contains(.shift), let focus = focusedID,
-           let a = visibleAssets.firstIndex(where: { $0.id == focus }), let b = visibleAssets.firstIndex(where: { $0.id == asset.id }) {
-            selection.formUnion(visibleAssets[min(a,b)...max(a,b)].map(\.id))
+        let list = visibleAssets
+        if modifiers.contains(.shift), let b = list.firstIndex(where: { $0.id == asset.id }) {
+            let anchor = selectionAnchorID ?? focusedID ?? asset.id
+            let a = list.firstIndex(where: { $0.id == anchor }) ?? list.firstIndex(where: { $0.id == focusedID }) ?? b
+            selectionAnchorID = list[a].id
+            let visibleIDs = Set(list.map(\.id))
+            let base = (rangeSelectionBase ?? selection).intersection(visibleIDs)
+            rangeSelectionBase = base
+            selection = base.union(list[min(a,b)...max(a,b)].map(\.id))
         } else if modifiers.contains(.command) {
             if selection.contains(asset.id) { selection.remove(asset.id) } else { selection.insert(asset.id) }
-        } else { selection = [asset.id] }
+            selectionAnchorID = asset.id; rangeSelectionBase = nil
+        } else {
+            selection = [asset.id]
+            selectionAnchorID = asset.id; rangeSelectionBase = nil
+        }
         focusedID = asset.id; preferredFileID = nil
     }
 
-    func step(_ offset: Int) {
+    func step(_ offset: Int, extendingSelection: Bool = false) {
+        guard !isMoving, !isLoading else { return }
         let list = visibleAssets
         guard !list.isEmpty else { return }
         let index = list.firstIndex { $0.id == focusedID } ?? 0
         let next = max(0, min(list.count - 1, index + offset))
-        select(list[next], modifiers: [])
+        select(list[next], modifiers: extendingSelection ? [.shift] : [])
     }
 
-    func selectAll() { selection = Set(visibleAssets.map(\.id)) }
+    func selectAll() {
+        selection = Set(visibleAssets.map(\.id))
+        selectionAnchorID = focusedID; rangeSelectionBase = nil
+    }
 
     func createGroup() {
         let ids = visibleAssets.filter { selection.contains($0.id) }.map(\.id)
@@ -347,6 +365,7 @@ private struct BrowserSession: Codable {
                 assets.removeAll { moved.contains($0.id) }; removeMembership(Array(moved))
                 selection = []; scope = "all"; focusedID = assets.first?.id; preferredFileID = nil; showGroupOverview = false
                 if let focusedID { selection = [focusedID] }
+                selectionAnchorID = focusedID; rangeSelectionBase = nil
                 isMoving = false; persistChanges("已归档 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件，可在移动记录中撤销")
                 refreshHistory()
             } catch { isMoving = false; status = "归档失败，请查看提示和移动记录"; report(error); refreshHistory() }
