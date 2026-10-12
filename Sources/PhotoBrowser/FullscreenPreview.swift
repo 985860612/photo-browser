@@ -5,6 +5,8 @@ import BrowserCore
 struct FullscreenPreview: View {
     @EnvironmentObject private var store: BrowserStore
     @State private var photo: DisplayPhoto?
+    @State private var thumbnail: NSImage?
+    @State private var displayedFileID: String?
     @State private var failure: String?
     @State private var loading = false
     @State private var zoom: Double = 1
@@ -30,13 +32,14 @@ struct FullscreenPreview: View {
             GeometryReader { geometry in
                 ZStack {
                     Color.black
-                    if let photo {
+                    if let photo, displayedFileID == store.focusedFile?.id {
                         PhotoCanvas(photo: photo, identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale) { failure = $0 }
+                    } else if let thumbnail, displayedFileID == store.focusedFile?.id {
+                        Image(nsImage: thumbnail).resizable().scaledToFit()
                     }
                     if let failure {
-                        ContentUnavailableView("高清原图加载失败", systemImage: "photo.badge.exclamationmark", description: Text(failure))
-                            .background(.black.opacity(0.8))
-                    } else if photo == nil { ProgressView("加载高清原图…") }
+                        VStack { Spacer(); Label("高清加载失败：" + failure, systemImage: "exclamationmark.triangle").font(.callout).padding(12).background(.black.opacity(0.75)).padding() }
+                    } else if photo == nil && thumbnail == nil { ProgressView("加载照片预览…") }
                 }
             }
             HStack(spacing: 16) {
@@ -62,13 +65,21 @@ struct FullscreenPreview: View {
                 }
             }
             .task(id: (store.focusedFile?.id ?? "") + "\(store.hdrPreview)") {
-                photo = nil; failure = nil; zoom = 1; loading = true
+                photo = nil; thumbnail = nil; displayedFileID = nil; failure = nil; zoom = 1; loading = true
                 guard let file = store.focusedFile else { loading = false; return }
+                let assetID = store.focusedID
+                do {
+                    let quick = try await ThumbnailCache.shared.image(file, maximum: 520)
+                    try Task.checkCancellation()
+                    thumbnail = quick.image; displayedFileID = file.id
+                    await Task.yield()
+                } catch is CancellationError { return }
+                catch { /* A failed thumbnail must not prevent the original from being decoded. */ }
                 do {
                     let result = try await ThumbnailCache.shared.displayPhoto(file, hdr: store.hdrPreview)
                     try Task.checkCancellation()
-                    photo = result; loading = false
-                    if let id = store.focusedID { store.updateMetadata(id, value: result.metadata) }
+                    photo = result; displayedFileID = file.id; loading = false
+                    if let assetID { store.updateMetadata(assetID, value: result.metadata) }
                 } catch is CancellationError {}
                 catch { failure = error.localizedDescription; loading = false }
             }
