@@ -30,6 +30,10 @@ import AppKit
             CommandMenu("照片") {
                 Button("上一张") { store.step(-1) }.keyboardShortcut(.leftArrow, modifiers: [])
                 Button("下一张") { store.step(1) }.keyboardShortcut(.rightArrow, modifiers: [])
+                Button("向左扩展选择") { store.step(-1, extendingSelection: true) }.keyboardShortcut(.leftArrow, modifiers: [.shift])
+                    .disabled(store.isMoving || store.isLoading || store.visibleAssets.isEmpty)
+                Button("向右扩展选择") { store.step(1, extendingSelection: true) }.keyboardShortcut(.rightArrow, modifiers: [.shift])
+                    .disabled(store.isMoving || store.isLoading || store.visibleAssets.isEmpty)
                 Button("选择全部") { store.selectAll() }.keyboardShortcut("a")
                 Divider()
                 Button("全屏高清预览") { store.toggleFullscreenPreview() }.keyboardShortcut(.space, modifiers: [])
@@ -58,6 +62,12 @@ import AppKit
                 store.closeFullscreenPreview(); return nil
             }
             if NSApp.keyWindow?.firstResponder is NSTextView { return event }
+            if event.modifierFlags.contains(.shift), event.keyCode == 123 || event.keyCode == 124,
+               !store.isLoading, !store.visibleAssets.isEmpty,
+               NSApp.keyWindow?.attachedSheet == nil, NSApp.modalWindow == nil {
+                store.step(event.keyCode == 123 ? -1 : 1, extendingSelection: true)
+                return nil
+            }
             if event.keyCode == 49, !store.isLoading, store.focusedFile != nil,
                NSApp.keyWindow?.attachedSheet == nil {
                 store.toggleFullscreenPreview(); return nil
