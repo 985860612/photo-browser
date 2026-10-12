@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct NavigationBar: View {
     @EnvironmentObject private var store: BrowserStore
@@ -19,22 +20,41 @@ struct NavigationBar: View {
                 Button("前往") { store.openTypedPath() }
             } else {
                 ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 5) {
-                            ForEach(store.breadcrumbs, id: \.path) { url in
-                                Button(url.path == "/" ? "计算机" : url.lastPathComponent) { store.load(url) }
-                                    .buttonStyle(.plain).id(url.path).help(url.path)
-                                if url != store.directory { Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.secondary) }
-                            }
-                        }.font(.system(size: 12))
-                    }.onChange(of: store.directory, initial: true) { _, url in if let url { proxy.scrollTo(url.path, anchor: .trailing) } }
-                }
-                Button { store.editPath() } label: { Image(systemName: "pencil") }.help("编辑路径 ⌘L")
+                    GeometryReader { geometry in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 0) {
+                                HStack(spacing: 5) {
+                                    ForEach(store.breadcrumbs, id: \.path) { url in
+                                        Button(url.path == "/" ? "计算机" : url.lastPathComponent) { store.load(url) }
+                                            .buttonStyle(.plain).id(url.path).help(url.path)
+                                        if url != store.directory { Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.secondary) }
+                                    }
+                                }.font(.system(size: 12)).fixedSize(horizontal: true, vertical: false)
+                                Color.clear.frame(minWidth: 36, maxWidth: .infinity)
+                                    .id("path-entry")
+                                    .contentShape(Rectangle()).onTapGesture { store.editPath() }
+                                    .help("点击输入或粘贴路径 ⌘L")
+                                    .accessibilityLabel("输入文件夹路径")
+                                    .accessibilityAddTraits(.isButton)
+                                    .accessibilityAction { store.editPath() }
+                            }.frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
+                        }.onChange(of: store.directory, initial: true) { _, _ in proxy.scrollTo("path-entry", anchor: .trailing) }
+                    }
+                }.frame(height: 24)
             }
             Menu {
                 ForEach(store.subdirectories, id: \.path) { url in Button(url.lastPathComponent) { store.load(url) } }
             } label: { Image(systemName: "folder") }.disabled(store.subdirectories.isEmpty).help("进入子文件夹")
         }.buttonStyle(.borderless).padding(.horizontal, 15).padding(.vertical, 10)
-            .onChange(of: store.editingPath) { _, value in focused = value }
+            .onChange(of: store.editingPath) { _, value in
+                focused = value
+                if value {
+                    DispatchQueue.main.async {
+                        guard store.editingPath, focused, let editor = NSApp.keyWindow?.firstResponder as? NSTextView,
+                              editor.isFieldEditor else { return }
+                        editor.selectAll(nil)
+                    }
+                }
+            }
     }
 }
