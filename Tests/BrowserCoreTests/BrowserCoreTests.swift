@@ -133,6 +133,109 @@ final class BrowserCoreTests {
         try expectThrows(try worker.undo(record))
         try expectTrue(record.entries.allSatisfy { FileManager.default.fileExists(atPath: $0.destination.path) })
     }
+
+    func testPendingDeletionReusesFolderAndUndoKeepsOtherBatches() throws {
+        let original = try setupPlan(), assets = try DirectoryScanner.scan(root), worker = engine()
+        let first = try worker.archive(ArchivePlan.pendingDeletion(directory: root, assets: [assets[0]], groups: [original.record.group]))
+        let second = try worker.archive(ArchivePlan.pendingDeletion(directory: root, assets: [assets[1]], groups: []))
+        try expectTrue(first.isPendingDeletion && first.destinationCreated)
+        try expectFalse(second.destinationCreated)
+        try expectEqual(first.destination, second.destination)
+        try expectEqual(first.entries.count, 3)
+        try expectEqual(first.deletionGroups?.first?.assetIDs, original.record.group.assetIDs)
+        try expectEqual(second.deletionGroups?.count, 0)
+        try expectTrue(original.record.entries.allSatisfy { !FileManager.default.fileExists(atPath: $0.source.path) })
+        _ = try worker.undo(first)
+        try expectTrue(first.entries.allSatisfy { FileManager.default.fileExists(atPath: $0.source.path) })
+        try expectTrue(second.entries.allSatisfy { FileManager.default.fileExists(atPath: $0.destination.path) })
+        _ = try worker.undo(second)
+        try expectTrue(FileManager.default.fileExists(atPath: second.destination.path))
+        for entry in original.record.entries { try expectEqual(try String(contentsOf: entry.source, encoding: .utf8), "original-photo") }
+    }
+
+    func testPendingDeletionPreflightsCaseInsensitiveSidecarCollision() throws {
+        _ = try setupPlan()
+        try file("DSC00002.xmp")
+        let assets = try DirectoryScanner.scan(root), worker = engine()
+        let target = root.appendingPathComponent("_del")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+        let collision = target.appendingPathComponent("dsc00002.XMP")
+        try Data("previous-deletion".utf8).write(to: collision)
+        let plan = try ArchivePlan.pendingDeletion(directory: root, assets: assets, groups: [])
+        try expectThrows(try worker.archive(plan))
+        try expectTrue(plan.record.entries.allSatisfy { FileManager.default.fileExists(atPath: $0.source.path) })
+        try expectEqual(try String(contentsOf: collision, encoding: .utf8), "previous-deletion")
+        try expectEqual(try worker.records().count, 0)
+    }
+
+    func testPendingDeletionRollbackPreservesExistingFolderContents() throws {
+        _ = try setupPlan()
+        let assets = try DirectoryScanner.scan(root), target = root.appendingPathComponent("_del")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+        let marker = target.appendingPathComponent("keep.txt")
+        try Data("keep".utf8).write(to: marker)
+        let plan = try ArchivePlan.pendingDeletion(directory: root, assets: assets, groups: [])
+        var calls = 0
+        let worker = engine { source, destination in
+            calls += 1
+            if calls == 2 { throw BrowserFailure.message("connection interrupted") }
+            try FileManager.default.moveItem(at: source, to: destination)
+        }
+        try expectThrows(try worker.archive(plan))
+        for entry in plan.record.entries { try expectEqual(try String(contentsOf: entry.source, encoding: .utf8), "original-photo") }
+        try expectEqual(try String(contentsOf: marker, encoding: .utf8), "keep")
+        try expectEqual(try worker.records().first?.state, "rolledBack")
+    }
+
+    func testPendingDeletionRejectsFileAndSymbolicLinkTargets() throws {
+        _ = try setupPlan()
+        let assets = try DirectoryScanner.scan(root), target = root.appendingPathComponent("_del")
+        let plan = try ArchivePlan.pendingDeletion(directory: root, assets: assets, groups: [])
+        try Data("keep".utf8).write(to: target)
+        try expectThrows(try engine().archive(plan))
+        try expectEqual(try String(contentsOf: target, encoding: .utf8), "keep")
+        try FileManager.default.removeItem(at: target)
+        let other = root.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: false)
+        try FileManager.default.createSymbolicLink(at: target, withDestinationURL: other)
+        try expectThrows(try engine().archive(plan))
+        try expectTrue(plan.record.entries.allSatisfy { FileManager.default.fileExists(atPath: $0.source.path) })
+        try expectTrue(try FileManager.default.contentsOfDirectory(atPath: other.path).isEmpty)
+        try FileManager.default.removeItem(at: target)
+        try FileManager.default.createSymbolicLink(at: target, withDestinationURL: root.appendingPathComponent("missing"))
+        try expectThrows(try engine().archive(plan))
+        try expectTrue(plan.record.entries.allSatisfy { FileManager.default.fileExists(atPath: $0.source.path) })
+    }
+
+    func testPendingDeletionJournalFailureLeavesSourcesUntouched() throws {
+        _ = try setupPlan()
+        let plan = try ArchivePlan.pendingDeletion(directory: root, assets: DirectoryScanner.scan(root), groups: [])
+        let worker = ArchiveEngine(journalDirectory: try file("blocked-journal"))
+        try expectThrows(try worker.archive(plan))
+        try expectFalse(FileManager.default.fileExists(atPath: plan.record.destination.path))
+        try expectTrue(plan.record.entries.allSatisfy { FileManager.default.fileExists(atPath: $0.source.path) })
+    }
+
+    func testPendingDeletionRecoveryAndAlreadyPendingGuard() throws {
+        _ = try setupPlan()
+        let plan = try ArchivePlan.pendingDeletion(directory: root, assets: DirectoryScanner.scan(root), groups: [])
+        let worker = engine(), record = try worker.archive(plan)
+        try expectThrows(try ArchivePlan.pendingDeletion(directory: record.destination, assets: DirectoryScanner.scan(record.destination), groups: []))
+        try FileManager.default.moveItem(at: record.entries[0].destination, to: record.entries[0].source)
+        let restored = try worker.undo(record)
+        try expectEqual(restored.state, "undone")
+        try expectTrue(record.entries.allSatisfy { FileManager.default.fileExists(atPath: $0.source.path) })
+    }
+
+    func testExistingArchiveRecordsRemainReadable() throws {
+        let plan = try setupPlan()
+        let encoded = try JSONEncoder().encode(plan.record)
+        var json = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        json.removeValue(forKey: "deletionGroups")
+        let decoded = try JSONDecoder().decode(ArchiveRecord.self, from: JSONSerialization.data(withJSONObject: json))
+        try expectFalse(decoded.isPendingDeletion)
+        try expectEqual(decoded.entries.count, 5)
+    }
 }
 
 private struct CheckFailure: Error, CustomStringConvertible {
@@ -167,7 +270,14 @@ private func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: St
             ("testUndoConflictIsPreflightedBeforeAnyFileMoves", suite.testUndoConflictIsPreflightedBeforeAnyFileMoves),
             ("testRecoveryReconcilesCrashBetweenMoveAndJournalUpdate", suite.testRecoveryReconcilesCrashBetweenMoveAndJournalUpdate),
             ("testJournalWriteFailurePreventsAnyOriginalMoves", suite.testJournalWriteFailurePreventsAnyOriginalMoves),
-            ("testChangedTargetPreventsUndo", suite.testChangedTargetPreventsUndo)
+            ("testChangedTargetPreventsUndo", suite.testChangedTargetPreventsUndo),
+            ("testPendingDeletionReusesFolderAndUndoKeepsOtherBatches", suite.testPendingDeletionReusesFolderAndUndoKeepsOtherBatches),
+            ("testPendingDeletionPreflightsCaseInsensitiveSidecarCollision", suite.testPendingDeletionPreflightsCaseInsensitiveSidecarCollision),
+            ("testPendingDeletionRollbackPreservesExistingFolderContents", suite.testPendingDeletionRollbackPreservesExistingFolderContents),
+            ("testPendingDeletionRejectsFileAndSymbolicLinkTargets", suite.testPendingDeletionRejectsFileAndSymbolicLinkTargets),
+            ("testPendingDeletionJournalFailureLeavesSourcesUntouched", suite.testPendingDeletionJournalFailureLeavesSourcesUntouched),
+            ("testPendingDeletionRecoveryAndAlreadyPendingGuard", suite.testPendingDeletionRecoveryAndAlreadyPendingGuard),
+            ("testExistingArchiveRecordsRemainReadable", suite.testExistingArchiveRecordsRemainReadable)
         ]
         var failures = 0
         for (name, check) in checks {

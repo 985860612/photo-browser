@@ -36,6 +36,8 @@ import AppKit
                 Button(L10n.text("向右扩展选择")) { store.step(1, extendingSelection: true) }.keyboardShortcut(.rightArrow, modifiers: [.shift])
                     .disabled(store.isMoving || store.isLoading || store.visibleAssets.isEmpty)
                 Button(L10n.text("选择全部")) { store.selectAll() }.keyboardShortcut("a")
+                Button(L10n.text("移到 _del 待删除目录")) { store.deleteSelection() }
+                    .disabled(!store.canDeleteSelection).help(L10n.text("⌫ / Delete：将所选照片及配套文件移到 _del，可撤销"))
                 Divider()
                 Button(L10n.text("全屏高清预览")) { store.toggleFullscreenPreview() }.keyboardShortcut(.space, modifiers: [])
                     .disabled(store.focusedFile == nil || store.selectedFolderID != nil || store.isMoving || store.isLoading)
@@ -57,24 +59,8 @@ import AppKit
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let store = self?.store, !store.isMoving,
-                  event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
-            if store.isFullscreenPreview, event.keyCode == 53 {
-                store.closeFullscreenPreview(); return nil
-            }
-            if NSApp.keyWindow?.firstResponder is NSTextView { return event }
-            guard !store.isLoading, NSApp.keyWindow?.attachedSheet == nil, NSApp.modalWindow == nil else { return event }
-            if event.keyCode == 123 || event.keyCode == 124 {
-                store.step(event.keyCode == 123 ? -1 : 1, extendingSelection: event.modifierFlags.contains(.shift))
-                return nil
-            }
-            if (event.keyCode == 36 || event.keyCode == 76), store.selectedFolderID != nil {
-                store.openSelectedFolder(); return nil
-            }
-            if event.keyCode == 49, store.focusedFile != nil, store.selectedFolderID == nil {
-                store.toggleFullscreenPreview(); return nil
-            }
-            return event
+            guard let store = self?.store else { return event }
+            return store.handleKeyDown(event, in: NSApp.keyWindow)
         }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

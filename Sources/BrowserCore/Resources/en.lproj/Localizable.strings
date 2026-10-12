@@ -253,3 +253,10 @@
 "预览加载失败" = "Preview Could Not Load";
 "预览格式" = "Preview Format";
 "高清加载失败：" = "Full-resolution image could not load: ";
+"待删除照片" = "Pending deletion photos";
+"照片已经在 _del 待删除目录中。" = "The photos are already in the _del pending deletion folder.";
+"_del 必须是当前目录下的普通文件夹，不能是文件或符号链接。" = "_del must be a regular folder in the current directory, not a file or symbolic link.";
+"正在移到 _del，请勿退出…" = "Moving files to _del. Keep the app open…";
+"已将 %@ 张照片、%@ 个文件移到 _del，可在移动记录中撤销" = "Moved to _del · Photos: %@ · Files: %@. You can undo this from Move History.";
+"移到 _del 待删除目录" = "Move to _del Pending Deletion Folder";
+"⌫ / Delete：将所选照片及配套文件移到 _del，可撤销" = "⌫ / Delete: move selected photos and their companion files to _del, with undo";
