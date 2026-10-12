@@ -56,7 +56,7 @@ struct BrowserView: View {
                 }.padding(10).background(.orange.opacity(0.1))
             }
             HSplitView {
-                SidebarView().frame(minWidth: 200, idealWidth: 220, maxWidth: 290)
+                SidebarView().frame(minWidth: 220, idealWidth: 250, maxWidth: 320)
                 center.frame(minWidth: 550, maxWidth: .infinity)
                 if !store.assets.isEmpty { InspectorView().frame(minWidth: 215, idealWidth: 240, maxWidth: 290) }
             }
@@ -158,31 +158,37 @@ struct BrowserView: View {
 struct SidebarView: View {
     @EnvironmentObject private var store: BrowserStore
     var body: some View {
+        let assetSizes = Dictionary(uniqueKeysWithValues: store.assets.map { asset in
+            (asset.id, asset.files.reduce(Int64(0)) { $0 + $1.size })
+        })
         VStack(alignment: .leading, spacing: 0) {
             List(selection: $store.scope) {
-                Section("照片目录") {
-                    Label("全部照片  \(store.assets.count)", systemImage: "photo.on.rectangle").tag("all")
-                    Label("未分组  \(store.ungroupedCount)", systemImage: "square.dashed").tag("ungrouped")
+                Section {
+                    directoryRow("全部照片", count: store.assets.count, icon: "photo.on.rectangle").tag("all")
+                    directoryRow("未分组", count: store.ungroupedCount, icon: "square.dashed").tag("ungrouped")
+                } header: {
+                    sectionHeader("照片目录")
                 }
+                .listSectionSeparator(.hidden)
                 if !store.subdirectories.isEmpty {
-                    Section("子文件夹") {
+                    Section {
                         ForEach(store.subdirectories, id: \.path) { url in
-                            Button { store.load(url) } label: { Label(url.lastPathComponent, systemImage: "folder").lineLimit(1) }.buttonStyle(.plain)
+                            Button { store.load(url) } label: {
+                                Label(url.lastPathComponent, systemImage: "folder").lineLimit(1)
+                                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                            }.buttonStyle(.plain)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+                                .listRowSeparator(.hidden)
                         }
+                    } header: {
+                        sectionHeader("子文件夹")
                     }
+                    .listSectionSeparator(.hidden)
                 }
-                Section("全景与手动分组 · \(store.groups.count)") {
+                Section {
                     ForEach(store.groups) { group in
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack {
-                                Image(systemName: group.confidence == .candidate ? "checkmark.circle" : "rectangle.stack")
-                                    .foregroundStyle(group.confidence == .candidate ? .cyan : .secondary)
-                                Text(group.name).lineLimit(1)
-                                Spacer()
-                                Text("\(group.assetIDs.count)").foregroundStyle(.secondary)
-                            }
-                            Text(group.confidence.rawValue).font(.caption2).foregroundStyle(.secondary)
-                        }.padding(.vertical, 4).tag(group.id)
+                        groupRow(group, totalSize: Set(group.assetIDs).reduce(Int64(0)) { $0 + (assetSizes[$1] ?? 0) })
+                            .tag(group.id)
                             .contextMenu {
                                 Button("查看整组") { store.scope = group.id; store.showGroupOverview = true }
                                 Button("重命名…") { store.renameGroup = group }
@@ -190,8 +196,14 @@ struct SidebarView: View {
                                 Button("取消分组") { store.dissolveGroup(group) }.disabled(store.isReadingMetadata)
                             }
                     }
+                } header: {
+                    sectionHeader("全景与手动分组 · \(store.groups.count)")
                 }
+                .listSectionSeparator(.hidden)
             }.listStyle(.plain).scrollContentBackground(.hidden).tint(.gray)
+                .font(.system(size: 13))
+                .environment(\.defaultMinListRowHeight, 44)
+                .padding(.horizontal, 8)
                 .disabled(store.isReadingMetadata && store.isMoving)
             GlassDivider()
             VStack(alignment: .leading, spacing: 8) {
@@ -201,5 +213,40 @@ struct SidebarView: View {
                     .help("← → 切换照片 · ⌘L 输入路径 · 右键打开 Camera Raw")
             }.padding(14).buttonStyle(.borderless)
         }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            .padding(.top, 16).padding(.bottom, 8).padding(.leading, 6)
+    }
+
+    private func directoryRow(_ title: String, count: Int, icon: String) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+            Spacer()
+            Text(count.formatted()).foregroundStyle(.secondary).monospacedDigit()
+        }.frame(minHeight: 32)
+            .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+            .listRowSeparator(.hidden)
+    }
+
+    private func groupRow(_ group: PhotoGroup, totalSize: Int64) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Image(systemName: group.confidence == .candidate ? "checkmark.circle" : "rectangle.stack")
+                    .foregroundStyle(group.confidence == .candidate ? .cyan : .secondary)
+                Text(group.name).lineLimit(1)
+                Spacer()
+                Text("\(group.assetIDs.count) 张").foregroundStyle(.secondary).monospacedDigit()
+            }
+            HStack {
+                Text(group.confidence.rawValue)
+                Spacer()
+                Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)).monospacedDigit()
+                    .help("组内所有格式和配套文件的总大小")
+            }.font(.system(size: 11)).foregroundStyle(.secondary)
+        }.padding(.vertical, 8)
+            .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+            .listRowSeparator(.hidden)
     }
 }
