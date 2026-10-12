@@ -43,6 +43,7 @@ struct GlassDivider: View {
 struct BrowserView: View {
     @EnvironmentObject private var store: BrowserStore
     @State private var confirmRegroup = false
+    @State private var filmstripDragStart: Double?
     @AppStorage("showDirectoryPanel") private var showDirectoryPanel = true
     @AppStorage("showInspectorPanel") private var showInspectorPanel = true
 
@@ -78,7 +79,7 @@ struct BrowserView: View {
                         .font(.caption).foregroundStyle(.orange).help(store.previewFailureDetails)
                 }
                 Text(store.selectedFolderID == nil ? "\(store.selection.count) 张已选" : "1 个目录已选").font(.caption).foregroundStyle(.secondary)
-                Slider(value: $store.thumbnailSize, in: 110...230).frame(width: 100).help("缩略图大小")
+                Slider(value: $store.thumbnailSize, in: 110...360).frame(width: 100).help("缩略图大小")
             }.padding(.horizontal, 15).padding(.vertical, 9)
         }
         .background(GlassBackdrop().ignoresSafeArea())
@@ -118,9 +119,38 @@ struct BrowserView: View {
         } else {
             VStack(spacing: 0) {
                 if store.showGroupOverview { PhotoGridView(); GlassDivider(); overviewControls }
-                else { LargePreviewView(); GlassDivider(); FilmstripView().frame(height: store.thumbnailSize + 48) }
+                else {
+                    GeometryReader { geometry in
+                        let maximum = max(110, min(360, geometry.size.height - 234))
+                        let size = min(store.thumbnailSize, maximum)
+                        VStack(spacing: 0) {
+                            LargePreviewView().frame(minHeight: 180)
+                            filmstripDivider(maximum: maximum)
+                            FilmstripView(thumbnailSize: size).frame(height: size + 48)
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private func filmstripDivider(maximum: Double) -> some View {
+        ZStack {
+            Color.clear
+            GlassDivider()
+            RoundedRectangle(cornerRadius: 1).fill(Color.white.opacity(0.25)).frame(width: 28, height: 2)
+        }.frame(height: 6).contentShape(Rectangle())
+            .onHover { hovering in
+                if hovering { NSCursor.resizeUpDown.set() } else { NSCursor.arrow.set() }
+            }
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if filmstripDragStart == nil { filmstripDragStart = min(store.thumbnailSize, maximum) }
+                    store.thumbnailSize = min(maximum, max(110, (filmstripDragStart ?? store.thumbnailSize) - value.translation.height))
+                }
+                .onEnded { _ in filmstripDragStart = nil; NSCursor.arrow.set() })
+            .onDisappear { filmstripDragStart = nil; NSCursor.arrow.set() }
+            .help("上下拖动调整缩略图区域高度")
     }
 
     private var overviewControls: some View {

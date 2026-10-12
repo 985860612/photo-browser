@@ -79,19 +79,21 @@ struct PhotoGridView: View {
 
 struct FilmstripView: View {
     @EnvironmentObject private var store: BrowserStore
+    var thumbnailSize: Double? = nil
+    private var size: Double { thumbnailSize ?? store.thumbnailSize }
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 8) {
                     if store.scope == "all" {
                         ForEach(store.subdirectories, id: \.path) { url in
-                            FolderCard(url: url, thumbnailHeight: store.thumbnailSize - 15) { store.load(url) }
-                                .frame(width: store.thumbnailSize).id("folder:" + url.path)
+                            FolderCard(url: url, thumbnailHeight: size - 15) { store.load(url) }
+                                .frame(width: size).id("folder:" + url.path)
                         }
                     }
                     ForEach(store.visibleAssets) { asset in
-                        PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id && store.selectedFolderID == nil, height: store.thumbnailSize - 15)
-                            .frame(width: store.thumbnailSize).id(asset.id)
+                        PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id && store.selectedFolderID == nil, height: size - 15)
+                            .frame(width: size).id(asset.id)
                             .background(ImmediateCardClick { count, modifiers in
                                 if count == 1 { store.select(asset, modifiers: modifiers) }
                             })
