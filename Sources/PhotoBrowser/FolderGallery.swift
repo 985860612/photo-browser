@@ -35,14 +35,12 @@ struct FolderCard: View {
     @State private var count: Int?
     @State private var loading = true
     @State private var failure: String?
-    @State private var hovered = false
     var body: some View {
         card
-            .contentShape(RoundedRectangle(cornerRadius: 13))
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .onTapGesture(count: 2) { open() }
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { open() }
-            .onHover { hovered = $0 }
             .help("双击打开：" + url.path)
             .contextMenu {
                 Button("打开目录") { open() }
@@ -54,7 +52,6 @@ struct FolderCard: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack {
-                Color.white.opacity(0.035)
                 if let cover {
                     if thumbnailHeight != nil { Image(nsImage: cover).resizable().scaledToFit().padding(5) }
                     else { Image(nsImage: cover).resizable().scaledToFill() }
@@ -82,8 +79,7 @@ struct FolderCard: View {
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                 }.padding(15)
             }
-        }.background(Color.white.opacity(hovered ? 0.09 : 0.04)).clipShape(RoundedRectangle(cornerRadius: 13))
-            .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(hovered ? Color.cyan.opacity(0.6) : Color.white.opacity(0.08)))
+        }.clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private func loadCover() async {
