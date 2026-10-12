@@ -116,18 +116,23 @@ struct LargePreviewView: View {
                     } else if store.focusedFile != nil { ProgressView("加载照片…") }
                 }
             }
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                PreviewScopeMenu().frame(maxWidth: 160, alignment: .leading)
                 Button { store.step(-1) } label: { Image(systemName: "chevron.left") }
                 Text(store.focusedFile?.url.lastPathComponent ?? "请选择照片").font(.caption).lineLimit(1)
+                    .help(store.focusedFile?.url.lastPathComponent ?? "请选择照片")
                 Button { store.step(1) } label: { Image(systemName: "chevron.right") }
                 Spacer()
-                if loading { ProgressView().controlSize(.small); Text("加载大图…").font(.caption2).foregroundStyle(.secondary) }
-                else if let photo { Text("\(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位").font(.caption2).foregroundStyle(photo.isHDR ? .cyan : .secondary) }
+                if loading { ProgressView().controlSize(.small).help("正在加载高清图") }
                 if let failure, thumbnail != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure) }
                 Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).controlSize(.small)
+                    .help(photo.map { "原图 \($0.isHDR ? "HDR" : "SDR") · \($0.bitsPerComponent) 位" } ?? "HDR / EDR 预览")
                 Button("适应") { zoom = 1 }
-                Slider(value: $zoom, in: 0.1...10).frame(width: 110)
-                Text("\(Int(zoom * 100))% 放大").font(.caption2).foregroundStyle(.secondary).frame(width: 85)
+                Slider(value: $zoom, in: 0.1...10).frame(width: 70).help("缩放")
+                Text("\(Int(zoom * 100))%").font(.caption2).foregroundStyle(.secondary).frame(width: 40)
+                Button { store.showGroupOverview = true } label: { Image(systemName: "square.grid.2x2") }.help("网格预览")
+                Button { store.toggleFullscreenPreview() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
+                    .disabled(store.focusedFile == nil).help("全屏高清预览（空格）")
             }.padding(.horizontal, 14).padding(.vertical, 10).buttonStyle(.borderless)
         }
         .contextMenu {

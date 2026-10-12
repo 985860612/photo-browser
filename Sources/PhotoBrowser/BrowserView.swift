@@ -106,35 +106,22 @@ struct BrowserView: View {
             FolderGallery()
         } else {
             VStack(spacing: 0) {
-                groupHeader
-                if store.showGroupOverview { PhotoGridView() }
+                if store.showGroupOverview { PhotoGridView(); GlassDivider(); overviewControls }
                 else { LargePreviewView(); GlassDivider(); FilmstripView().frame(height: store.thumbnailSize + 48) }
             }
         }
     }
 
-    private var groupHeader: some View {
+    private var overviewControls: some View {
         HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(store.currentGroup?.name ?? (store.scope == "ungrouped" ? "未分组照片" : "全部照片")).font(.headline)
-                Text("\(store.visibleAssets.count) 张照片" + (store.currentGroup.map { " · \($0.confidence.rawValue)" } ?? ""))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            PreviewScopeMenu()
             Spacer()
-            if store.currentGroup != nil {
-                Button("重命名…") { store.renameGroup = store.currentGroup }
-                Button("确认全景") { store.confirmGroup() }
-                    .disabled(store.isReadingMetadata)
-                Button("归档整组…") { store.archiveGroup = store.currentGroup }
-                    .buttonStyle(.borderedProminent).tint(.blue)
-                    .disabled(hasRecovery || store.isReadingMetadata)
-            }
             Button { store.showGroupOverview.toggle() } label: {
                 Image(systemName: store.showGroupOverview ? "rectangle" : "square.grid.2x2")
             }.help(store.showGroupOverview ? "大图浏览" : "网格预览")
             Button { store.toggleFullscreenPreview() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
                 .disabled(store.focusedFile == nil).help("全屏高清预览（空格）")
-        }.padding(.horizontal, 16).padding(.vertical, 12).buttonStyle(.borderless)
+        }.padding(.horizontal, 14).padding(.vertical, 10).buttonStyle(.borderless)
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -152,6 +139,30 @@ struct BrowserView: View {
             Button { store.refreshHistory(); store.showHistory = true } label: { Label("移动记录", systemImage: "clock.arrow.circlepath") }
             TextField("搜索文件名或格式", text: $store.search).textFieldStyle(.roundedBorder).frame(width: 180)
         }
+    }
+}
+
+struct PreviewScopeMenu: View {
+    @EnvironmentObject private var store: BrowserStore
+    var body: some View {
+        Menu {
+            if let group = store.currentGroup {
+                Text("\(group.assetIDs.count) 张 · \(group.confidence.rawValue)")
+                Button("重命名…") { store.renameGroup = group }
+                Button("确认全景") { store.confirmGroup() }.disabled(store.isReadingMetadata)
+                Button("归档整组…") { store.archiveGroup = group }.disabled(!store.canArchive)
+                Divider()
+            }
+            Button("网格预览") { store.showGroupOverview = true }
+            Button("大图浏览") { store.showGroupOverview = false }
+            Button("全屏高清预览") { store.toggleFullscreenPreview() }.disabled(store.focusedFile == nil)
+        } label: {
+            HStack(spacing: 6) {
+                Text(store.currentGroup?.name ?? (store.scope == "ungrouped" ? "未分组" : "全部照片"))
+                    .font(.system(size: 12, weight: .medium)).lineLimit(1)
+                Text(store.visibleAssets.count.formatted()).font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+            }.foregroundStyle(.primary)
+        }.menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true)
     }
 }
 
