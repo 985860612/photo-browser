@@ -97,10 +97,10 @@ import BrowserCore
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = BrowserStore(supportDirectory: root.appendingPathComponent("preferences-support"), defaults: defaults)
         try expect(store.previewBefore == 2 && store.previewAfter == 5, "store uses the configured two-before five-after defaults")
-        store.previewBefore = 0; store.previewAfter = 8
+        store.previewBefore = 0; store.previewAfter = 8; store.thumbnailSize = 240
         let reopened = BrowserStore(supportDirectory: root.appendingPathComponent("preferences-reopened"), defaults: defaults)
-        try expect(reopened.previewBefore == 0 && reopened.previewAfter == 8,
-                   "reopened store preserves preload settings")
+        try expect(reopened.previewBefore == 0 && reopened.previewAfter == 8 && reopened.thumbnailSize == 240,
+                   "reopened store preserves preload settings and filmstrip height")
         let url = root.appendingPathComponent("presentation.jpg"); try jpeg.write(to: url)
         let captures = (0..<12).map { index in
             PhotoAsset(id: "capture\(index)", name: "capture\(index)", files: [

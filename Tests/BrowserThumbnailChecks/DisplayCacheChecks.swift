@@ -96,6 +96,9 @@ extension ThumbnailChecks {
         try require(PreviewPreferences.neighbors(in: [0,1,2], index: 0, before: 2, after: 5) == [1,2]
                     && PreviewPreferences.neighbors(in: [0,1,2], index: 2, before: 0, after: 0).isEmpty,
                     "range boundaries and disabled directions never wrap or preload the current photo")
-
+        let layout = BrowserPanelLayout(available: 1080, directoryWidth: 420, inspectorWidth: 420, showDirectory: true, showInspector: true)
+        try require(layout.directory + layout.inspector + 12 <= 530, "restored wide panels leave room for the photo in a smaller window")
+        let expanded = BrowserPanelLayout(available: 1800, directoryWidth: 420, inspectorWidth: 420, showDirectory: false, showInspector: true)
+        try require(expanded.directory == 0 && expanded.inspector == 420, "collapsed panel frees width without losing the other panel's requested width")
     }
 }

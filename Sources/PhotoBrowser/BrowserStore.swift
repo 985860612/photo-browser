@@ -39,7 +39,13 @@ private struct BrowserSession: Codable {
     @Published var showHistory = false
     @Published var history: [ArchiveRecord] = []
     @Published var showMerge = false
-    @Published var thumbnailSize: Double = 155
+    @Published var thumbnailSize: Double = 155 {
+        didSet {
+            let bounded = BrowserPanelLayout.clamp(thumbnailSize, to: 110...360, fallback: 155)
+            if thumbnailSize != bounded { thumbnailSize = bounded; return }
+            preferencesDefaults.set(thumbnailSize, forKey: "thumbnailSize")
+        }
+    }
     @Published var previewBefore = 2 {
         didSet {
             let bounded = PreviewPreferences.clamp(previewBefore)
@@ -55,6 +61,7 @@ private struct BrowserSession: Codable {
         }
     }
     private let previewPreferences: PreviewPreferences
+    private let preferencesDefaults: UserDefaults
     @Published var showGroupOverview = false
     @Published var renameGroup: PhotoGroup?
     @Published var subdirectories: [URL] = []
@@ -85,8 +92,10 @@ private struct BrowserSession: Codable {
     let engine: ArchiveEngine
 
     init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared, defaults: UserDefaults = .standard) {
+        preferencesDefaults = defaults
         previewPreferences = PreviewPreferences(defaults: defaults)
         previewBefore = previewPreferences.before; previewAfter = previewPreferences.after
+        thumbnailSize = BrowserPanelLayout.clamp(defaults.object(forKey: "thumbnailSize") as? Double ?? 155, to: 110...360, fallback: 155)
         support = supportDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("PhotoBrowser", isDirectory: true)
         self.thumbnails = thumbnails
         engine = ArchiveEngine(journalDirectory: support.appendingPathComponent("Moves", isDirectory: true))
