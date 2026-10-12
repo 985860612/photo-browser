@@ -44,6 +44,7 @@ struct BrowserView: View {
     @EnvironmentObject private var store: BrowserStore
     @State private var confirmRegroup = false
     @State private var filmstripDragStart: Double?
+    @FocusState private var searchFocused: Bool
     @AppStorage("showDirectoryPanel") private var showDirectoryPanel = true
     @AppStorage("showInspectorPanel") private var showInspectorPanel = true
 
@@ -183,7 +184,15 @@ struct BrowserView: View {
             Button { showInspectorPanel.toggle() } label: { Label(L10n.text("照片信息面板"), systemImage: "sidebar.right") }
                 .help(showInspectorPanel ? L10n.text("收起照片信息面板") : L10n.text("展开照片信息面板"))
                 .accessibilityValue(showInspectorPanel ? L10n.text("展开") : L10n.text("收起"))
-            TextField(L10n.text("搜索文件名或格式"), text: $store.search).textFieldStyle(.roundedBorder).frame(width: 180)
+            TextField(L10n.text("搜索文件名或格式"), text: $store.search)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 9).padding(.vertical, 6)
+                .frame(width: 180)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.04)))
+                .overlay(RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(searchFocused ? Color.cyan.opacity(0.55) : Color.white.opacity(0.12), lineWidth: 0.75))
+                .focusEffectDisabled()
+                .focused($searchFocused)
         }
     }
 }
