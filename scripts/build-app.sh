@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 swift build -c release --product PhotoBrowser
-APP_PATH="$PWD/dist/照片组浏览器.app"
+APP_PATH="$PWD/dist/照片浏览器.app"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 cp .build/release/PhotoBrowser "$APP_PATH/Contents/MacOS/PhotoBrowser"
 cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
@@ -11,8 +11,8 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>PhotoBrowser</string>
 <key>CFBundleIdentifier</key><string>local.wxj.PhotoBrowser</string>
-<key>CFBundleName</key><string>照片组浏览器</string>
-<key>CFBundleDisplayName</key><string>照片组浏览器</string>
+<key>CFBundleName</key><string>照片浏览器</string>
+<key>CFBundleDisplayName</key><string>照片浏览器</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.3.1</string>
 <key>CFBundleVersion</key><string>4</string>
