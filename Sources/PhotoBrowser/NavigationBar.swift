@@ -14,7 +14,12 @@ struct NavigationBar: View {
                 .disabled(store.directory == nil || store.directory?.path == "/" || store.isLoading).help("上一级 ⌘↑")
             Image(systemName: "folder").foregroundStyle(.cyan)
             if store.editingPath {
-                TextField("输入文件夹路径", text: $store.pathText).textFieldStyle(.roundedBorder)
+                TextField("输入文件夹路径", text: $store.pathText).textFieldStyle(.plain)
+                    .font(.system(size: 13)).padding(.horizontal, 10).padding(.vertical, 7)
+                    .frame(minHeight: 32)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.04)))
+                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.cyan.opacity(0.5), lineWidth: 0.75))
+                    .focusEffectDisabled()
                     .focused($focused).onSubmit { store.openTypedPath() }
                     .onExitCommand { store.editingPath = false }
                 Button("前往") { store.openTypedPath() }
@@ -40,7 +45,7 @@ struct NavigationBar: View {
                             }.frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                         }.onChange(of: store.directory, initial: true) { _, _ in proxy.scrollTo("path-entry", anchor: .trailing) }
                     }
-                }.frame(height: 24)
+                }.frame(height: 32)
             }
             Menu {
                 ForEach(store.subdirectories, id: \.path) { url in Button(url.lastPathComponent) { store.load(url) } }
@@ -55,6 +60,9 @@ struct NavigationBar: View {
                         editor.selectAll(nil)
                     }
                 }
+            }
+            .onChange(of: focused) { _, value in
+                if !value { store.editingPath = false }
             }
     }
 }
