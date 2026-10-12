@@ -43,6 +43,8 @@ struct GlassDivider: View {
 struct BrowserView: View {
     @EnvironmentObject private var store: BrowserStore
     @State private var confirmRegroup = false
+    @AppStorage("showDirectoryPanel") private var showDirectoryPanel = true
+    @AppStorage("showInspectorPanel") private var showInspectorPanel = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,9 +58,9 @@ struct BrowserView: View {
                 }.padding(10).background(.orange.opacity(0.1))
             }
             HSplitView {
-                SidebarView().frame(minWidth: 220, idealWidth: 250, maxWidth: 320)
+                if showDirectoryPanel { SidebarView().frame(minWidth: 220, idealWidth: 250, maxWidth: 320) }
                 center.frame(minWidth: 550, maxWidth: .infinity)
-                if !store.assets.isEmpty { InspectorView().frame(minWidth: 215, idealWidth: 240, maxWidth: 290) }
+                if showInspectorPanel && !store.assets.isEmpty { InspectorView().frame(minWidth: 215, idealWidth: 240, maxWidth: 290) }
             }
             GlassDivider()
             HStack(spacing: 10) {
@@ -134,6 +136,9 @@ struct BrowserView: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
+            Button { showDirectoryPanel.toggle() } label: { Label("目录面板", systemImage: "sidebar.left") }
+                .help(showDirectoryPanel ? "收起目录面板" : "展开目录面板")
+                .accessibilityValue(showDirectoryPanel ? "展开" : "收起")
             Button { store.chooseDirectory() } label: { Label("打开目录", systemImage: "folder") }.help("打开目录 ⌘O")
             Button { if let dir = store.directory { store.load(dir) } } label: { Image(systemName: "arrow.clockwise") }
                 .disabled(store.directory == nil || store.isLoading || store.isMoving).help("刷新目录 ⌘R")
@@ -145,6 +150,9 @@ struct BrowserView: View {
             Button { store.createGroup() } label: { Label("选中成组", systemImage: "rectangle.stack.badge.plus") }
                 .disabled(store.selection.count < 2 || store.isReadingMetadata).help("⌘ / ⇧ 点击多选，再按 ⌘G 成组")
             Button { store.refreshHistory(); store.showHistory = true } label: { Label("移动记录", systemImage: "clock.arrow.circlepath") }
+            Button { showInspectorPanel.toggle() } label: { Label("照片信息面板", systemImage: "sidebar.right") }
+                .help(showInspectorPanel ? "收起照片信息面板" : "展开照片信息面板")
+                .accessibilityValue(showInspectorPanel ? "展开" : "收起")
             TextField("搜索文件名或格式", text: $store.search).textFieldStyle(.roundedBorder).frame(width: 180)
         }
     }
