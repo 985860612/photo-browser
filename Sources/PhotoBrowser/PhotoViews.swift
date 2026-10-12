@@ -43,7 +43,7 @@ struct PhotoGridView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 if store.visibleAssets.isEmpty {
-                    ContentUnavailableView("没有匹配的照片", systemImage: "magnifyingglass")
+                    ContentUnavailableView(L10n.text("没有匹配的照片"), systemImage: "magnifyingglass")
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: store.thumbnailSize, maximum: store.thumbnailSize + 70), spacing: 12)], spacing: 14) {
                     if store.scope == "all" {
@@ -62,13 +62,13 @@ struct PhotoGridView: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityAction { store.select(asset, modifiers: []) }
                             .contextMenu {
-                                Button("全屏高清预览") { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
-                                Button("在 Camera Raw 中打开") { store.openInCameraRaw(asset) }
-                                Menu("指定格式在 Camera Raw 中打开") {
+                                Button(L10n.text("全屏高清预览")) { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
+                                Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
+                                Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
                                     ForEach(asset.imageFiles) { file in Button(file.format) { store.openInCameraRaw(asset, file: file) } }
                                 }
                                 Divider()
-                                Button("在 Finder 显示所有格式") { NSWorkspace.shared.activateFileViewerSelecting(asset.imageFiles.map(\.url)) }
+                                Button(L10n.text("在 Finder 显示所有格式")) { NSWorkspace.shared.activateFileViewerSelecting(asset.imageFiles.map(\.url)) }
                             }
                     }
                 }.padding(15)
@@ -100,12 +100,12 @@ struct FilmstripView: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityAction { store.select(asset, modifiers: []) }
                             .contextMenu {
-                                Button("全屏高清预览") { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
-                                Button("在 Camera Raw 中打开") { store.openInCameraRaw(asset) }
-                                Menu("指定格式在 Camera Raw 中打开") {
+                                Button(L10n.text("全屏高清预览")) { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
+                                Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
+                                Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
                                     ForEach(asset.imageFiles) { file in Button(file.format) { store.openInCameraRaw(asset, file: file) } }
                                 }
-                                Button("在 Finder 显示所有格式") { NSWorkspace.shared.activateFileViewerSelecting(asset.imageFiles.map(\.url)) }
+                                Button(L10n.text("在 Finder 显示所有格式")) { NSWorkspace.shared.activateFileViewerSelecting(asset.imageFiles.map(\.url)) }
                             }
                     }
                 }.padding(10)
@@ -140,39 +140,39 @@ struct LargePreviewView: View {
                     } else if let thumbnail, displayedFileID == store.focusedFile?.id {
                         Image(nsImage: thumbnail).resizable().scaledToFit()
                     } else if let failure {
-                        ContentUnavailableView("预览加载失败", systemImage: "photo.badge.exclamationmark", description: Text(failure))
-                    } else if store.focusedFile != nil { ProgressView("加载照片…") }
+                        ContentUnavailableView(L10n.text("预览加载失败"), systemImage: "photo.badge.exclamationmark", description: Text(failure))
+                    } else if store.focusedFile != nil { ProgressView(L10n.text("加载照片…")) }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             HStack(spacing: 8) {
                 Button { store.step(-1) } label: { Image(systemName: "chevron.left") }
-                Text(store.focusedFile?.url.lastPathComponent ?? "请选择照片").font(.caption).lineLimit(1)
-                    .help(store.focusedFile?.url.lastPathComponent ?? "请选择照片")
+                Text(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片")).font(.caption).lineLimit(1)
+                    .help(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片"))
                 Button { store.step(1) } label: { Image(systemName: "chevron.right") }
                 Spacer()
-                if loading { ProgressView().controlSize(.small).help("正在加载高清图") }
+                if loading { ProgressView().controlSize(.small).help(L10n.text("正在加载高清图")) }
                 if let failure, thumbnail != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure) }
                 Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).controlSize(.small)
-                    .help(photo.map { "原图 \($0.isHDR ? "HDR" : "SDR") · \($0.bitsPerComponent) 位" } ?? "HDR / EDR 预览")
-                Toggle("RAW 优先", isOn: $store.preferRawPreview).toggleStyle(.switch).controlSize(.small)
-                    .font(.caption).help("开启时优先预览 RAW，关闭时优先预览 HIF/JPG；缺少对应格式时自动使用已有格式")
-                Button("适应") { zoom = 1 }
-                Slider(value: $zoom, in: 0.1...10).frame(width: 70).help("缩放")
+                    .help(photo.map { L10n.text("原图 \($0.isHDR ? "HDR" : "SDR") · \($0.bitsPerComponent) 位") } ?? L10n.text("HDR / EDR 预览"))
+                Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch).controlSize(.small)
+                    .font(.caption).help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG；缺少对应格式时自动使用已有格式"))
+                Button(L10n.text("适应")) { zoom = 1 }
+                Slider(value: $zoom, in: 0.1...10).frame(width: 70).help(L10n.text("缩放"))
                 Text("\(Int(zoom * 100))%").font(.caption2).foregroundStyle(.secondary).frame(width: 40)
-                Button { store.showGroupOverview = true } label: { Image(systemName: "square.grid.2x2") }.help("网格预览")
+                Button { store.showGroupOverview = true } label: { Image(systemName: "square.grid.2x2") }.help(L10n.text("网格预览"))
                 Button { store.toggleFullscreenPreview() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
-                    .disabled(store.focusedFile == nil).help("全屏高清预览（空格）")
+                    .disabled(store.focusedFile == nil).help(L10n.text("全屏高清预览（空格）"))
             }.padding(.horizontal, 14).padding(.vertical, 10).buttonStyle(.borderless)
         }
         .contextMenu {
             if let asset = store.focusedAsset {
-                Button("全屏高清预览") { store.toggleFullscreenPreview() }
-                Button("在 Camera Raw 中打开") { store.openInCameraRaw(asset) }
-                Menu("指定格式在 Camera Raw 中打开") {
+                Button(L10n.text("全屏高清预览")) { store.toggleFullscreenPreview() }
+                Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
+                Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
                     ForEach(asset.imageFiles) { file in Button(file.format) { store.openInCameraRaw(asset, file: file) } }
                 }
-                Button("在 Finder 显示") { store.revealFocused() }
+                Button(L10n.text("在 Finder 显示")) { store.revealFocused() }
             }
         }
         .task(id: (store.focusedFile?.id ?? "") + "\(store.hdrPreview)") {

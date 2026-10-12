@@ -20,10 +20,10 @@ public final class MetadataReader {
 
     public func read(directory: URL, assets: [PhotoAsset]) throws -> [String: PhotoMetadata] {
         guard let binary = Self.executable else {
-            throw BrowserFailure.message("自动分组需要 ExifTool。请安装后重试：brew install exiftool。照片浏览和手动分组仍可使用。")
+            throw BrowserFailure.message(L10n.text("自动分组需要 ExifTool。请安装后重试：brew install exiftool。照片浏览和手动分组仍可使用。"))
         }
         let errorURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".stderr")
-        guard FileManager.default.createFile(atPath: errorURL.path, contents: nil) else { throw BrowserFailure.message("无法创建拍摄信息读取日志。") }
+        guard FileManager.default.createFile(atPath: errorURL.path, contents: nil) else { throw BrowserFailure.message(L10n.text("无法创建拍摄信息读取日志。")) }
         let errorHandle = try FileHandle(forWritingTo: errorURL)
         defer { try? errorHandle.close(); try? FileManager.default.removeItem(at: errorURL) }
         let p = Process(), output = Pipe()
@@ -40,11 +40,11 @@ public final class MetadataReader {
         lock.lock(); let wasCancelled = cancelled; process = nil; lock.unlock()
         if wasCancelled { throw CancellationError() }
         guard p.terminationStatus == 0 else {
-            let message = String(data: try Data(contentsOf: errorURL), encoding: .utf8) ?? "未知错误"
-            throw BrowserFailure.message("拍摄信息读取失败：\(message.prefix(1200))")
+            let message = String(data: try Data(contentsOf: errorURL), encoding: .utf8) ?? L10n.text("未知错误")
+            throw BrowserFailure.message(L10n.text("拍摄信息读取失败：\(message.prefix(1200))"))
         }
         guard let objects = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw BrowserFailure.message("无法解析相机拍摄信息。")
+            throw BrowserFailure.message(L10n.text("无法解析相机拍摄信息。"))
         }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")

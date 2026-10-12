@@ -68,7 +68,7 @@ struct PhotoCanvas: NSViewRepresentable {
         reportFit()
         if zoom == 1 { pan = .zero }
         (layer as? CAMetalLayer)?.wantsExtendedDynamicRangeContent = hdr && photo.isHDR
-        if device == nil { DispatchQueue.main.async { [weak self] in self?.onFailure?("当前 Mac 无法建立 Metal 预览，请检查图形设备。") } }
+        if device == nil { DispatchQueue.main.async { [weak self] in self?.onFailure?(L10n.text("当前 Mac 无法建立 Metal 预览，请检查图形设备。")) } }
         needsDisplay = true
     }
     private var fit: Double {

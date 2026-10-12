@@ -23,14 +23,14 @@ struct FullscreenPreview: View {
             .onDisappear { hideControlsTask?.cancel() }
             .onChange(of: store.focusedFile?.id) { _, _ in revealControls() }
             .onExitCommand { store.closeFullscreenPreview() }
-            .alert("操作未完成", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
-                Button("知道了") { store.errorMessage = nil }
+            .alert(L10n.text("操作未完成"), isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
+                Button(L10n.text("知道了")) { store.errorMessage = nil }
             } message: { Text(store.errorMessage ?? "") }
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in store.fullscreenWindowExited() }
             .contextMenu {
                 if let asset = store.focusedAsset {
-                    Button("在 Camera Raw 中打开") { store.openInCameraRaw(asset) }
-                    Button("在 Finder 显示") { store.revealFocused() }
+                    Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
+                    Button(L10n.text("在 Finder 显示")) { store.revealFocused() }
                 }
             }
             .task(id: (store.focusedFile?.id ?? "") + "\(store.hdrPreview)") {
@@ -66,11 +66,11 @@ struct FullscreenPreview: View {
             if let failure {
                 VStack {
                     Spacer()
-                    Label("高清加载失败：" + failure, systemImage: "exclamationmark.triangle")
+                    Label(L10n.text("高清加载失败：") + failure, systemImage: "exclamationmark.triangle")
                         .font(.callout).padding(12).background(.black.opacity(0.75))
                         .padding(.bottom, controlsVisible ? 60 : 20)
                 }
-            } else if photo == nil && thumbnail == nil { ProgressView("加载照片预览…") }
+            } else if photo == nil && thumbnail == nil { ProgressView(L10n.text("加载照片预览…")) }
         }
     }
 
@@ -89,21 +89,21 @@ struct FullscreenPreview: View {
 
     private var topControls: some View {
         HStack {
-            Button { store.closeFullscreenPreview() } label: { Label("退出全屏", systemImage: "arrow.down.right.and.arrow.up.left") }
+            Button { store.closeFullscreenPreview() } label: { Label(L10n.text("退出全屏"), systemImage: "arrow.down.right.and.arrow.up.left") }
             Text(store.focusedFile?.url.lastPathComponent ?? "").font(.headline).lineLimit(1)
             Spacer()
-            Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).controlSize(.small).help("启用原图 HDR / EDR 显示；普通照片保持 SDR")
-            Toggle("RAW 优先", isOn: $store.preferRawPreview).toggleStyle(.switch).controlSize(.small)
-                .help("开启时优先预览 RAW，关闭时优先预览 HIF/JPG")
+            Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).controlSize(.small).help(L10n.text("启用原图 HDR / EDR 显示；普通照片保持 SDR"))
+            Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch).controlSize(.small)
+                .help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG"))
             if let asset = store.focusedAsset {
                 ForEach(asset.imageFiles) { file in
                     Button(file.format) { store.preferredFileID = file.id }
                         .foregroundStyle(file.id == store.focusedFile?.id ? Color.white : Color.white.opacity(0.5))
                 }
             }
-            if loading { ProgressView().controlSize(.small); Text("加载高清原图…").font(.caption) }
+            if loading { ProgressView().controlSize(.small); Text(L10n.text("加载高清原图…")).font(.caption) }
             else if let photo {
-                Text("\(Int(photo.size.width)) × \(Int(photo.size.height)) · \(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位").font(.caption).foregroundStyle(.secondary)
+                Text(L10n.text("\(Int(photo.size.width)) × \(Int(photo.size.height)) · \(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位")).font(.caption).foregroundStyle(.secondary)
             }
         }.padding(20).onHover { hoveringControls = $0; revealControls() }
     }
@@ -111,15 +111,15 @@ struct FullscreenPreview: View {
     private var bottomControls: some View {
         HStack(spacing: 16) {
             Button { store.step(-1) } label: { Image(systemName: "chevron.left") }
-                .help("上一张（←）")
+                .help(L10n.text("上一张（←）"))
             Text("\((store.visibleAssets.firstIndex { $0.id == store.focusedID } ?? 0) + 1) / \(store.visibleAssets.count)").font(.caption)
             Button { store.step(1) } label: { Image(systemName: "chevron.right") }
-                .help("下一张（→）")
+                .help(L10n.text("下一张（→）"))
             Spacer()
-            Button("适应屏幕") { zoom = 1 }
-            Button("100% 像素") { setPixelZoom(scale: fitScale, toggle: false) }.disabled(loading || photo == nil)
+            Button(L10n.text("适应屏幕")) { zoom = 1 }
+            Button(L10n.text("100% 像素")) { setPixelZoom(scale: fitScale, toggle: false) }.disabled(loading || photo == nil)
             Slider(value: $zoom, in: 0.1...10).frame(width: 100)
-                .help("捏合缩放 · 滚动 / 拖拽平移 · ⌘滚轮缩放 · Esc 退出")
+                .help(L10n.text("捏合缩放 · 滚动 / 拖拽平移 · ⌘滚轮缩放 · Esc 退出"))
         }.padding(20).onHover { hoveringControls = $0; revealControls() }
     }
     private func revealControls() {

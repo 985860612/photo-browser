@@ -25,7 +25,7 @@ private actor OriginalPhotoDecoder {
     func decode(_ file: PhotoFile, hdr: Bool, maximum: Int?) throws -> DisplayPhoto {
         try Task.checkCancellation()
         guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
-            throw BrowserFailure.message("无法读取原图：\(file.url.lastPathComponent)")
+            throw BrowserFailure.message(L10n.text("无法读取原图：\(file.url.lastPathComponent)"))
         }
         var options: [CFString: Any] = [kCGImageSourceShouldCacheImmediately: true,
                                        kCGImageSourceShouldAllowFloat: true,
@@ -38,7 +38,7 @@ private actor OriginalPhotoDecoder {
             options[kCGImageSourceCreateThumbnailWithTransform] = false
             cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
         } else { cg = CGImageSourceCreateImageAtIndex(source, 0, options as CFDictionary) }
-        guard let cg else { throw BrowserFailure.message("系统无法解码 \(file.format) 原图。请切换同名格式，或在 Camera Raw 中打开。") }
+        guard let cg else { throw BrowserFailure.message(L10n.text("系统无法解码 \(file.format) 原图。请切换同名格式，或在 Camera Raw 中打开。")) }
         let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]
         let orientation = (properties?[kCGImagePropertyOrientation as String] as? NSNumber)?.int32Value ?? 1
         let sourceImage = CIImage(cgImage: cg, options: [.toneMapHDRtoSDR: !hdr])
@@ -48,6 +48,6 @@ private actor OriginalPhotoDecoder {
         if #available(macOS 15, *) { headroom = max(1, cg.contentHeadroom, sourceImage.contentHeadroom) }
         try Task.checkCancellation()
         return DisplayPhoto(image: image, metadata: ThumbnailCache.shared.nativeMetadata(source), headroom: headroom,
-                            bitsPerComponent: cg.bitsPerComponent, colorSpaceName: cg.colorSpace?.name.map { $0 as String } ?? "系统色彩配置")
+                            bitsPerComponent: cg.bitsPerComponent, colorSpaceName: cg.colorSpace?.name.map { $0 as String } ?? L10n.text("系统色彩配置"))
     }
 }

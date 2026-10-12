@@ -10,14 +10,14 @@ struct FolderGallery: View {
                 VStack(alignment: .leading, spacing: 22) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 7) {
-                            Text(store.directory?.lastPathComponent ?? "文件夹").font(.system(size: 24, weight: .semibold))
-                            Text("\(store.subdirectories.count) 个子文件夹 · 双击进入浏览照片").font(.callout).foregroundStyle(.secondary)
+                            Text(store.directory?.lastPathComponent ?? L10n.text("文件夹")).font(.system(size: 24, weight: .semibold))
+                            Text(L10n.text("\(store.subdirectories.count) 个子文件夹 · 双击进入浏览照片")).font(.callout).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("上一级") { if let url = store.directory { store.load(url.deletingLastPathComponent()) } }.disabled(store.directory?.path == "/")
+                        Button(L10n.text("上一级")) { if let url = store.directory { store.load(url.deletingLastPathComponent()) } }.disabled(store.directory?.path == "/")
                     }
                     if store.subdirectories.isEmpty {
-                        Label("此文件夹没有照片或子文件夹", systemImage: "folder").foregroundStyle(.secondary).padding(.vertical, 30)
+                        Label(L10n.text("此文件夹没有照片或子文件夹"), systemImage: "folder").foregroundStyle(.secondary).padding(.vertical, 30)
                     } else {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 360), spacing: 18)], alignment: .leading, spacing: 20) {
                             ForEach(store.subdirectories, id: \.path) { url in
@@ -50,10 +50,10 @@ struct FolderCard: View {
             })
             .accessibilityAddTraits(store.selectedFolderID == url.path ? [.isButton, .isSelected] : [.isButton])
             .accessibilityAction { open() }
-            .help("单击选择，双击打开：" + url.path)
+            .help(L10n.text("单击选择，双击打开：") + url.path)
             .contextMenu {
-                Button("打开目录") { open() }
-                Button("在 Finder 显示") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                Button(L10n.text("打开目录")) { open() }
+                Button(L10n.text("在 Finder 显示")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             }
             .task(id: url.path) { await loadCover() }
     }
@@ -73,10 +73,10 @@ struct FolderCard: View {
                 Text(url.lastPathComponent).lineLimit(1)
             }.font(.system(size: thumbnailHeight != nil ? 11 : 14, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .center)
-            Text(failure == nil ? count.map { "\($0) 张照片" } ?? "读取中…" : "读取失败")
+            Text(failure == nil ? count.map { L10n.text("\($0) 张照片") } ?? L10n.text("读取中…") : L10n.text("读取失败"))
                 .font(.system(size: thumbnailHeight != nil ? 9 : 12)).foregroundStyle(.secondary).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .help(failure ?? "同名 RAW / HIF / JPG 合并计数")
+                .help(failure ?? L10n.text("同名 RAW / HIF / JPG 合并计数"))
         }.padding(7).multilineTextAlignment(.center).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 

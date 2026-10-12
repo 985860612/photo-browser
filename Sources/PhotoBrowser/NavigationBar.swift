@@ -1,3 +1,4 @@
+import BrowserCore
 import SwiftUI
 import AppKit
 
@@ -7,14 +8,14 @@ struct NavigationBar: View {
     var body: some View {
         HStack(spacing: 9) {
             Button { store.navigateHistory(-1) } label: { Image(systemName: "chevron.left") }
-                .disabled(!store.canGoBack).help("后退 ⌘[")
+                .disabled(!store.canGoBack).help(L10n.text("后退 ⌘["))
             Button { store.navigateHistory(1) } label: { Image(systemName: "chevron.right") }
-                .disabled(!store.canGoForward).help("前进 ⌘]")
+                .disabled(!store.canGoForward).help(L10n.text("前进 ⌘]"))
             Button { if let url = store.directory { store.load(url.deletingLastPathComponent()) } } label: { Image(systemName: "arrow.up") }
-                .disabled(store.directory == nil || store.directory?.path == "/" || store.isLoading).help("上一级 ⌘↑")
+                .disabled(store.directory == nil || store.directory?.path == "/" || store.isLoading).help(L10n.text("上一级 ⌘↑"))
             Image(systemName: "folder").foregroundStyle(.cyan)
             if store.editingPath {
-                TextField("输入文件夹路径", text: $store.pathText).textFieldStyle(.plain)
+                TextField(L10n.text("输入文件夹路径"), text: $store.pathText).textFieldStyle(.plain)
                     .font(.system(size: 13)).padding(.horizontal, 10).padding(.vertical, 7)
                     .frame(minHeight: 32)
                     .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.04)))
@@ -22,7 +23,7 @@ struct NavigationBar: View {
                     .focusEffectDisabled()
                     .focused($focused).onSubmit { store.openTypedPath() }
                     .onExitCommand { store.editingPath = false }
-                Button("前往") { store.openTypedPath() }
+                Button(L10n.text("前往")) { store.openTypedPath() }
             } else {
                 ScrollViewReader { proxy in
                     GeometryReader { geometry in
@@ -30,7 +31,7 @@ struct NavigationBar: View {
                             HStack(spacing: 0) {
                                 HStack(spacing: 5) {
                                     ForEach(store.breadcrumbs, id: \.path) { url in
-                                        Button(url.path == "/" ? "计算机" : url.lastPathComponent) { store.load(url) }
+                                        Button(url.path == "/" ? L10n.text("计算机") : url.lastPathComponent) { store.load(url) }
                                             .buttonStyle(.plain).id(url.path).help(url.path)
                                         if url != store.directory { Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.secondary) }
                                     }
@@ -38,8 +39,8 @@ struct NavigationBar: View {
                                 Color.clear.frame(minWidth: 36, maxWidth: .infinity)
                                     .id("path-entry")
                                     .contentShape(Rectangle()).onTapGesture { store.editPath() }
-                                    .help("点击输入或粘贴路径 ⌘L")
-                                    .accessibilityLabel("输入文件夹路径")
+                                    .help(L10n.text("点击输入或粘贴路径 ⌘L"))
+                                    .accessibilityLabel(L10n.text("输入文件夹路径"))
                                     .accessibilityAddTraits(.isButton)
                                     .accessibilityAction { store.editPath() }
                             }.frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
@@ -49,7 +50,7 @@ struct NavigationBar: View {
             }
             Menu {
                 ForEach(store.subdirectories, id: \.path) { url in Button(url.lastPathComponent) { store.load(url) } }
-            } label: { Image(systemName: "folder") }.disabled(store.subdirectories.isEmpty).help("进入子文件夹")
+            } label: { Image(systemName: "folder") }.disabled(store.subdirectories.isEmpty).help(L10n.text("进入子文件夹"))
         }.buttonStyle(.borderless).padding(.horizontal, 15).padding(.vertical, 10)
             .onChange(of: store.editingPath) { _, value in
                 focused = value

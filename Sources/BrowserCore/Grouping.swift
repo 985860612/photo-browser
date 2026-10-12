@@ -31,17 +31,17 @@ public enum Grouping {
         if !current.isEmpty { runs.append(current) }
         return runs.filter { $0.count >= 3 }.enumerated().map { index, run in
             let burst = run.allSatisfy { $0.metadata?.sequence != nil }
-            return PhotoGroup(name: "候选组 \(index + 1)", assetIDs: run.map(\.id), confidence: .review,
-                              reason: burst ? "连续连拍、焦距一致；请查看画面是否横向移动并重叠" : "短时间连续单拍、焦距一致；可能只是重复构图")
+            return PhotoGroup(name: L10n.text("候选组 \(index + 1)"), assetIDs: run.map(\.id), confidence: .review,
+                              reason: burst ? L10n.text("连续连拍、焦距一致；请查看画面是否横向移动并重叠") : L10n.text("短时间连续单拍、焦距一致；可能只是重复构图"))
         }
     }
 
     public static func importCSV(_ data: Data, assets: [PhotoAsset]) throws -> [PhotoGroup] {
-        guard var text = String(data: data, encoding: .utf8) else { throw BrowserFailure.message("清单不是 UTF-8 编码。") }
+        guard var text = String(data: data, encoding: .utf8) else { throw BrowserFailure.message(L10n.text("清单不是 UTF-8 编码。")) }
         if text.first == "\u{feff}" { text.removeFirst() }
         let rows = try CSV.parse(text)
         guard let header = rows.first, let gi = header.firstIndex(of: "组号"), let fi = header.firstIndex(of: "文件名") else {
-            throw BrowserFailure.message("清单需要“组号”和“文件名”两列。")
+            throw BrowserFailure.message(L10n.text("清单需要“组号”和“文件名”两列。"))
         }
         let ci = header.firstIndex(of: "分类"), ri = header.firstIndex(of: "判断依据")
         let byFilename = Dictionary(assets.flatMap { a in a.files.map { ($0.url.lastPathComponent, a.id) } }, uniquingKeysWith: { a, _ in a })
@@ -52,20 +52,20 @@ public enum Grouping {
             let number = row[gi]
             if locations[number] == nil {
                 let category = ci.flatMap { $0 < row.count ? row[$0] : nil } ?? "待确认"
-                let reason = ri.flatMap { $0 < row.count ? row[$0] : nil } ?? "导入已有清单"
+                let reason = ri.flatMap { $0 < row.count ? row[$0] : nil } ?? L10n.text("导入已有清单")
                 locations[number] = result.count
-                result.append(PhotoGroup(id: "import-\(number)", name: "全景组 \(number)", assetIDs: [], confidence: GroupConfidence(rawValue: category) ?? .review, reason: reason))
+                result.append(PhotoGroup(id: "import-\(number)", name: L10n.text("全景组 \(number)"), assetIDs: [], confidence: GroupConfidence(rawValue: category) ?? .review, reason: reason))
             }
             let index = locations[number]!
             if !result[index].assetIDs.contains(assetID) { result[index].assetIDs.append(assetID) }
         }
-        guard !result.isEmpty else { throw BrowserFailure.message("清单中的文件没有匹配到当前目录。") }
+        guard !result.isEmpty else { throw BrowserFailure.message(L10n.text("清单中的文件没有匹配到当前目录。")) }
         return result
     }
 
     public static func split(_ group: PhotoGroup, at assetID: String) throws -> [PhotoGroup] {
         guard let index = group.assetIDs.firstIndex(of: assetID), index > 0 else {
-            throw BrowserFailure.message("请选择组内第二张或之后的照片作为新组起点。")
+            throw BrowserFailure.message(L10n.text("请选择组内第二张或之后的照片作为新组起点。"))
         }
         return [PhotoGroup(name: group.name + " A", assetIDs: Array(group.assetIDs[..<index])),
                 PhotoGroup(name: group.name + " B", assetIDs: Array(group.assetIDs[index...]))]
@@ -87,7 +87,7 @@ public enum CSV {
             } else { field.append(char) }
             i += 1
         }
-        guard !quoted else { throw BrowserFailure.message("CSV 的引号未闭合。") }
+        guard !quoted else { throw BrowserFailure.message(L10n.text("CSV 的引号未闭合。")) }
         row.append(field); if row.contains(where: { !$0.isEmpty }) { rows.append(row) }
         return rows
     }

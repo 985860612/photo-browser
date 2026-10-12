@@ -1,8 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-swift build --product PhotoBrowser
-PREVIEW_BUILD_PATH="$(swift build --show-bin-path)"
+PREVIEW_BUILD_ARGS=()
+if [ -n "${PHOTO_BROWSER_BUILD_PATH:-}" ]; then PREVIEW_BUILD_ARGS+=(--scratch-path "$PHOTO_BROWSER_BUILD_PATH"); fi
+swift build "${PREVIEW_BUILD_ARGS[@]}" --product PhotoBrowser
+PREVIEW_BUILD_PATH="$(swift build "${PREVIEW_BUILD_ARGS[@]}" --show-bin-path)"
 swiftc -parse-as-library -I "$PREVIEW_BUILD_PATH/Modules" \
   Sources/PhotoBrowser/BrowserStore.swift Sources/PhotoBrowser/CameraRawLauncher.swift \
   Tests/BrowserPreviewStoreChecks/PreviewStoreChecks.swift \
