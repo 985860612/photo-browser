@@ -31,7 +31,7 @@ struct ArchiveSheet: View {
             HStack {
                 Image(systemName: "folder.badge.checkmark").font(.title).foregroundStyle(.cyan)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("确认归档整组照片").font(.title2)
+                    Text("移动整组到新文件夹").font(.title2)
                     Text("\(group.name) · \(group.assetIDs.count) 张照片").foregroundStyle(.secondary)
                 }
             }
@@ -96,7 +96,7 @@ struct RenameGroupSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             Text("重命名分组").font(.title2)
             TextField("分组名称", text: $name).textFieldStyle(.roundedBorder).focused($focused)
-            Text("分组名称会保存，并用于归档时的默认文件夹名。原照片文件名不变。").font(.caption).foregroundStyle(.secondary)
+            Text("分组名称会保存，并用于移动整组时的默认文件夹名。原照片文件名不变。").font(.caption).foregroundStyle(.secondary)
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)

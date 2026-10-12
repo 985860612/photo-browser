@@ -299,13 +299,6 @@ private struct BrowserSession: Codable {
         persistChanges("已取消分组，原文件未移动")
     }
 
-    func confirmGroup() {
-        guard let index = groups.firstIndex(where: { $0.id == scope }) else { return }
-        groups[index].confidence = .candidate
-        groups[index].reason = "用户已查看画面并确认属于全景素材"
-        persistChanges("已确认全景分组，尚未移动文件")
-    }
-
     func autoGroup() {
         guard let directory, !isReadingMetadata, !isMoving, !assets.isEmpty else { return }
         let snapshot = assets, job = MetadataReader(), ticket = UUID()
@@ -366,9 +359,9 @@ private struct BrowserSession: Codable {
                 selection = []; scope = "all"; focusedID = assets.first?.id; preferredFileID = nil; showGroupOverview = false
                 if let focusedID { selection = [focusedID] }
                 selectionAnchorID = focusedID; rangeSelectionBase = nil
-                isMoving = false; persistChanges("已归档 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件，可在移动记录中撤销")
+                isMoving = false; persistChanges("已移动 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件，可在移动记录中撤销")
                 refreshHistory()
-            } catch { isMoving = false; status = "归档失败，请查看提示和移动记录"; report(error); refreshHistory() }
+            } catch { isMoving = false; status = "移动失败，请查看提示和移动记录"; report(error); refreshHistory() }
         }
     }
 
