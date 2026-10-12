@@ -105,6 +105,34 @@ private struct BrowserSession: Codable {
     var canArchive: Bool {
         !isMoving && !isReadingMetadata && !history.contains { ["prepared", "moving", "undoing", "recoveryNeeded"].contains($0.state) }
     }
+    var canDeleteSelection: Bool {
+        canArchive && !isLoading && !editingPath && selectedFolderID == nil
+            && directory != nil && directory?.lastPathComponent.lowercased() != "_del"
+            && visibleAssets.contains { selection.contains($0.id) }
+    }
+
+    func handleKeyDown(_ event: NSEvent, in window: NSWindow?) -> NSEvent? {
+        guard !isMoving, event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
+        if isFullscreenPreview, event.keyCode == 53 { closeFullscreenPreview(); return nil }
+        guard let window, !(window.firstResponder is NSTextView), !(window.firstResponder is NSTextField),
+              !isLoading, window.attachedSheet == nil, NSApp.modalWindow == nil else { return event }
+        if event.keyCode == 51 || event.keyCode == 117 {
+            // Holding Delete must not remove the next automatically selected photo.
+            if !event.isARepeat { deleteSelection() }
+            return nil
+        }
+        if event.keyCode == 123 || event.keyCode == 124 {
+            step(event.keyCode == 123 ? -1 : 1, extendingSelection: event.modifierFlags.contains(.shift))
+            return nil
+        }
+        if (event.keyCode == 36 || event.keyCode == 76), selectedFolderID != nil {
+            openSelectedFolder(); return nil
+        }
+        if event.keyCode == 49, focusedFile != nil, selectedFolderID == nil {
+            toggleFullscreenPreview(); return nil
+        }
+        return event
+    }
 
     func start() {
         guard !started else { return }; started = true
@@ -124,7 +152,8 @@ private struct BrowserSession: Codable {
         if panel.runModal() == .OK, let url = panel.url { load(url) }
     }
 
-    func load(_ inputURL: URL, restoring restoredGroup: PhotoGroup? = nil, recordNavigation: Bool = true) {
+    func load(_ inputURL: URL, restoring restoredGroup: PhotoGroup? = nil,
+              restoringDeletedGroups: [PhotoGroup]? = nil, recordNavigation: Bool = true) {
         guard !isMoving else { return }
         cancelPreviewGeneration()
         let url = inputURL.standardizedFileURL
@@ -174,7 +203,9 @@ private struct BrowserSession: Codable {
                     navigationHistory = Array(navigationHistory.prefix(navigationIndex + 1)) + [url]
                     navigationIndex = navigationHistory.count - 1
                 }
-                if let restoredGroup, !groups.contains(where: { $0.id == restoredGroup.id }) {
+                if let restoringDeletedGroups {
+                    restoreDeletedMembership(restoringDeletedGroups, assetIDs: Set(restoredGroup?.assetIDs ?? []))
+                } else if let restoredGroup, !groups.contains(where: { $0.id == restoredGroup.id }) {
                     let existing = Set(assets.map(\.id))
                     var restored = restoredGroup; restored.assetIDs = restored.assetIDs.filter { existing.contains($0) }
                     if !restored.assetIDs.isEmpty { groups.append(restored) }
@@ -458,10 +489,26 @@ private struct BrowserSession: Codable {
         }
     }
 
+    func deleteSelection() {
+        guard canDeleteSelection, let directory else { return }
+        do {
+            let selected = visibleAssets.filter { selection.contains($0.id) }
+            let plan = try ArchivePlan.pendingDeletion(directory: directory, assets: selected, groups: groups)
+            archive(plan)
+        } catch { report(error) }
+    }
+
     func archive(_ plan: ArchivePlan) {
         guard canArchive else { report(BrowserFailure.message(L10n.text("请先完成当前任务或恢复未完成的移动记录。"))); return }
+        let deleting = plan.record.isPendingDeletion
+        let moved = Set(plan.record.group.assetIDs), list = visibleAssets
+        let index = list.firstIndex { $0.id == focusedID } ?? 0
+        let nextID = list.first { $0.id == focusedID && !moved.contains($0.id) }?.id
+            ?? list.dropFirst(index + 1).first { !moved.contains($0.id) }?.id
+            ?? list.prefix(index).last { !moved.contains($0.id) }?.id
         cancelPreviewGeneration()
-        isMoving = true; archiveGroup = nil; status = L10n.text("正在移动整组文件，请勿退出…")
+        isMoving = true; archiveGroup = nil
+        status = deleting ? L10n.text("正在移到 _del，请勿退出…") : L10n.text("正在移动整组文件，请勿退出…")
         let worker = engine
         Task {
             do {
@@ -471,13 +518,24 @@ private struct BrowserSession: Codable {
                     subdirectories.append(record.destination)
                     subdirectories.sort { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
                 }
-                let moved = Set(record.group.assetIDs)
                 assets.removeAll { moved.contains($0.id) }; removeMembership(Array(moved))
                 selectedFolderID = nil
-                selection = []; scope = "all"; focusedID = assets.first?.id; preferredFileID = nil; showGroupOverview = false
+                selection = []; preferredFileID = nil
+                if deleting {
+                    if scope != "all", scope != "ungrouped", currentGroup == nil { scope = "ungrouped" }
+                    let remaining = visibleAssets
+                    focusedID = remaining.first { $0.id == nextID }?.id ?? remaining.first?.id
+                    navigationScrollTarget = focusedID
+                    if focusedID == nil, isFullscreenPreview { closeFullscreenPreview() }
+                } else {
+                    scope = "all"; focusedID = assets.first?.id; showGroupOverview = false
+                }
                 if let focusedID { selection = [focusedID] }
                 selectionAnchorID = focusedID; rangeSelectionBase = nil
-                isMoving = false; persistChanges(L10n.text("已移动 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件，可在移动记录中撤销"))
+                isMoving = false
+                persistChanges(deleting
+                    ? L10n.text("已将 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件移到 _del，可在移动记录中撤销")
+                    : L10n.text("已移动 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件，可在移动记录中撤销"))
                 refreshHistory()
                 startPreviewGeneration()
             } catch { isMoving = false; startPreviewGeneration(); status = L10n.text("移动失败，请查看提示和移动记录"); report(error); refreshHistory() }
@@ -492,7 +550,7 @@ private struct BrowserSession: Codable {
             do {
                 let restored = try await Task.detached(priority: .userInitiated) { try worker.undo(record) }.value
                 isMoving = false; showHistory = false
-                load(restored.sourceDirectory, restoring: restored.group)
+                load(restored.sourceDirectory, restoring: restored.group, restoringDeletedGroups: restored.deletionGroups)
             } catch { isMoving = false; startPreviewGeneration(); report(error); refreshHistory() }
         }
     }
@@ -511,6 +569,33 @@ private struct BrowserSession: Codable {
         let removed = Set(ids)
         for index in groups.indices { groups[index].assetIDs.removeAll { removed.contains($0) } }
         groups.removeAll { $0.assetIDs.isEmpty }
+    }
+
+    private func restoreDeletedMembership(_ savedGroups: [PhotoGroup], assetIDs: Set<String>) {
+        let restoredIDs = assetIDs.intersection(assets.map(\.id))
+        let currentGroups = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
+        removeMembership(Array(restoredIDs))
+        for saved in savedGroups {
+            let recovered = saved.assetIDs.filter { restoredIDs.contains($0) }
+            guard !recovered.isEmpty else { continue }
+            if let index = groups.firstIndex(where: { $0.id == saved.id }) {
+                var ordered = groups[index].assetIDs
+                for id in recovered {
+                    let position = saved.assetIDs.firstIndex(of: id)!
+                    if let next = saved.assetIDs.dropFirst(position + 1).first(where: { ordered.contains($0) }),
+                       let anchor = ordered.firstIndex(of: next) {
+                        ordered.insert(id, at: anchor)
+                    } else if let previous = saved.assetIDs.prefix(position).last(where: { ordered.contains($0) }),
+                              let anchor = ordered.firstIndex(of: previous) {
+                        ordered.insert(id, at: anchor + 1)
+                    } else { ordered.append(id) }
+                }
+                groups[index].assetIDs = ordered
+            } else {
+                var group = currentGroups[saved.id] ?? saved
+                group.assetIDs = recovered; groups.append(group)
+            }
+        }
     }
 
     private func persistChanges(_ message: String) {

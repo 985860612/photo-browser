@@ -34,6 +34,7 @@ macOS 原生照片浏览器，同名 RAW、HIF、JPG 合并成一次拍摄，全
 6. “移动记录”可撤销，也可恢复因退出或连接中断而未完成的操作。遇到同名文件、文件变化或缺失会报告并停止。
 7. 在照片网格、底部缩略图或大图上右键，选择“在 Camera Raw 中打开”。优先选同名 RAW；也可在“指定格式”子菜单选择 HIF/JPG。RAW 直接交给 Photoshop 打开；HIF/JPG 通过 JSX 调用 Camera Raw 对话框，Photoshop 若提示外部脚本来源，请核对后允许。需要安装 Photoshop 及 Camera Raw，格式和相机支持由所装版本决定，打开失败会提示。此入口只打开素材，是否保存修改由你在 Camera Raw 中决定。参见 [Adobe Camera Raw 说明](https://helpx.adobe.com/camera-raw/desktop/get-started/overview-and-setup/introduction-camera-raw.html) 与 [Photoshop 脚本说明](https://helpx.adobe.com/photoshop/using/scripting.html)。
 8. 大图和全屏均支持触控板捏合缩放、双指/鼠标滚动平移、鼠标拖拽平移（触控手势让照片跟随手指，兼容自然滚动开关）、⌘或 Option＋滚轮缩放，双击切换适应屏幕与 100% 像素。空白目录页显示子文件夹封面与合并后的照片数量，双击卡片进入，自动隐藏空的照片信息栏。
+9. 苹果键盘按 **⌫（Backspace / Delete）**，将选中照片的全部 RAW、HIF/JPG 和 XMP 移到当前目录下的 `_del` 文件夹；Fn＋⌫ 或独立前向 Delete 键同样可用。连续删除复用 `_del`，不会永久清除文件，可从“移动记录”恢复文件及原有分组。遇到同名文件会在整批移动前停止。输入文字时仍是普通退格；长按不会继续删除下一张，目录卡片不参与删除。
 
 ## HDR 与色彩
 

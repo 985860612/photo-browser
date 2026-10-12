@@ -17,6 +17,9 @@ public struct ArchiveRecord: Codable, Identifiable, Sendable {
     public var state: String
     public var message: String?
     public var destinationCreated: Bool = false
+    /// Present for pending deletion, including an empty list for ungrouped photos.
+    public var deletionGroups: [PhotoGroup]? = nil
+    public var isPendingDeletion: Bool { deletionGroups != nil }
 }
 
 public struct ArchivePlan: Sendable {
@@ -24,8 +27,25 @@ public struct ArchivePlan: Sendable {
     public var fileCount: Int { record.entries.count }
     public var totalBytes: Int64 { record.entries.reduce(0) { $0 + $1.size } }
     public init(directory: URL, destination: URL, group: PhotoGroup, assets: [PhotoAsset]) throws {
+        try self.init(directory: directory, destination: destination, group: group, assets: assets, deletionGroups: nil)
+    }
+
+    public static func pendingDeletion(directory: URL, assets: [PhotoAsset], groups: [PhotoGroup]) throws -> ArchivePlan {
+        let ids = Set(assets.map(\.id))
+        let affected = groups.filter { !ids.isDisjoint(with: $0.assetIDs) }
+        return try ArchivePlan(directory: directory, destination: directory.appendingPathComponent("_del", isDirectory: true),
+                               group: PhotoGroup(name: L10n.text("待删除照片"), assetIDs: assets.map(\.id)),
+                               assets: assets, deletionGroups: affected)
+    }
+
+    private init(directory: URL, destination: URL, group: PhotoGroup, assets: [PhotoAsset], deletionGroups: [PhotoGroup]?) throws {
         let root = directory.resolvingSymlinksInPath().standardizedFileURL
-        let target = destination.resolvingSymlinksInPath().standardizedFileURL
+        // Keep _del lexical so that an existing symbolic link is detected rather than followed.
+        let target = deletionGroups == nil ? destination.resolvingSymlinksInPath().standardizedFileURL
+            : root.appendingPathComponent("_del", isDirectory: true)
+        if deletionGroups != nil, root.lastPathComponent.lowercased() == "_del" {
+            throw BrowserFailure.message(L10n.text("照片已经在 _del 待删除目录中。"))
+        }
         guard target != root, !target.path.hasPrefix(root.path + "/.") else {
             throw BrowserFailure.message(L10n.text("请选择独立的分组目录。"))
         }
@@ -47,7 +67,9 @@ public struct ArchivePlan: Sendable {
         guard Set(entries.map { $0.destination.path.lowercased() }).count == entries.count else {
             throw BrowserFailure.message(L10n.text("分组存在大小写重名文件，请先处理冲突。"))
         }
-        record = ArchiveRecord(id: UUID().uuidString, created: Date(), sourceDirectory: root, destination: target, group: group, entries: entries, state: "prepared", message: nil)
+        var result = ArchiveRecord(id: UUID().uuidString, created: Date(), sourceDirectory: root, destination: target, group: group, entries: entries, state: "prepared", message: nil)
+        result.deletionGroups = deletionGroups
+        record = result
     }
 }
 
@@ -74,17 +96,29 @@ public struct ArchiveEngine {
 
     public func archive(_ plan: ArchivePlan) throws -> ArchiveRecord {
         var record = plan.record
-        guard !fm.fileExists(atPath: record.destination.path) else {
+        let existingDestination = fm.fileExists(atPath: record.destination.path)
+        guard record.isPendingDeletion || !existingDestination else {
             throw BrowserFailure.message(L10n.text("目标文件夹已存在，不会覆盖：\(record.destination.path)"))
         }
-        for entry in record.entries { try validate(entry.source, against: entry) }
+        try validateDeletionDirectory(record)
+        let existingNames = existingDestination
+            ? Set(try fm.contentsOfDirectory(atPath: record.destination.path).map { $0.lowercased() }) : []
+        for entry in record.entries {
+            try validate(entry.source, against: entry)
+            guard !existingNames.contains(entry.destination.lastPathComponent.lowercased()) else {
+                throw BrowserFailure.message(L10n.text("目标文件已存在：\(entry.destination.lastPathComponent)"))
+            }
+        }
         try persist(record)
         do {
-            try fm.createDirectory(at: record.destination, withIntermediateDirectories: false)
-            record.destinationCreated = true
+            if !existingDestination {
+                try fm.createDirectory(at: record.destination, withIntermediateDirectories: false)
+                record.destinationCreated = true
+            }
             record.state = "moving"; try persist(record)
             for entry in record.entries {
                 // Refuse races with a newly created destination file.
+                try validateDeletionDirectory(record)
                 guard !fm.fileExists(atPath: entry.destination.path) else { throw BrowserFailure.message(L10n.text("目标文件已存在：\(entry.destination.lastPathComponent)")) }
                 try validate(entry.source, against: entry)
                 try mover(entry.source, entry.destination)
@@ -150,6 +184,7 @@ public struct ArchiveEngine {
     }
 
     private func validateRestore(_ record: ArchiveRecord) throws {
+        try validateDeletionDirectory(record)
         for entry in record.entries {
             let sourceExists = fm.fileExists(atPath: entry.source.path)
             let targetExists = fm.fileExists(atPath: entry.destination.path)
@@ -157,6 +192,19 @@ public struct ArchiveEngine {
                 throw BrowserFailure.message(sourceExists ? L10n.text("原目录有同名文件，拒绝覆盖：\(entry.source.lastPathComponent)") : L10n.text("原目录和目标目录都找不到文件：\(entry.source.lastPathComponent)"))
             }
             try validate(sourceExists ? entry.source : entry.destination, against: entry)
+        }
+    }
+
+    private func validateDeletionDirectory(_ record: ArchiveRecord) throws {
+        guard record.isPendingDeletion else { return }
+        guard record.destination.standardizedFileURL == record.sourceDirectory.appendingPathComponent("_del", isDirectory: true).standardizedFileURL else {
+            throw BrowserFailure.message(L10n.text("_del 必须是当前目录下的普通文件夹，不能是文件或符号链接。"))
+        }
+        let values: URLResourceValues
+        do { values = try record.destination.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]) }
+        catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError { return }
+        guard values.isDirectory == true, values.isSymbolicLink != true else {
+            throw BrowserFailure.message(L10n.text("_del 必须是当前目录下的普通文件夹，不能是文件或符号链接。"))
         }
     }
 

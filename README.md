@@ -63,6 +63,7 @@ Burst frames join a candidate when sequence numbers increase, focal length match
 | ⌘↑ | Parent folder |
 | ← / → | Previous / next photo or folder card |
 | ⇧← / ⇧→ | Extend or shrink photo selection |
+| ⌫ (Backspace) / Delete | Move selected photos and all paired formats/XMP to `_del` |
 | Return | Open the selected folder |
 | Space / Esc | Enter / exit fullscreen preview |
 | ⌘J | Toggle grid / large preview |
@@ -71,7 +72,9 @@ Burst frames join a candidate when sequence numbers increase, focal length match
 
 ## Data and rendering
 
-Groups and move records are stored in `~/Library/Application Support/PhotoBrowser/`; thumbnails are cached in `~/Library/Caches/PhotoBrowser/`. Browsing and grouping do not write to the original photos. A confirmed move changes their location. File moves happen individually, with records written before the first move; they are not one atomic filesystem transaction. Keep Move History until recovery is complete.
+Groups and move records are stored in `~/Library/Application Support/PhotoBrowser/`; thumbnails are cached in `~/Library/Caches/PhotoBrowser/`. Browsing and grouping do not write to the original photos. A confirmed move or the deletion shortcut changes their location. File moves happen individually, with records written before the first move; they are not one atomic filesystem transaction. Keep Move History until recovery is complete.
+
+On an Apple keyboard, press **⌫ (Backspace)** to move selected captures, including RAW, HIF/JPG, and XMP files, into `_del` in the current folder. Forward Delete (Fn + ⌫) also works. Consecutive deletions reuse this folder. Nothing is permanently erased; Move History restores the files and their group memberships. A filename conflict stops the entire batch before moving files. While typing in a text field, ⌫ deletes text as usual. Holding the key does not delete successive photos, and folder cards cannot be deleted with this shortcut.
 
 Existing groups and Chinese CSV lists remain readable. A list at `全景素材筛选/全景候选文件清单.csv` can be imported on first access. The legacy columns are `组号`, `文件名`, and optionally `分类` and `判断依据`. Saved group names, folder names, and user descriptions are preserved when the interface language changes.
 
