@@ -49,13 +49,18 @@ struct PhotoGridView: View {
                     if store.scope == "all" {
                         ForEach(store.subdirectories, id: \.path) { url in
                             FolderCard(url: url, thumbnailHeight: store.thumbnailSize) { store.load(url) }
+                                .id("folder:" + url.path)
                         }
                     }
                     ForEach(store.visibleAssets) { asset in
                         PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id && store.selectedFolderID == nil, height: store.thumbnailSize)
                             .id(asset.id)
-                            .onTapGesture(count: 2) { store.select(asset, modifiers: []); store.showGroupOverview = false }
-                            .onTapGesture { store.select(asset) }
+                            .background(ImmediateCardClick { count, modifiers in
+                                store.select(asset, modifiers: count == 2 ? [] : modifiers)
+                                if count == 2 { store.showGroupOverview = false }
+                            })
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { store.select(asset, modifiers: []) }
                             .contextMenu {
                                 Button("全屏高清预览") { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
                                 Button("在 Camera Raw 中打开") { store.openInCameraRaw(asset) }
@@ -67,7 +72,7 @@ struct PhotoGridView: View {
                             }
                     }
                 }.padding(15)
-            }.onChange(of: store.focusedID) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
+            }.onChange(of: store.navigationScrollTarget) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
         }
     }
 }
@@ -87,7 +92,11 @@ struct FilmstripView: View {
                     ForEach(store.visibleAssets) { asset in
                         PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id && store.selectedFolderID == nil, height: store.thumbnailSize - 15)
                             .frame(width: store.thumbnailSize).id(asset.id)
-                            .onTapGesture { store.select(asset) }
+                            .background(ImmediateCardClick { count, modifiers in
+                                if count == 1 { store.select(asset, modifiers: modifiers) }
+                            })
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { store.select(asset, modifiers: []) }
                             .contextMenu {
                                 Button("全屏高清预览") { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
                                 Button("在 Camera Raw 中打开") { store.openInCameraRaw(asset) }
@@ -99,7 +108,7 @@ struct FilmstripView: View {
                     }
                 }.padding(10)
             }
-            .onChange(of: store.focusedID) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
+            .onChange(of: store.navigationScrollTarget) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
             .onAppear {
                 if store.scope == "all", let folder = store.subdirectories.first, store.focusedID == store.visibleAssets.first?.id {
                     proxy.scrollTo("folder:" + folder.path, anchor: .leading)

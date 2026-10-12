@@ -83,6 +83,58 @@ import BrowserCore
         let after = try Dictionary(uniqueKeysWithValues: caches.map { ($0.path, try $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) })
         try expect(before == after, "reopening directory reuses disk entries without rewriting them")
         try expect(store.previewCompleted == 4 && store.previewFailures == 1, "repeated scan finishes with accurate counts")
-        print("PASS all preview store checks")
+        try await navigationChecks(root: root)
+        print("PASS all preview store and navigation checks")
+    }
+
+    @MainActor static func navigationChecks(root: URL) async throws {
+        let store = BrowserStore(supportDirectory: root.appendingPathComponent("navigation-support"))
+        let folders = [root.appendingPathComponent("folder-a"), root.appendingPathComponent("folder-b")]
+        let photos = (0..<3).map { n in
+            PhotoAsset(id: "photo-\(n)", name: "photo-\(n)", files: [
+                PhotoFile(url: root.appendingPathComponent("photo-\(n).jpg"), kind: .rendered)
+            ])
+        }
+        store.assets = photos; store.subdirectories = folders
+        store.select(photos[0], modifiers: [])
+        store.step(-1)
+        try expect(store.selectedFolderID == folders[1].path && store.selection.isEmpty,
+                   "left from first photo selects the preceding folder and clears photo selection")
+        store.step(-1); store.step(-1)
+        try expect(store.selectedFolderID == folders[0].path && store.selectedItemID == "folder:" + folders[0].path,
+                   "folder navigation stops at the first folder and provides its scroll identity")
+        try expect(store.navigationScrollTarget == store.selectedItemID, "keyboard selection scrolls its card into view")
+        store.selectFolder(folders[0])
+        try expect(store.navigationScrollTarget == nil, "mouse selection keeps the card still for a second click")
+        store.step(1); store.step(1)
+        try expect(store.selectedFolderID == nil && store.focusedID == photos[0].id && store.selection == [photos[0].id],
+                   "right from last folder returns to the first photo even when its preview was already focused")
+        store.step(1); store.step(1); store.step(1)
+        try expect(store.focusedID == photos[2].id, "photo navigation stops at the last photo")
+        store.select(photos[0], modifiers: [])
+        store.step(1, extendingSelection: true); store.step(1, extendingSelection: true)
+        try expect(store.selection == Set(photos.map(\.id)), "Shift-right extends selection across photos")
+        store.step(-1, extendingSelection: true); store.step(-1, extendingSelection: true); store.step(-1, extendingSelection: true)
+        try expect(store.selection == [photos[0].id] && store.selectedFolderID == nil,
+                   "Shift-left contracts the range and stops before folders")
+        store.scope = "ungrouped"; store.changeScope(); store.step(-1)
+        try expect(store.selectedFolderID == nil && store.focusedID == photos[0].id,
+                   "ungrouped scope does not navigate hidden folder cards")
+        store.groups = [PhotoGroup(id: "group", name: "group", assetIDs: [photos[2].id, photos[0].id])]
+        store.scope = "group"; store.changeScope(); store.step(1)
+        try expect(store.focusedID == photos[0].id && store.selectedFolderID == nil,
+                   "group navigation follows group order and excludes folders")
+        store.scope = "all"; store.changeScope(); store.isFullscreenPreview = true; store.step(-1)
+        try expect(store.focusedID == photos[0].id && store.selectedFolderID == nil,
+                   "fullscreen navigation remains within photos")
+        store.isFullscreenPreview = false; store.assets = []; store.focusedID = nil; store.selection = []
+        store.step(1); store.step(1)
+        try expect(store.selectedFolderID == folders[1].path, "directories without photos remain keyboard navigable")
+        try FileManager.default.createDirectory(at: folders[1], withIntermediateDirectories: true)
+        store.openSelectedFolder()
+        try await until { !store.isLoading }
+        try expect(store.directory?.path == folders[1].path && store.selectedFolderID == nil && store.errorMessage == nil,
+                   "opening selected folder loads it and clears the old selection")
+        store.cancelPreviewGeneration()
     }
 }

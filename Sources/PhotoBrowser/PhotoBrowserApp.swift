@@ -28,8 +28,8 @@ import AppKit
                     .keyboardShortcut(.upArrow).disabled(store.directory == nil || store.isMoving || store.isLoading)
             }
             CommandMenu("照片") {
-                Button("上一张") { store.step(-1) }.keyboardShortcut(.leftArrow, modifiers: [])
-                Button("下一张") { store.step(1) }.keyboardShortcut(.rightArrow, modifiers: [])
+                Button("上一项") { store.step(-1) }.keyboardShortcut(.leftArrow, modifiers: [])
+                Button("下一项") { store.step(1) }.keyboardShortcut(.rightArrow, modifiers: [])
                 Button("向左扩展选择") { store.step(-1, extendingSelection: true) }.keyboardShortcut(.leftArrow, modifiers: [.shift])
                     .disabled(store.isMoving || store.isLoading || store.visibleAssets.isEmpty)
                 Button("向右扩展选择") { store.step(1, extendingSelection: true) }.keyboardShortcut(.rightArrow, modifiers: [.shift])
@@ -37,7 +37,7 @@ import AppKit
                 Button("选择全部") { store.selectAll() }.keyboardShortcut("a")
                 Divider()
                 Button("全屏高清预览") { store.toggleFullscreenPreview() }.keyboardShortcut(.space, modifiers: [])
-                    .disabled(store.focusedFile == nil || store.isMoving || store.isLoading)
+                    .disabled(store.focusedFile == nil || store.selectedFolderID != nil || store.isMoving || store.isLoading)
                 Button("切换网格 / 大图") { store.showGroupOverview.toggle() }.keyboardShortcut("j")
                 Button("在 Camera Raw 中打开") { if let asset = store.focusedAsset { store.openInCameraRaw(asset) } }
                     .disabled(store.focusedAsset == nil || store.isMoving)
@@ -62,14 +62,15 @@ import AppKit
                 store.closeFullscreenPreview(); return nil
             }
             if NSApp.keyWindow?.firstResponder is NSTextView { return event }
-            if event.modifierFlags.contains(.shift), event.keyCode == 123 || event.keyCode == 124,
-               !store.isLoading, !store.visibleAssets.isEmpty,
-               NSApp.keyWindow?.attachedSheet == nil, NSApp.modalWindow == nil {
-                store.step(event.keyCode == 123 ? -1 : 1, extendingSelection: true)
+            guard !store.isLoading, NSApp.keyWindow?.attachedSheet == nil, NSApp.modalWindow == nil else { return event }
+            if event.keyCode == 123 || event.keyCode == 124 {
+                store.step(event.keyCode == 123 ? -1 : 1, extendingSelection: event.modifierFlags.contains(.shift))
                 return nil
             }
-            if event.keyCode == 49, !store.isLoading, store.focusedFile != nil,
-               NSApp.keyWindow?.attachedSheet == nil {
+            if (event.keyCode == 36 || event.keyCode == 76), store.selectedFolderID != nil {
+                store.openSelectedFolder(); return nil
+            }
+            if event.keyCode == 49, store.focusedFile != nil, store.selectedFolderID == nil {
                 store.toggleFullscreenPreview(); return nil
             }
             return event
