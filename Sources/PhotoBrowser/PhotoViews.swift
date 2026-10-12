@@ -3,6 +3,7 @@ import SwiftUI
 import BrowserCore
 
 struct PhotoThumbnail: View {
+    @EnvironmentObject private var store: BrowserStore
     let asset: PhotoAsset
     let selected: Bool
     let focused: Bool
@@ -27,6 +28,7 @@ struct PhotoThumbnail: View {
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focused ? Color.cyan.opacity(0.65) : (selected ? Color.white.opacity(0.16) : .clear), lineWidth: 1))
         .contentShape(Rectangle())
         .onHover { hovered = $0 }
+        .onAppear { store.previewAppeared(asset) }
         .task(id: asset.preferred.id + "\(asset.preferred.modified.timeIntervalSince1970)") {
             do { image = try await ThumbnailCache.shared.image(asset.preferred, maximum: 520).image; failure = nil }
             catch is CancellationError {}

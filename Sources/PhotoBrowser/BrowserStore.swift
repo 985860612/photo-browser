@@ -23,6 +23,14 @@ private struct BrowserSession: Codable {
     @Published var isLoading = false
     @Published var isReadingMetadata = false
     @Published var isMoving = false
+    @Published var isGeneratingPreviews = false
+    @Published var previewCompleted = 0
+    @Published var previewTotal = 0
+    @Published var previewFailures = 0
+    @Published var previewFailureDetails = ""
+    private var previewTask: Task<Void, Never>?
+    private var previewID = UUID()
+    private var previewQueue: [PhotoFile] = []
     @Published var status = "选择照片目录开始浏览"
     @Published var errorMessage: String?
     @Published var archiveGroup: PhotoGroup?
@@ -50,10 +58,12 @@ private struct BrowserSession: Codable {
     private var selectionAnchorID: String?
     private var rangeSelectionBase: Set<String>?
     private let support: URL
+    private let thumbnails: ThumbnailCache
     let engine: ArchiveEngine
 
-    init() {
-        support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("PhotoBrowser", isDirectory: true)
+    init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared) {
+        support = supportDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("PhotoBrowser", isDirectory: true)
+        self.thumbnails = thumbnails
         engine = ArchiveEngine(journalDirectory: support.appendingPathComponent("Moves", isDirectory: true))
     }
 
@@ -105,6 +115,7 @@ private struct BrowserSession: Codable {
 
     func load(_ inputURL: URL, restoring restoredGroup: PhotoGroup? = nil, recordNavigation: Bool = true) {
         guard !isMoving else { return }
+        cancelPreviewGeneration()
         let url = inputURL.standardizedFileURL
         if isFullscreenPreview { closeFullscreenPreview() }
         metadataJob?.cancel(); metadataJob = nil; isReadingMetadata = false; metadataID = UUID()
@@ -162,11 +173,69 @@ private struct BrowserSession: Codable {
                 UserDefaults.standard.set(url.path, forKey: "lastDirectory")
                 try saveSession()
                 refreshHistory()
+                startPreviewGeneration()
             } catch {
                 guard loadID == ticket else { return }
                 isLoading = false; status = "目录加载失败"; report(error)
             }
         }
+    }
+
+    func cancelPreviewGeneration() {
+        previewID = UUID(); previewTask?.cancel(); previewTask = nil
+        previewQueue = []; isGeneratingPreviews = false
+        previewCompleted = 0; previewTotal = 0; previewFailures = 0; previewFailureDetails = ""
+    }
+
+    private func startPreviewGeneration() {
+        cancelPreviewGeneration()
+        guard !isMoving, !isLoading, !assets.isEmpty else { return }
+        previewQueue = assets.map(\.preferred)
+        previewTotal = previewQueue.count; isGeneratingPreviews = true
+        let ticket = previewID
+        prioritizePreviews(visibleAssets.prefix(48).map(\.preferred))
+        previewTask = Task {
+            var completed = 0, failures = 0, details: [String] = []
+            var lastUpdate = Date.distantPast
+            while previewID == ticket, !Task.isCancelled, !previewQueue.isEmpty {
+                let file = previewQueue.removeFirst()
+                do { _ = try await thumbnails.image(file, maximum: 520, background: true) }
+                catch is CancellationError { return }
+                catch {
+                    failures += 1
+                    if details.count < 20 { details.append("\(file.url.lastPathComponent)：\(error.localizedDescription)") }
+                }
+                guard previewID == ticket, !Task.isCancelled else { return }
+                completed += 1
+                // Publishing each cache hit would needlessly redraw the whole gallery.
+                if Date().timeIntervalSince(lastUpdate) >= 0.25 || previewQueue.isEmpty {
+                    previewCompleted = completed; previewFailures = failures
+                    previewFailureDetails = details.joined(separator: "\n")
+                    lastUpdate = Date()
+                }
+            }
+            guard previewID == ticket, !Task.isCancelled else { return }
+            do { try await thumbnails.trim(protecting: assets.map(\.preferred)) }
+            catch is CancellationError { return }
+            catch { previewFailureDetails += "\n缓存清理失败：\(error.localizedDescription)" }
+            guard previewID == ticket, !Task.isCancelled else { return }
+            isGeneratingPreviews = false; previewTask = nil
+        }
+    }
+
+    private func prioritizePreviews(_ files: [PhotoFile]) {
+        guard isGeneratingPreviews else { return }
+        let rank = Dictionary(files.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: min)
+        let priority = previewQueue.filter { rank[$0.id] != nil }.sorted { rank[$0.id]! < rank[$1.id]! }
+        previewQueue = priority + previewQueue.filter { rank[$0.id] == nil }
+    }
+
+    func previewAppeared(_ asset: PhotoAsset) {
+        guard isGeneratingPreviews else { return }
+        let list = visibleAssets
+        guard let index = list.firstIndex(where: { $0.id == asset.id }) else { return }
+        // Warm the following screenful before the user scrolls into it.
+        prioritizePreviews(list[max(0, index - 4)..<min(list.count, index + 25)].map(\.preferred))
     }
 
     var canGoBack: Bool { navigationIndex > 0 && !isLoading && !isMoving }
@@ -222,6 +291,7 @@ private struct BrowserSession: Codable {
         if let focusedID { selection = [focusedID] }
         showGroupOverview = currentGroup != nil
         selectionAnchorID = focusedID; rangeSelectionBase = nil
+        prioritizePreviews(visibleAssets.prefix(48).map(\.preferred))
     }
 
     func select(_ asset: PhotoAsset, modifiers: NSEvent.ModifierFlags = NSEvent.modifierFlags) {
@@ -349,6 +419,7 @@ private struct BrowserSession: Codable {
 
     func archive(_ plan: ArchivePlan) {
         guard canArchive else { report(BrowserFailure.message("请先完成当前任务或恢复未完成的移动记录。")); return }
+        cancelPreviewGeneration()
         isMoving = true; archiveGroup = nil; status = "正在移动整组文件，请勿退出…"
         let worker = engine
         Task {
@@ -366,19 +437,21 @@ private struct BrowserSession: Codable {
                 selectionAnchorID = focusedID; rangeSelectionBase = nil
                 isMoving = false; persistChanges("已移动 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件，可在移动记录中撤销")
                 refreshHistory()
-            } catch { isMoving = false; status = "移动失败，请查看提示和移动记录"; report(error); refreshHistory() }
+                startPreviewGeneration()
+            } catch { isMoving = false; startPreviewGeneration(); status = "移动失败，请查看提示和移动记录"; report(error); refreshHistory() }
         }
     }
 
     func undo(_ record: ArchiveRecord) {
         guard !isMoving else { return }
+        cancelPreviewGeneration()
         isMoving = true; status = "正在撤销移动…"; let worker = engine
         Task {
             do {
                 let restored = try await Task.detached(priority: .userInitiated) { try worker.undo(record) }.value
                 isMoving = false; showHistory = false
                 load(restored.sourceDirectory, restoring: restored.group)
-            } catch { isMoving = false; report(error); refreshHistory() }
+            } catch { isMoving = false; startPreviewGeneration(); report(error); refreshHistory() }
         }
     }
 

@@ -32,6 +32,8 @@ macOS 原生照片浏览器，同名 RAW、HIF、JPG 合并成一次拍摄，全
 ```bash
 swift run BrowserCoreChecks
 swift run BrowserHDRChecks
+swift run BrowserThumbnailChecks
+bash scripts/check-preview-store.sh
 bash scripts/build-app.sh
 open 'dist/照片组浏览器.app'
 ```
@@ -44,4 +46,4 @@ swift run BrowserSmokeChecks '/path/to/photos' DSC00648 DSC00672
 
 独立检查程序不依赖 XCTest，也可在仅安装 Command Line Tools 的机器运行。移动模块的测试只操作临时目录，覆盖全格式移动/撤销、同名冲突、部分失败回滚、日志写入失败和中断恢复。移动记录在原文件操作前写入；文件定位、大小及修改时间用于校验，不计算整库内容哈希。分组归档是逐文件移动，不是跨文件原子事务；连接不可用时保留记录，重新连接后从“移动记录”继续恢复。
 
-预览使用 [Apple ImageIO](https://developer.apple.com/documentation/imageio/cgimagesource)，生成时按照片方向旋转，并限制分辨率以避免一次解码整个图库。缩略图在后台串行生成并缓存，缓存超过 2,000 张时清理较旧项目。
+预览使用 [Apple ImageIO](https://developer.apple.com/documentation/imageio/cgimagesource)，生成时按照片方向旋转，并限制分辨率以避免一次解码整个图库。打开目录后自动在后台生成所有合并照片的首选格式缩略图，底部显示进度。可见照片使用两个加载通道，后台预生成使用单独的一个通道，优先处理当前分组与滚动位置附近的照片；同一照片的请求共用解码，切换目录取消旧任务。沿用原有磁盘缓存，缓存 JPEG 在后台立即解码，内存命中直接返回图片与元数据。后台生成不挤占可见照片的内存缓存，也不改动原照片。首次访问未缓存照片仍需读取，后台生成完成后滚动直接使用本地缓存。缓存超过 2,000 张时清理较旧项目，保留当前目录的预览。

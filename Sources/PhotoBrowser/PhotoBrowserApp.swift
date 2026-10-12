@@ -84,6 +84,7 @@ import AppKit
             return .terminateCancel
         }
         store?.cancelMetadata()
+        store?.cancelPreviewGeneration()
         return .terminateNow
     }
 }
