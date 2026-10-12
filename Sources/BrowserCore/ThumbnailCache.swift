@@ -10,51 +10,122 @@ public struct LoadedPreview {
 
 public actor ThumbnailCache {
     public static let shared = ThumbnailCache()
-    private let memory = NSCache<NSString, NSImage>()
-    private let context = CIContext(options: [.cacheIntermediates: false])
-    private var writes = 0
+    private final class Entry: NSObject {
+        let preview: LoadedPreview
+        init(_ preview: LoadedPreview) { self.preview = preview }
+    }
+    private struct Pending {
+        let ticket: UUID
+        let task: Task<Void, Never>
+        var waiters: [UUID: CheckedContinuation<LoadedPreview, Error>]
+        var keepInMemory: Bool
+    }
+    private let memory = NSCache<NSString, Entry>()
+    private var pending: [String: Pending] = [:]
     private let directory: URL
+    private let workers: PreviewWorkQueue
 
-    init() {
-        directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    public init(directory: URL? = nil, workers: PreviewWorkQueue = .shared) {
+        self.directory = directory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("PhotoBrowser/Thumbnails", isDirectory: true)
+        self.workers = workers
         memory.countLimit = 160; memory.totalCostLimit = 180 * 1024 * 1024
     }
 
     public nonisolated static func digest(_ string: String) -> String { SHA256.hash(data: Data(string.utf8)).map { String(format: "%02x", $0) }.joined() }
 
     /// Decode the original at native resolution; never substitute a camera's small embedded JPEG.
-    public func fullResolution(_ file: PhotoFile) throws -> LoadedPreview {
-        try Task.checkCancellation()
-        guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
-              var cg = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {
-            throw BrowserFailure.message("系统无法解码 \(file.format) 高清原图。请切换同名 HIF/JPG，或在 Camera Raw 中打开。")
+    public nonisolated func fullResolution(_ file: PhotoFile) async throws -> LoadedPreview {
+        try await workers.run { check in
+            let context = CIContext(options: [.cacheIntermediates: false])
+            try check()
+            guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+                  var cg = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {
+                throw BrowserFailure.message("系统无法解码 \(file.format) 高清原图。请切换同名 HIF/JPG，或在 Camera Raw 中打开。")
+            }
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]
+            let orientation = (properties?[kCGImagePropertyOrientation as String] as? NSNumber)?.int32Value ?? 1
+            if orientation != 1 {
+                let ci = CIImage(cgImage: cg).oriented(forExifOrientation: orientation)
+                guard let rotated = context.createCGImage(ci, from: ci.extent) else { throw BrowserFailure.message("无法校正高清照片方向。") }
+                cg = rotated
+            }
+            try check()
+            return LoadedPreview(image: NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)), metadata: self.nativeMetadata(source))
         }
-        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]
-        let orientation = (properties?[kCGImagePropertyOrientation as String] as? NSNumber)?.int32Value ?? 1
-        if orientation != 1 {
-            let ci = CIImage(cgImage: cg).oriented(forExifOrientation: orientation)
-            guard let rotated = context.createCGImage(ci, from: ci.extent) else { throw BrowserFailure.message("无法校正高清照片方向。") }
-            cg = rotated
-        }
-        try Task.checkCancellation()
-        return LoadedPreview(image: NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)), metadata: nativeMetadata(source))
     }
 
-    public func image(_ file: PhotoFile, maximum: Int) throws -> LoadedPreview {
+    /// Visible requests share the same decode with prefetch, but only visible images enter RAM.
+    public func image(_ file: PhotoFile, maximum: Int, background: Bool = false) async throws -> LoadedPreview {
         try Task.checkCancellation()
         let key = Self.digest("v1|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)|\(maximum)")
+        if let cached = memory.object(forKey: key as NSString) { return cached.preview }
+        let waiter = UUID()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                if var current = pending[key] {
+                    current.waiters[waiter] = continuation
+                    current.keepInMemory = current.keepInMemory || !background
+                    pending[key] = current
+                    return
+                }
+                let ticket = UUID(), directory = directory, workers = workers
+                let task = Task {
+                    let result: Result<LoadedPreview, Error>
+                    do {
+                        let preview = try await workers.run(background: background) { check in
+                            try Self.readOrGenerate(file, maximum: maximum, key: key, directory: directory, check: check)
+                        }
+                        result = .success(preview)
+                    } catch { result = .failure(error) }
+                    finish(key, ticket: ticket, result: result)
+                }
+                pending[key] = Pending(ticket: ticket, task: task, waiters: [waiter: continuation], keepInMemory: !background)
+            }
+        } onCancel: {
+            Task { await self.cancel(key, waiter: waiter) }
+        }
+    }
+
+    private func cancel(_ key: String, waiter: UUID) {
+        guard var current = pending[key], let continuation = current.waiters.removeValue(forKey: waiter) else { return }
+        if current.waiters.isEmpty { pending.removeValue(forKey: key); current.task.cancel() }
+        else { pending[key] = current }
+        continuation.resume(throwing: CancellationError())
+    }
+
+    private func finish(_ key: String, ticket: UUID, result: Result<LoadedPreview, Error>) {
+        guard let current = pending[key], current.ticket == ticket else { return }
+        pending.removeValue(forKey: key)
+        if case .success(let preview) = result, current.keepInMemory {
+            memory.setObject(Entry(preview), forKey: key as NSString,
+                             cost: Int(preview.image.size.width * preview.image.size.height) * 4)
+        }
+        current.waiters.values.forEach { $0.resume(with: result) }
+    }
+
+    private nonisolated static func readOrGenerate(_ file: PhotoFile, maximum: Int, key: String,
+                                                   directory: URL, check: () throws -> Void) throws -> LoadedPreview {
+        try check()
         let cachedURL = directory.appendingPathComponent(key + ".jpg")
         let metadataURL = directory.appendingPathComponent(key + ".json")
-        var cachedMetadata: PhotoMetadata?
-        if FileManager.default.fileExists(atPath: metadataURL.path) {
-            cachedMetadata = try JSONDecoder().decode(PhotoMetadata.self, from: Data(contentsOf: metadataURL))
+        if FileManager.default.fileExists(atPath: cachedURL.path) {
+            // Force JPEG decoding here, so drawing the NSImage never reads/decompresses on the UI thread.
+            let bytes = try Data(contentsOf: cachedURL)
+            if let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+               let cg = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) {
+                var metadata: PhotoMetadata?
+                if FileManager.default.fileExists(atPath: metadataURL.path) {
+                    let data = try Data(contentsOf: metadataURL)
+                    do { metadata = try JSONDecoder().decode(PhotoMetadata.self, from: data) }
+                    catch is DecodingError { /* Older/corrupt metadata must not hide a valid cached image. */ }
+                }
+                try check()
+                return LoadedPreview(image: NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)), metadata: metadata)
+            }
         }
-        if let cached = memory.object(forKey: key as NSString) { return LoadedPreview(image: cached, metadata: cachedMetadata) }
-        if FileManager.default.fileExists(atPath: cachedURL.path), let image = NSImage(contentsOf: cachedURL) {
-            memory.setObject(image, forKey: key as NSString)
-            return LoadedPreview(image: image, metadata: cachedMetadata)
-        }
+        let context = CIContext(options: [.cacheIntermediates: false])
         var source: CGImageSource?
         var orientation: Int32 = 1
         var embedded = false
@@ -64,6 +135,7 @@ public actor ThumbnailCache {
             p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
             try p.run()
             let bytes = pipe.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
+            try check()
             if p.terminationStatus == 0,
                let objects = try JSONSerialization.jsonObject(with: bytes) as? [[String: Any]], let object = objects.first,
                let raw = object["PreviewImage"] as? String, raw.hasPrefix("base64:"),
@@ -87,21 +159,31 @@ public actor ThumbnailCache {
             guard let rotated = context.createCGImage(ci, from: ci.extent) else { throw BrowserFailure.message("无法校正照片方向。") }
             cg = rotated
         }
-        try Task.checkCancellation()
+        try check()
         let image = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-        memory.setObject(image, forKey: key as NSString, cost: cg.width * cg.height * 4)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        // Cache writes are optional optimizations; decode failures are always reported.
         let mutable = NSMutableData()
-        if let destination = CGImageDestinationCreateWithData(mutable, "public.jpeg" as CFString, 1, nil) {
-            CGImageDestinationAddImage(destination, cg, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
-            if CGImageDestinationFinalize(destination) { try (mutable as Data).write(to: cachedURL, options: .atomic) }
+        guard let destination = CGImageDestinationCreateWithData(mutable, "public.jpeg" as CFString, 1, nil) else {
+            throw BrowserFailure.message("无法创建预览缓存：\(file.url.lastPathComponent)")
         }
-        let metadata = nativeMetadata(source)
+        CGImageDestinationAddImage(destination, cg, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { throw BrowserFailure.message("无法保存预览缓存：\(file.url.lastPathComponent)") }
+        try check()
+        try (mutable as Data).write(to: cachedURL, options: .atomic)
+        try check()
+        let metadata = ThumbnailCache.shared.nativeMetadata(source)
         if let metadata { try JSONEncoder().encode(metadata).write(to: metadataURL, options: .atomic) }
-        writes += 1
-        if writes % 100 == 0 { try trimCache() }
         return LoadedPreview(image: image, metadata: metadata)
+    }
+
+    /// Maintenance also uses the utility lane; never blocks memory hits or visible decoding.
+    public func trim(protecting files: [PhotoFile] = [], maximum: Int = 520) async throws {
+        let protected = Set(files.map { Self.digest("v1|\($0.url.path)|\($0.size)|\($0.modified.timeIntervalSince1970)|\(maximum)") })
+            .union(pending.keys)
+        try await workers.run(background: true) { check in
+            try check()
+            try Self.trimCache(self.directory, protecting: protected, check: check)
+        }
     }
 
     nonisolated func nativeMetadata(_ source: CGImageSource) -> PhotoMetadata? {
@@ -125,11 +207,13 @@ public actor ThumbnailCache {
         return value
     }
 
-    private func trimCache() throws {
+    private nonisolated static func trimCache(_ directory: URL, protecting protected: Set<String>, check: () throws -> Void) throws {
         let urls = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]).filter { $0.pathExtension == "jpg" }
         guard urls.count > 2000 else { return }
         let ordered = try urls.map { ($0, try $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast) }.sorted { $0.1 < $1.1 }
-        for item in ordered.prefix(ordered.count - 1600) {
+        let removable = ordered.filter { !protected.contains($0.0.deletingPathExtension().lastPathComponent) }
+        for item in removable.prefix(max(0, ordered.count - max(1600, protected.count))) {
+            try check()
             try FileManager.default.removeItem(at: item.0)
             let companion = item.0.deletingPathExtension().appendingPathExtension("json")
             if FileManager.default.fileExists(atPath: companion.path) { try FileManager.default.removeItem(at: companion) }

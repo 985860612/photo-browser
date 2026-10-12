@@ -119,7 +119,10 @@ struct PhotoCanvas: NSViewRepresentable {
             changeZoom(zoom * exp(event.scrollingDeltaY * 0.015), at: convert(event.locationInWindow, from: nil))
         } else {
             let multiplier: CGFloat = event.hasPreciseScrollingDeltas ? 1 : 14
-            pan.x -= event.scrollingDeltaX * multiplier; pan.y -= event.scrollingDeltaY * multiplier
+            // Precise touch gestures grab the photo, independent of the system scroll preference.
+            let direction: CGFloat = event.hasPreciseScrollingDeltas && !event.isDirectionInvertedFromDevice ? -1 : 1
+            pan.x += event.scrollingDeltaX * multiplier * direction
+            pan.y += event.scrollingDeltaY * multiplier * direction
             needsDisplay = true
         }
     }
