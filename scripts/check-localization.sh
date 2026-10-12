@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PHOTO_CHECK_ARGS=()
+PHOTO_CHECK_ARGS=(--package-path "$PWD")
 if [ -n "${PHOTO_BROWSER_BUILD_PATH:-}" ]; then PHOTO_CHECK_ARGS+=(--scratch-path "$PHOTO_BROWSER_BUILD_PATH"); fi
 swift build "${PHOTO_CHECK_ARGS[@]}" --product BrowserLocalizationChecks
 PHOTO_CHECK_BIN=$(swift build "${PHOTO_CHECK_ARGS[@]}" --show-bin-path)/BrowserLocalizationChecks
