@@ -122,7 +122,8 @@ struct PhotoCanvas: NSViewRepresentable {
             // Precise touch gestures grab the photo, independent of the system scroll preference.
             let direction: CGFloat = event.hasPreciseScrollingDeltas && !event.isDirectionInvertedFromDevice ? -1 : 1
             pan.x += event.scrollingDeltaX * multiplier * direction
-            pan.y += event.scrollingDeltaY * multiplier * direction
+            // AppKit's vertical scroll axis is opposite to the Core Image canvas Y axis.
+            pan.y -= event.scrollingDeltaY * multiplier * direction
             needsDisplay = true
         }
     }
