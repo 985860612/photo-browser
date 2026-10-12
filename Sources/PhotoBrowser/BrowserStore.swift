@@ -354,6 +354,11 @@ private struct BrowserSession: Codable {
         Task {
             do {
                 let record = try await Task.detached(priority: .userInitiated) { try worker.archive(plan) }.value
+                if record.destination.deletingLastPathComponent().resolvingSymlinksInPath() == directory?.resolvingSymlinksInPath(),
+                   !subdirectories.contains(where: { $0.resolvingSymlinksInPath() == record.destination }) {
+                    subdirectories.append(record.destination)
+                    subdirectories.sort { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+                }
                 let moved = Set(record.group.assetIDs)
                 assets.removeAll { moved.contains($0.id) }; removeMembership(Array(moved))
                 selection = []; scope = "all"; focusedID = assets.first?.id; preferredFileID = nil; showGroupOverview = false
