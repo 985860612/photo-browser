@@ -28,6 +28,7 @@ struct FolderGallery: View {
 }
 
 struct FolderCard: View {
+    @EnvironmentObject private var store: BrowserStore
     let url: URL
     var thumbnailHeight: Double? = nil
     var open: () -> Void
@@ -37,11 +38,14 @@ struct FolderCard: View {
     @State private var failure: String?
     var body: some View {
         card
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(store.selectedFolderID == url.path ? Color.cyan.opacity(0.65) : .clear, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .onTapGesture(count: 2) { open() }
-            .accessibilityAddTraits(.isButton)
+            .onTapGesture { store.selectFolder(url) }
+            .accessibilityAddTraits(store.selectedFolderID == url.path ? [.isButton, .isSelected] : [.isButton])
             .accessibilityAction { open() }
-            .help("双击打开：" + url.path)
+            .help("单击选择，双击打开：" + url.path)
             .contextMenu {
                 Button("打开目录") { open() }
                 Button("在 Finder 显示") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
@@ -50,7 +54,7 @@ struct FolderCard: View {
     }
 
     private var card: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .center, spacing: 7) {
             ZStack {
                 if let cover {
                     if thumbnailHeight != nil { Image(nsImage: cover).resizable().scaledToFit().padding(5) }
@@ -58,28 +62,17 @@ struct FolderCard: View {
                 }
                 else if loading { ProgressView().controlSize(.small) }
                 else { Image(systemName: "folder").font(.system(size: 42, weight: .light)).foregroundStyle(.cyan.opacity(0.7)) }
-            }.frame(height: thumbnailHeight ?? 160).clipped()
-            if thumbnailHeight != nil {
-                VStack(spacing: 7) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "folder.fill").foregroundStyle(.cyan)
-                        Text(url.lastPathComponent).lineLimit(1)
-                    }.font(.system(size: 11, weight: .semibold))
-                    Text(failure == nil ? count.map { "\($0) 张照片" } ?? "读取中…" : "读取失败")
-                        .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
-                }.padding(.top, 7).padding(.bottom, 7).frame(maxWidth: .infinity)
-            } else {
-                HStack(spacing: 10) {
-                    Image(systemName: "folder.fill").foregroundStyle(.cyan)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(url.lastPathComponent).font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                        Text(failure ?? count.map { "\($0) 张照片 · 同名格式合并" } ?? "正在读取…").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                }.padding(15)
-            }
-        }.clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }.frame(maxWidth: .infinity, alignment: .center).frame(height: thumbnailHeight ?? 160).clipped()
+            HStack(spacing: 5) {
+                Image(systemName: "folder.fill").foregroundStyle(.cyan)
+                Text(url.lastPathComponent).lineLimit(1)
+            }.font(.system(size: thumbnailHeight != nil ? 11 : 14, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .center)
+            Text(failure == nil ? count.map { "\($0) 张照片" } ?? "读取中…" : "读取失败")
+                .font(.system(size: thumbnailHeight != nil ? 9 : 12)).foregroundStyle(.secondary).lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .help(failure ?? "同名 RAW / HIF / JPG 合并计数")
+        }.padding(7).multilineTextAlignment(.center).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private func loadCover() async {
