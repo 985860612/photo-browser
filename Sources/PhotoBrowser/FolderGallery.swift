@@ -29,6 +29,7 @@ struct FolderGallery: View {
 
 struct FolderCard: View {
     let url: URL
+    var thumbnailHeight: Double? = nil
     var open: () -> Void
     @State private var cover: NSImage?
     @State private var count: Int?
@@ -40,19 +41,33 @@ struct FolderCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 ZStack {
                     Color.white.opacity(0.035)
-                    if let cover { Image(nsImage: cover).resizable().scaledToFill() }
+                    if let cover {
+                        if thumbnailHeight != nil { Image(nsImage: cover).resizable().scaledToFit().padding(5) }
+                        else { Image(nsImage: cover).resizable().scaledToFill() }
+                    }
                     else if loading { ProgressView().controlSize(.small) }
                     else { Image(systemName: "folder").font(.system(size: 42, weight: .light)).foregroundStyle(.cyan.opacity(0.7)) }
-                }.frame(height: 160).clipped()
-                HStack(spacing: 10) {
-                    Image(systemName: "folder.fill").foregroundStyle(.cyan)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(url.lastPathComponent).font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                        Text(failure ?? count.map { "\($0) 张照片 · 同名格式合并" } ?? "正在读取…").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                }.padding(15)
+                }.frame(height: thumbnailHeight ?? 160).clipped()
+                if thumbnailHeight != nil {
+                    VStack(spacing: 7) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "folder.fill").foregroundStyle(.cyan)
+                            Text(url.lastPathComponent).lineLimit(1)
+                        }.font(.system(size: 11, weight: .semibold))
+                        Text(failure == nil ? count.map { "\($0) 张照片" } ?? "读取中…" : "读取失败")
+                            .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
+                    }.padding(.top, 7).padding(.bottom, 7).frame(maxWidth: .infinity)
+                } else {
+                    HStack(spacing: 10) {
+                        Image(systemName: "folder.fill").foregroundStyle(.cyan)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(url.lastPathComponent).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                            Text(failure ?? count.map { "\($0) 张照片 · 同名格式合并" } ?? "正在读取…").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                    }.padding(15)
+                }
             }.background(Color.white.opacity(hovered ? 0.09 : 0.04)).clipShape(RoundedRectangle(cornerRadius: 13))
                 .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(hovered ? Color.cyan.opacity(0.6) : Color.white.opacity(0.08)))
         }.buttonStyle(.plain).onHover { hovered = $0 }.help(url.path)

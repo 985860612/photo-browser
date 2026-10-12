@@ -156,21 +156,6 @@ struct SidebarView: View {
                     sectionHeader("照片目录")
                 }
                 .listSectionSeparator(.hidden)
-                if !store.subdirectories.isEmpty {
-                    Section {
-                        ForEach(store.subdirectories, id: \.path) { url in
-                            Button { store.load(url) } label: {
-                                Label(url.lastPathComponent, systemImage: "folder").lineLimit(1)
-                                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                            }.buttonStyle(.plain)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
-                                .listRowSeparator(.hidden)
-                        }
-                    } header: {
-                        sectionHeader("子文件夹")
-                    }
-                    .listSectionSeparator(.hidden)
-                }
                 Section {
                     ForEach(store.groups) { group in
                         groupRow(group, totalSize: Set(group.assetIDs).reduce(Int64(0)) { $0 + (assetSizes[$1] ?? 0) })

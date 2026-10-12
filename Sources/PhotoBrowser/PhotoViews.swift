@@ -44,6 +44,9 @@ struct PhotoGridView: View {
                     ContentUnavailableView("没有匹配的照片", systemImage: "magnifyingglass")
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: store.thumbnailSize, maximum: store.thumbnailSize + 70), spacing: 12)], spacing: 14) {
+                    ForEach(store.subdirectories, id: \.path) { url in
+                        FolderCard(url: url, thumbnailHeight: store.thumbnailSize) { store.load(url) }
+                    }
                     ForEach(store.visibleAssets) { asset in
                         PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id, height: store.thumbnailSize)
                             .id(asset.id)
@@ -71,6 +74,10 @@ struct FilmstripView: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 8) {
+                    ForEach(store.subdirectories, id: \.path) { url in
+                        FolderCard(url: url, thumbnailHeight: store.thumbnailSize - 15) { store.load(url) }
+                            .frame(width: store.thumbnailSize).id("folder:" + url.path)
+                    }
                     ForEach(store.visibleAssets) { asset in
                         PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id, height: store.thumbnailSize - 15)
                             .frame(width: store.thumbnailSize).id(asset.id)
@@ -87,7 +94,11 @@ struct FilmstripView: View {
                 }.padding(10)
             }
             .onChange(of: store.focusedID) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
-            .onAppear { if let id = store.focusedID { proxy.scrollTo(id, anchor: .center) } }
+            .onAppear {
+                if let folder = store.subdirectories.first, store.focusedID == store.visibleAssets.first?.id {
+                    proxy.scrollTo("folder:" + folder.path, anchor: .leading)
+                } else if let id = store.focusedID { proxy.scrollTo(id, anchor: .center) }
+            }
         }
     }
 }
