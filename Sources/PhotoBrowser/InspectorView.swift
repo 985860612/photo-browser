@@ -53,10 +53,10 @@ struct InspectorView: View {
                     Text(file.format).font(.system(size: 11, weight: .medium))
                         .foregroundStyle(selected ? .primary : .secondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 7)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(selected ? 0.13 : 0)))
+                        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.white.opacity(selected ? 0.13 : 0)))
                 }.buttonStyle(.plain).accessibilityLabel("预览 \(file.format)")
             }
-        }.padding(3).background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
+        }.padding(3).background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white.opacity(0.04)))
     }
 
     private func metadataFields(_ value: PhotoMetadata?) -> some View {

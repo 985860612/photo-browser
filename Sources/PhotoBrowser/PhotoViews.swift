@@ -24,8 +24,8 @@ struct PhotoThumbnail: View {
             Text(asset.formatLabel).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
         }
         .padding(7)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(selected ? 0.09 : (hovered ? 0.045 : 0))))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focused ? Color.cyan.opacity(0.65) : (selected ? Color.white.opacity(0.16) : .clear), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white.opacity(selected ? 0.09 : (hovered ? 0.045 : 0))))
+        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(focused ? Color.cyan.opacity(0.65) : (selected ? Color.white.opacity(0.16) : .clear), lineWidth: 1))
         .contentShape(Rectangle())
         .onHover { hovered = $0 }
         .onAppear { store.previewAppeared(asset) }
@@ -133,6 +133,7 @@ struct LargePreviewView: View {
                     } else if store.focusedFile != nil { ProgressView("加载照片…") }
                 }
             }
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             HStack(spacing: 8) {
                 Button { store.step(-1) } label: { Image(systemName: "chevron.left") }
                 Text(store.focusedFile?.url.lastPathComponent ?? "请选择照片").font(.caption).lineLimit(1)
