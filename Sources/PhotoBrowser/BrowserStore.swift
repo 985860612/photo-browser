@@ -19,6 +19,7 @@ private struct BrowserSession: Codable {
     @Published var search = ""
     @Published var selection: Set<String> = []
     @Published var selectedFolderID: String?
+    @Published private(set) var navigationScrollTarget: String?
     @Published var focusedID: String?
     @Published var preferredFileID: String?
     @Published var isLoading = false
@@ -68,6 +69,7 @@ private struct BrowserSession: Codable {
         engine = ArchiveEngine(journalDirectory: support.appendingPathComponent("Moves", isDirectory: true))
     }
 
+    var selectedItemID: String? { selectedFolderID.map { "folder:" + $0 } ?? focusedID }
     var focusedAsset: PhotoAsset? { assets.first { $0.id == focusedID } }
     var currentGroup: PhotoGroup? { groups.first { $0.id == scope } }
     var focusedFile: PhotoFile? {
@@ -123,6 +125,7 @@ private struct BrowserSession: Codable {
         let ticket = UUID(); loadID = ticket
         directory = url; isLoading = true; status = "扫描照片并合并同名格式…"
         selectedFolderID = nil
+        navigationScrollTarget = nil
         assets = []; groups = []; subdirectories = []; selection = []; focusedID = nil; preferredFileID = nil; scope = "all"; search = ""; showGroupOverview = false
         selectionAnchorID = nil; rangeSelectionBase = nil
         pathText = url.path; editingPath = false
@@ -266,7 +269,7 @@ private struct BrowserSession: Codable {
         persistChanges("分组已重命名为“\(name)”")
     }
     func toggleFullscreenPreview() {
-        guard !isMoving, focusedFile != nil else { return }
+        guard !isMoving, selectedFolderID == nil, focusedFile != nil else { return }
         if isFullscreenPreview { closeFullscreenPreview(); return }
         previewWindow = NSApp.keyWindow
         enteredFullscreen = previewWindow?.styleMask.contains(.fullScreen) == false
@@ -294,16 +297,19 @@ private struct BrowserSession: Codable {
         if let focusedID { selection = [focusedID] }
         showGroupOverview = currentGroup != nil
         selectionAnchorID = focusedID; rangeSelectionBase = nil
+        navigationScrollTarget = selectedItemID
         prioritizePreviews(visibleAssets.prefix(48).map(\.preferred))
     }
 
     func selectFolder(_ url: URL) {
         guard !isMoving, !isLoading else { return }
+        navigationScrollTarget = nil
         selectedFolderID = url.path
         selection = []; selectionAnchorID = nil; rangeSelectionBase = nil
     }
 
     func select(_ asset: PhotoAsset, modifiers: NSEvent.ModifierFlags = NSEvent.modifierFlags) {
+        navigationScrollTarget = nil
         selectedFolderID = nil
         let list = visibleAssets
         if modifiers.contains(.shift), let b = list.firstIndex(where: { $0.id == asset.id }) {
@@ -327,10 +333,26 @@ private struct BrowserSession: Codable {
     func step(_ offset: Int, extendingSelection: Bool = false) {
         guard !isMoving, !isLoading else { return }
         let list = visibleAssets
-        guard !list.isEmpty else { return }
-        let index = list.firstIndex { $0.id == focusedID } ?? 0
-        let next = max(0, min(list.count - 1, index + offset))
-        select(list[next], modifiers: extendingSelection ? [.shift] : [])
+        // Fullscreen and range selection operate on photos; normal browsing follows every displayed item.
+        let folders = scope == "all" && !isFullscreenPreview && !extendingSelection ? subdirectories : []
+        let total = folders.count + list.count
+        guard total > 0 else { return }
+        let index: Int?
+        if let folder = selectedFolderID, let position = folders.firstIndex(where: { $0.path == folder }) {
+            index = position
+        } else if selectedFolderID == nil, let position = list.firstIndex(where: { $0.id == focusedID }) {
+            index = folders.count + position
+        } else { index = nil }
+        let next = index.map { max(0, min(total - 1, $0 + offset)) } ?? 0
+        if next < folders.count { selectFolder(folders[next]) }
+        else { select(list[next - folders.count], modifiers: extendingSelection ? [.shift] : []) }
+        navigationScrollTarget = selectedItemID
+    }
+
+    func openSelectedFolder() {
+        guard !isMoving, !isLoading, let path = selectedFolderID,
+              let url = subdirectories.first(where: { $0.path == path }) else { return }
+        load(url)
     }
 
     func selectAll() {
