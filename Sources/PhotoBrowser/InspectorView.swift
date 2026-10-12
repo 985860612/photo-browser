@@ -83,9 +83,9 @@ struct InspectorView: View {
 
     private func information(_ title: String, _ value: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Text(title).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 58, alignment: .leading)
+            Text(title).font(.system(size: 12)).foregroundStyle(Color(white: 0.72)).frame(width: 58, alignment: .leading)
             Spacer(minLength: 0)
-            Text(value).font(.system(size: 12)).multilineTextAlignment(.trailing).lineLimit(2).textSelection(.enabled)
+            Text(value).font(.system(size: 13)).foregroundStyle(Color(white: 0.94)).multilineTextAlignment(.trailing).lineLimit(2).textSelection(.enabled)
         }.padding(.vertical, 2)
     }
 }
