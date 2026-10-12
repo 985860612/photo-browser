@@ -18,6 +18,7 @@ private struct BrowserSession: Codable {
     @Published var scope = "all"
     @Published var search = ""
     @Published var selection: Set<String> = []
+    @Published var selectedFolderID: String?
     @Published var focusedID: String?
     @Published var preferredFileID: String?
     @Published var isLoading = false
@@ -121,6 +122,7 @@ private struct BrowserSession: Codable {
         metadataJob?.cancel(); metadataJob = nil; isReadingMetadata = false; metadataID = UUID()
         let ticket = UUID(); loadID = ticket
         directory = url; isLoading = true; status = "扫描照片并合并同名格式…"
+        selectedFolderID = nil
         assets = []; groups = []; subdirectories = []; selection = []; focusedID = nil; preferredFileID = nil; scope = "all"; search = ""; showGroupOverview = false
         selectionAnchorID = nil; rangeSelectionBase = nil
         pathText = url.path; editingPath = false
@@ -287,6 +289,7 @@ private struct BrowserSession: Codable {
 
     func changeScope() {
         guard !isMoving else { return }
+        selectedFolderID = nil
         selection = []; focusedID = visibleAssets.first?.id; preferredFileID = nil
         if let focusedID { selection = [focusedID] }
         showGroupOverview = currentGroup != nil
@@ -294,7 +297,14 @@ private struct BrowserSession: Codable {
         prioritizePreviews(visibleAssets.prefix(48).map(\.preferred))
     }
 
+    func selectFolder(_ url: URL) {
+        guard !isMoving, !isLoading else { return }
+        selectedFolderID = url.path
+        selection = []; selectionAnchorID = nil; rangeSelectionBase = nil
+    }
+
     func select(_ asset: PhotoAsset, modifiers: NSEvent.ModifierFlags = NSEvent.modifierFlags) {
+        selectedFolderID = nil
         let list = visibleAssets
         if modifiers.contains(.shift), let b = list.firstIndex(where: { $0.id == asset.id }) {
             let anchor = selectionAnchorID ?? focusedID ?? asset.id
@@ -324,6 +334,7 @@ private struct BrowserSession: Codable {
     }
 
     func selectAll() {
+        selectedFolderID = nil
         selection = Set(visibleAssets.map(\.id))
         selectionAnchorID = focusedID; rangeSelectionBase = nil
     }
@@ -432,6 +443,7 @@ private struct BrowserSession: Codable {
                 }
                 let moved = Set(record.group.assetIDs)
                 assets.removeAll { moved.contains($0.id) }; removeMembership(Array(moved))
+                selectedFolderID = nil
                 selection = []; scope = "all"; focusedID = assets.first?.id; preferredFileID = nil; showGroupOverview = false
                 if let focusedID { selection = [focusedID] }
                 selectionAnchorID = focusedID; rangeSelectionBase = nil

@@ -75,7 +75,7 @@ struct BrowserView: View {
                     Label(store.previewFailures > 0 ? "\(store.previewFailures) 张预览失败" : "缓存提示", systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.orange).help(store.previewFailureDetails)
                 }
-                Text("\(store.selection.count) 张已选").font(.caption).foregroundStyle(.secondary)
+                Text(store.selectedFolderID == nil ? "\(store.selection.count) 张已选" : "1 个目录已选").font(.caption).foregroundStyle(.secondary)
                 Slider(value: $store.thumbnailSize, in: 110...230).frame(width: 100).help("缩略图大小")
             }.padding(.horizontal, 15).padding(.vertical, 9)
         }

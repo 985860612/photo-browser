@@ -52,7 +52,7 @@ struct PhotoGridView: View {
                         }
                     }
                     ForEach(store.visibleAssets) { asset in
-                        PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id, height: store.thumbnailSize)
+                        PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id && store.selectedFolderID == nil, height: store.thumbnailSize)
                             .id(asset.id)
                             .onTapGesture(count: 2) { store.select(asset, modifiers: []); store.showGroupOverview = false }
                             .onTapGesture { store.select(asset) }
@@ -85,7 +85,7 @@ struct FilmstripView: View {
                         }
                     }
                     ForEach(store.visibleAssets) { asset in
-                        PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id, height: store.thumbnailSize - 15)
+                        PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id && store.selectedFolderID == nil, height: store.thumbnailSize - 15)
                             .frame(width: store.thumbnailSize).id(asset.id)
                             .onTapGesture { store.select(asset) }
                             .contextMenu {
