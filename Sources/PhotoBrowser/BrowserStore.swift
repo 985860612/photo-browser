@@ -40,6 +40,21 @@ private struct BrowserSession: Codable {
     @Published var history: [ArchiveRecord] = []
     @Published var showMerge = false
     @Published var thumbnailSize: Double = 155
+    @Published var previewBefore = 2 {
+        didSet {
+            let bounded = PreviewPreferences.clamp(previewBefore)
+            if previewBefore != bounded { previewBefore = bounded; return }
+            previewPreferences.before = previewBefore
+        }
+    }
+    @Published var previewAfter = 5 {
+        didSet {
+            let bounded = PreviewPreferences.clamp(previewAfter)
+            if previewAfter != bounded { previewAfter = bounded; return }
+            previewPreferences.after = previewAfter
+        }
+    }
+    private let previewPreferences: PreviewPreferences
     @Published var showGroupOverview = false
     @Published var renameGroup: PhotoGroup?
     @Published var subdirectories: [URL] = []
@@ -69,7 +84,9 @@ private struct BrowserSession: Codable {
     private let thumbnails: ThumbnailCache
     let engine: ArchiveEngine
 
-    init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared) {
+    init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared, defaults: UserDefaults = .standard) {
+        previewPreferences = PreviewPreferences(defaults: defaults)
+        previewBefore = previewPreferences.before; previewAfter = previewPreferences.after
         support = supportDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("PhotoBrowser", isDirectory: true)
         self.thumbnails = thumbnails
         engine = ArchiveEngine(journalDirectory: support.appendingPathComponent("Moves", isDirectory: true))
@@ -83,6 +100,33 @@ private struct BrowserSession: Codable {
         return asset.imageFiles.first { $0.id == preferredFileID }
             ?? asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) }
             ?? asset.preferred
+    }
+    var previewRequestID: String {
+        let file = focusedFile
+        return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")"
+    }
+    var adjacentPreviewFiles: [PhotoFile] {
+        guard selectedFolderID == nil, let index = visibleAssets.firstIndex(where: { $0.id == focusedID }) else { return [] }
+        return PreviewPreferences.neighbors(in: visibleAssets, index: index, before: previewBefore, after: previewAfter).map { asset in
+            asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) } ?? asset.preferred
+        }
+    }
+    func preparePreviewCache() async {
+        await DisplayPhotoCache.shared.setWorkingSet(current: selectedFolderID == nil ? focusedFile : nil,
+                                                     neighbors: adjacentPreviewFiles, hdr: hdrPreview)
+    }
+    func preloadAdjacentPreviews() async {
+        let files = adjacentPreviewFiles, hdr = hdrPreview
+        for file in files {
+            guard !Task.isCancelled, !isMoving, !isLoading else { return }
+            do {
+                _ = try await DisplayPhotoCache.shared.image(file, hdr: hdr, maximum: 2800, background: true)
+                // Stop distant warming when memory cannot retain it.
+                if await DisplayPhotoCache.shared.cached(file, hdr: hdr, maximum: 2800) == nil { return }
+            }
+            catch is CancellationError { return }
+            catch { /* A bad neighbor must not prevent the remaining photos from warming. */ }
+        }
     }
     var visibleAssets: [PhotoAsset] {
         let base: [PhotoAsset]
@@ -115,6 +159,7 @@ private struct BrowserSession: Codable {
         guard !isMoving, event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
         if isFullscreenPreview, event.keyCode == 53 { closeFullscreenPreview(); return nil }
         guard let window, !(window.firstResponder is NSTextView), !(window.firstResponder is NSTextField),
+              window.identifier?.rawValue != "PhotoBrowser.Settings",
               !isLoading, window.attachedSheet == nil, NSApp.modalWindow == nil else { return event }
         if event.keyCode == 51 || event.keyCode == 117 {
             // Holding Delete must not remove the next automatically selected photo.

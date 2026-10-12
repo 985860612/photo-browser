@@ -122,11 +122,11 @@ struct FilmstripView: View {
 
 struct LargePreviewView: View {
     @EnvironmentObject private var store: BrowserStore
-    @State private var photo: DisplayPhoto?
-    @State private var thumbnail: NSImage?
-    @State private var displayedFileID: String?
-    @State private var loading = false
-    @State private var failure: String?
+    @StateObject private var preview = PreviewPresentation()
+    private var photo: DisplayPhoto? { preview.photo }
+    private var thumbnail: NSImage? { preview.thumbnail }
+    private var loading: Bool { preview.loading }
+    private var failure: String? { preview.failure }
     @State private var zoom: Double = 1
     @State private var fitScale: Double = 1
 
@@ -135,13 +135,14 @@ struct LargePreviewView: View {
             GeometryReader { geometry in
                 ZStack {
                     Color.black
-                    if let photo, displayedFileID == store.focusedFile?.id {
-                        PhotoCanvas(photo: photo, identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale) { failure = $0 }
-                    } else if let thumbnail, displayedFileID == store.focusedFile?.id {
+                    PhotoCanvas(photo: preview.fileID == store.focusedFile?.id ? photo : nil,
+                                identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale) { preview.failure = $0 }
+                        .opacity(photo != nil && preview.fileID == store.focusedFile?.id ? 1 : 0)
+                    if photo == nil, let thumbnail, preview.fileID == store.focusedFile?.id {
                         Image(nsImage: thumbnail).resizable().scaledToFit()
-                    } else if let failure {
+                    } else if photo == nil, let failure {
                         ContentUnavailableView(L10n.text("预览加载失败"), systemImage: "photo.badge.exclamationmark", description: Text(failure))
-                    } else if store.focusedFile != nil { ProgressView(L10n.text("加载照片…")) }
+                    } else if photo == nil, store.focusedFile != nil { ProgressView(L10n.text("加载照片…")) }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -176,22 +177,14 @@ struct LargePreviewView: View {
                 Button(L10n.text("在 Finder 显示")) { store.revealFocused() }
             }
         }
-        .task(id: (store.focusedFile?.id ?? "") + "\(store.hdrPreview)") {
-            photo = nil; thumbnail = nil; displayedFileID = nil; failure = nil; zoom = 1; loading = true
-            guard let file = store.focusedFile, let assetID = store.focusedID else { loading = false; return }
-            do {
-                let quick = try await ThumbnailCache.shared.image(file, maximum: 520)
-                try Task.checkCancellation()
-                thumbnail = quick.image; displayedFileID = file.id
-                await Task.yield()
-            } catch is CancellationError { return }
-            catch { /* Continue with the original when the cached preview is unavailable. */ }
-            do {
-                let result = try await ThumbnailCache.shared.displayPhoto(file, hdr: store.hdrPreview, maximum: 2800)
-                try Task.checkCancellation()
-                photo = result; displayedFileID = file.id; loading = false; store.updateMetadata(assetID, value: result.metadata)
-            } catch is CancellationError {}
-            catch { failure = error.localizedDescription; loading = false }
+        .task(id: store.previewRequestID) {
+            if preview.fileID != store.focusedFile?.id { zoom = 1 }
+            await store.preparePreviewCache()
+            let assetID = store.focusedID
+            await preview.load(store.selectedFolderID == nil ? store.focusedFile : nil, hdr: store.hdrPreview, maximum: 2800) { metadata in
+                if let assetID { store.updateMetadata(assetID, value: metadata) }
+            }
+            await store.preloadAdjacentPreviews()
         }
     }
 }

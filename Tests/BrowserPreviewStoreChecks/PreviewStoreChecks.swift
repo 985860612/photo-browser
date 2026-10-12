@@ -86,8 +86,91 @@ import BrowserCore
         try expect(store.previewCompleted == 4 && store.previewFailures == 1, "repeated scan finishes with accurate counts")
         try await navigationChecks(root: root)
         try formatPreferenceChecks(root: root)
+        try await previewPreferenceChecks(root: root, jpeg: data as Data)
         try await deletionChecks(root: root, jpeg: data as Data)
         print("PASS all preview store and navigation checks")
+    }
+
+    @MainActor static func previewPreferenceChecks(root: URL, jpeg: Data) async throws {
+        let suite = "PhotoBrowser-Store-Preferences-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = BrowserStore(supportDirectory: root.appendingPathComponent("preferences-support"), defaults: defaults)
+        try expect(store.previewBefore == 2 && store.previewAfter == 5, "store uses the configured two-before five-after defaults")
+        store.previewBefore = 0; store.previewAfter = 8
+        let reopened = BrowserStore(supportDirectory: root.appendingPathComponent("preferences-reopened"), defaults: defaults)
+        try expect(reopened.previewBefore == 0 && reopened.previewAfter == 8,
+                   "reopened store preserves preload settings")
+        let url = root.appendingPathComponent("presentation.jpg"); try jpeg.write(to: url)
+        let captures = (0..<12).map { index in
+            PhotoAsset(id: "capture\(index)", name: "capture\(index)", files: [
+                PhotoFile(url: root.appendingPathComponent("capture\(index).arw"), kind: .raw),
+                PhotoFile(url: url, kind: .rendered)
+            ])
+        }
+        store.assets = captures; store.focusedID = "capture4"; store.previewBefore = 2; store.previewAfter = 5
+        let oldRaw = store.preferRawPreview
+        defer { store.preferRawPreview = oldRaw }
+        store.preferRawPreview = true
+        try expect(store.adjacentPreviewFiles.map { $0.url.lastPathComponent } == ["capture5.arw", "capture3.arw", "capture6.arw", "capture2.arw", "capture7.arw", "capture8.arw", "capture9.arw"],
+                   "store preloads the requested range using the RAW preference")
+        store.groups = [PhotoGroup(id: "preview-group", name: "Preview", assetIDs: ["capture4", "capture6", "capture9"])]
+        store.scope = "preview-group"
+        try expect(store.adjacentPreviewFiles.map { $0.url.lastPathComponent } == ["capture6.arw", "capture9.arw"],
+                   "preloading stays inside the current group")
+        store.search = "capture4"
+        try expect(store.adjacentPreviewFiles.isEmpty, "preloading respects filtered results")
+        store.scope = "all"; store.search = ""; store.selectFolder(root)
+        try expect(store.adjacentPreviewFiles.isEmpty, "folder selection stops photo preloading")
+
+        let file = PhotoFile(url: url, kind: .rendered)
+        let cached = try await DisplayPhotoCache.shared.image(file, hdr: true, maximum: 2800)
+        let before = await DisplayPhotoCache.shared.statistics()
+        let presentation = PreviewPresentation()
+        await presentation.load(file, hdr: true, maximum: 2800) { _ in }
+        let after = await DisplayPhotoCache.shared.statistics()
+        try expect(presentation.photo?.image === cached.image && !presentation.loading && presentation.thumbnail == nil && before.decodes == after.decodes,
+                   "presentation displays a memory hit without thumbnail loading or another decode")
+        let canvas = CanvasView()
+        canvas.configure(photo: cached, identity: file.id, hdr: true, zoom: 1)
+        canvas.configure(photo: nil, identity: "next", hdr: true, zoom: 1)
+        canvas.configure(photo: cached, identity: file.id, hdr: true, zoom: 1)
+        try expect(canvas.device != nil, "one Metal canvas survives image changes and an empty loading state")
+        await presentation.load(nil, hdr: true, maximum: 2800) { _ in }
+        try expect(presentation.photo == nil && presentation.fileID == nil && !presentation.loading,
+                   "empty selection clears previous photo state")
+
+        let workers = PreviewWorkQueue(), isolated = DisplayPhotoCache(workers: workers)
+        let browsing = try await isolated.image(file, hdr: true, maximum: 2800)
+        let started = DispatchSemaphore(value: 0), gate = DispatchSemaphore(value: 0)
+        let blockers = (0..<2).map { _ in Task.detached { try await workers.run { _ in
+            started.signal()
+            guard gate.wait(timeout: .now() + 5) == .success else { throw BrowserFailure.message("Native preview gate timed out") }
+        } } }
+        defer { gate.signal(); gate.signal() }
+        let lanesReady = await Task.detached { waitForStart(started) && waitForStart(started) }.value
+        try expect(lanesReady, "both native decode lanes are held for progressive preview checks")
+        let fullscreen = PreviewPresentation(cache: isolated)
+        let nativeLoad = Task { await fullscreen.load(file, hdr: true, maximum: nil) { _ in } }
+        try await until { fullscreen.photo != nil }
+        try expect(fullscreen.photo?.image === browsing.image && fullscreen.loading,
+                   "fullscreen displays the cached browsing pixels before the blocked native original loads")
+        let secondURL = root.appendingPathComponent("presentation-next.jpg"); try jpeg.write(to: secondURL)
+        let secondFile = PhotoFile(url: secondURL, kind: .rendered)
+        nativeLoad.cancel(); await nativeLoad.value
+        gate.signal(); gate.signal()
+        for blocker in blockers { try await blocker.value }
+        await fullscreen.load(secondFile, hdr: true, maximum: 2800) { _ in }
+        try expect(fullscreen.fileID == secondFile.id && fullscreen.photo != nil && !fullscreen.loading,
+                   "cancelling an original load allows the latest photo to replace the cached fallback")
+
+        let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.identifier = NSUserInterfaceItemIdentifier("PhotoBrowser.Settings")
+        defer { window.close() }
+        let key = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                  windowNumber: window.windowNumber, context: nil, characters: "\u{7f}",
+                                  charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51)!
+        try expect(store.handleKeyDown(key, in: window) === key, "settings window keystrokes cannot operate on browser photos")
     }
 
     @MainActor static func deletionChecks(root: URL, jpeg: Data) async throws {
