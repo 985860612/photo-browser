@@ -1,5 +1,33 @@
 import SwiftUI
+import AppKit
 import BrowserCore
+
+/// One native backdrop shared by the entire window, so adjacent panes have the same material.
+struct GlassBackdrop: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowGlassView {
+        let view = WindowGlassView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+    func updateNSView(_ view: WindowGlassView, context: Context) {}
+}
+
+final class WindowGlassView: NSVisualEffectView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.isOpaque = false
+        window?.backgroundColor = .clear
+        window?.titlebarAppearsTransparent = true
+        window?.toolbarStyle = .unified
+    }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+struct GlassDivider: View {
+    var body: some View { Rectangle().fill(Color.white.opacity(0.07)).frame(height: 0.5) }
+}
 
 struct BrowserView: View {
     @EnvironmentObject private var store: BrowserStore
@@ -21,7 +49,7 @@ struct BrowserView: View {
                 center.frame(minWidth: 550, maxWidth: .infinity)
                 if !store.assets.isEmpty { InspectorView().frame(minWidth: 215, idealWidth: 240, maxWidth: 290) }
             }
-            Divider()
+            GlassDivider()
             HStack(spacing: 10) {
                 if store.isLoading || store.isReadingMetadata || store.isMoving { ProgressView().controlSize(.small) }
                 Text(store.status).font(.caption).lineLimit(1)
@@ -31,7 +59,9 @@ struct BrowserView: View {
                 Slider(value: $store.thumbnailSize, in: 110...230).frame(width: 100).help("缩略图大小")
             }.padding(.horizontal, 15).padding(.vertical, 9)
         }
-        .background(Color(red: 0.105, green: 0.115, blue: 0.13))
+        .background(GlassBackdrop().ignoresSafeArea())
+        .tint(.cyan)
+        .controlSize(.small)
         .toolbar { toolbar }
         .disabled(store.isMoving)
         .onChange(of: store.scope) { _, _ in store.changeScope() }
@@ -67,7 +97,7 @@ struct BrowserView: View {
             VStack(spacing: 0) {
                 groupHeader
                 if store.showGroupOverview { PhotoGridView() }
-                else { LargePreviewView(); Divider(); FilmstripView().frame(height: store.thumbnailSize + 48) }
+                else { LargePreviewView(); GlassDivider(); FilmstripView().frame(height: store.thumbnailSize + 48) }
             }
         }
     }
@@ -93,7 +123,7 @@ struct BrowserView: View {
             }.help(store.showGroupOverview ? "大图浏览" : "网格预览")
             Button { store.toggleFullscreenPreview() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
                 .disabled(store.focusedFile == nil).help("全屏高清预览（空格）")
-        }.padding(14)
+        }.padding(.horizontal, 16).padding(.vertical, 12).buttonStyle(.borderless)
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -104,7 +134,7 @@ struct BrowserView: View {
         }
         ToolbarItemGroup {
             Button { if store.groups.isEmpty { store.autoGroup() } else { confirmRegroup = true } } label: {
-                Label("自动分组", systemImage: "rectangle.stack.badge.sparkles")
+                Label("自动分组", systemImage: "wand.and.stars")
             }.disabled(store.assets.isEmpty || store.isReadingMetadata || store.isLoading)
             Button { store.createGroup() } label: { Label("选中成组", systemImage: "rectangle.stack.badge.plus") }
                 .disabled(store.selection.count < 2 || store.isReadingMetadata).help("⌘ / ⇧ 点击多选，再按 ⌘G 成组")
@@ -150,13 +180,15 @@ struct SidebarView: View {
                             }
                     }
                 }
-            }.listStyle(.sidebar).disabled(store.isReadingMetadata && store.isMoving)
-            Divider()
+            }.listStyle(.plain).scrollContentBackground(.hidden).tint(.gray)
+                .disabled(store.isReadingMetadata && store.isMoving)
+            GlassDivider()
             VStack(alignment: .leading, spacing: 8) {
                 Button("导入分组 CSV…") { store.importCSV() }.disabled(store.assets.isEmpty || store.isReadingMetadata)
-                Text("⌘ 点击多选 · ⇧ 点击连选\n← → 切换照片 · 空格高清全屏\n⌘L 输入路径 · 右键打开 Camera Raw")
-                    .font(.caption2).foregroundStyle(.secondary).lineSpacing(4)
-            }.padding(14)
+                Text("⌘ / ⇧ 多选 · 空格全屏")
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .help("← → 切换照片 · ⌘L 输入路径 · 右键打开 Camera Raw")
+            }.padding(14).buttonStyle(.borderless)
         }
     }
 }
