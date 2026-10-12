@@ -147,23 +147,24 @@ struct LargePreviewView: View {
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             HStack(spacing: 8) {
                 Button { store.step(-1) } label: { Image(systemName: "chevron.left") }
-                Text(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片")).font(.caption).lineLimit(1)
+                Text(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片")).lineLimit(1)
                     .help(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片"))
                 Button { store.step(1) } label: { Image(systemName: "chevron.right") }
                 Spacer()
                 if loading { ProgressView().controlSize(.small).help(L10n.text("正在加载高清图")) }
                 if let failure, thumbnail != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure) }
-                Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).controlSize(.small)
+                Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch)
                     .help(photo.map { L10n.text("原图 \($0.isHDR ? "HDR" : "SDR") · \($0.bitsPerComponent) 位") } ?? L10n.text("HDR / EDR 预览"))
-                Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch).controlSize(.small)
-                    .font(.caption).help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG；缺少对应格式时自动使用已有格式"))
+                Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch)
+                    .help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG；缺少对应格式时自动使用已有格式"))
                 Button(L10n.text("适应")) { zoom = 1 }
                 Slider(value: $zoom, in: 0.1...10).frame(width: 70).help(L10n.text("缩放"))
-                Text("\(Int(zoom * 100))%").font(.caption2).foregroundStyle(.secondary).frame(width: 40)
+                Text("\(Int(zoom * 100))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40)
                 Button { store.showGroupOverview = true } label: { Image(systemName: "square.grid.2x2") }.help(L10n.text("网格预览"))
                 Button { store.toggleFullscreenPreview() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
                     .disabled(store.focusedFile == nil).help(L10n.text("全屏高清预览（空格）"))
-            }.padding(.horizontal, 14).padding(.vertical, 10).buttonStyle(.borderless)
+            }.font(.system(size: 12)).controlSize(.mini)
+                .padding(.horizontal, 14).padding(.vertical, 8).buttonStyle(.borderless)
         }
         .contextMenu {
             if let asset = store.focusedAsset {
