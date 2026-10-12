@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PREVIEW_BUILD_ARGS=()
+PREVIEW_BUILD_ARGS=(--package-path "$PWD")
 if [ -n "${PHOTO_BROWSER_BUILD_PATH:-}" ]; then PREVIEW_BUILD_ARGS+=(--scratch-path "$PHOTO_BROWSER_BUILD_PATH"); fi
 swift build "${PREVIEW_BUILD_ARGS[@]}" --product PhotoBrowser
 PREVIEW_BUILD_PATH="$(swift build "${PREVIEW_BUILD_ARGS[@]}" --show-bin-path)"
