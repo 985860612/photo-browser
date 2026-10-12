@@ -48,6 +48,12 @@ private struct BrowserSession: Codable {
     @Published var editingPath = false
     @Published var pathText = ""
     @Published var isFullscreenPreview = false
+    @Published var preferRawPreview = UserDefaults.standard.bool(forKey: "preferRawPreview") {
+        didSet {
+            UserDefaults.standard.set(preferRawPreview, forKey: "preferRawPreview")
+            preferredFileID = nil
+        }
+    }
     @Published var hdrPreview = UserDefaults.standard.object(forKey: "hdrPreview") as? Bool ?? true {
         didSet { UserDefaults.standard.set(hdrPreview, forKey: "hdrPreview") }
     }
@@ -74,7 +80,9 @@ private struct BrowserSession: Codable {
     var currentGroup: PhotoGroup? { groups.first { $0.id == scope } }
     var focusedFile: PhotoFile? {
         guard let asset = focusedAsset else { return nil }
-        return asset.imageFiles.first { $0.id == preferredFileID } ?? asset.preferred
+        return asset.imageFiles.first { $0.id == preferredFileID }
+            ?? asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) }
+            ?? asset.preferred
     }
     var visibleAssets: [PhotoAsset] {
         let base: [PhotoAsset]

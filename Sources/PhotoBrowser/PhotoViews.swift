@@ -79,19 +79,21 @@ struct PhotoGridView: View {
 
 struct FilmstripView: View {
     @EnvironmentObject private var store: BrowserStore
+    var thumbnailSize: Double? = nil
+    private var size: Double { thumbnailSize ?? store.thumbnailSize }
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 8) {
                     if store.scope == "all" {
                         ForEach(store.subdirectories, id: \.path) { url in
-                            FolderCard(url: url, thumbnailHeight: store.thumbnailSize - 15) { store.load(url) }
-                                .frame(width: store.thumbnailSize).id("folder:" + url.path)
+                            FolderCard(url: url, thumbnailHeight: size - 15) { store.load(url) }
+                                .frame(width: size).id("folder:" + url.path)
                         }
                     }
                     ForEach(store.visibleAssets) { asset in
-                        PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id && store.selectedFolderID == nil, height: store.thumbnailSize - 15)
-                            .frame(width: store.thumbnailSize).id(asset.id)
+                        PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id && store.selectedFolderID == nil, height: size - 15)
+                            .frame(width: size).id(asset.id)
                             .background(ImmediateCardClick { count, modifiers in
                                 if count == 1 { store.select(asset, modifiers: modifiers) }
                             })
@@ -153,6 +155,8 @@ struct LargePreviewView: View {
                 if let failure, thumbnail != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure) }
                 Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).controlSize(.small)
                     .help(photo.map { "原图 \($0.isHDR ? "HDR" : "SDR") · \($0.bitsPerComponent) 位" } ?? "HDR / EDR 预览")
+                Toggle("RAW 优先", isOn: $store.preferRawPreview).toggleStyle(.switch).controlSize(.small)
+                    .font(.caption).help("开启时优先预览 RAW，关闭时优先预览 HIF/JPG；缺少对应格式时自动使用已有格式")
                 Button("适应") { zoom = 1 }
                 Slider(value: $zoom, in: 0.1...10).frame(width: 70).help("缩放")
                 Text("\(Int(zoom * 100))%").font(.caption2).foregroundStyle(.secondary).frame(width: 40)
