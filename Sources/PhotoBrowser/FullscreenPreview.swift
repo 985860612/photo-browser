@@ -28,7 +28,7 @@ struct FullscreenPreview: View {
                 else if let photo {
                     Text("\(Int(photo.size.width)) × \(Int(photo.size.height)) · \(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位").font(.caption).foregroundStyle(.secondary)
                 }
-            }.padding(15)
+            }.padding(15).buttonStyle(.borderless)
             GeometryReader { geometry in
                 ZStack {
                     Color.black
@@ -51,8 +51,8 @@ struct FullscreenPreview: View {
                 Button("适应屏幕") { zoom = 1 }
                 Button("100% 像素") { setPixelZoom(scale: fitScale, toggle: false) }.disabled(loading || photo == nil)
                 Slider(value: $zoom, in: 0.1...10).frame(width: 100)
-            }.padding(14)
-        }.background(.black)
+            }.padding(14).buttonStyle(.borderless)
+        }.background(GlassBackdrop().ignoresSafeArea()).tint(.cyan)
             .onExitCommand { store.closeFullscreenPreview() }
             .alert("操作未完成", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
                 Button("知道了") { store.errorMessage = nil }

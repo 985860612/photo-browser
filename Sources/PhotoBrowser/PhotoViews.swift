@@ -9,28 +9,29 @@ struct PhotoThumbnail: View {
     let height: Double
     @State private var image: NSImage?
     @State private var failure: String?
+    @State private var hovered = false
 
     var body: some View {
         VStack(spacing: 7) {
             ZStack(alignment: .topTrailing) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.04))
                     if let image { Image(nsImage: image).resizable().scaledToFit().padding(5) }
                     else if let failure {
                         Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure)
                     } else { ProgressView().controlSize(.small) }
                 }.frame(height: height)
                 if selected {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, .blue).padding(8)
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, .cyan).font(.system(size: 12)).padding(8)
                 }
             }
             Text(asset.name).font(.system(size: 11, weight: focused ? .semibold : .regular)).lineLimit(1)
             Text(asset.formatLabel).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
         }
         .padding(7)
-        .background(RoundedRectangle(cornerRadius: 9).fill(selected ? Color.blue.opacity(0.12) : .clear))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(focused ? Color.cyan : (selected ? Color.blue : Color.clear), lineWidth: 2))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(selected ? 0.09 : (hovered ? 0.045 : 0))))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focused ? Color.cyan.opacity(0.65) : (selected ? Color.white.opacity(0.16) : .clear), lineWidth: 1))
         .contentShape(Rectangle())
+        .onHover { hovered = $0 }
         .task(id: asset.preferred.id + "\(asset.preferred.modified.timeIntervalSince1970)") {
             do { image = try await ThumbnailCache.shared.image(asset.preferred, maximum: 520).image; failure = nil }
             catch is CancellationError {}
@@ -92,7 +93,7 @@ struct FilmstripView: View {
             }
             .onChange(of: store.focusedID) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
             .onAppear { if let id = store.focusedID { proxy.scrollTo(id, anchor: .center) } }
-        }.background(Color.black.opacity(0.18))
+        }
     }
 }
 
@@ -110,7 +111,7 @@ struct LargePreviewView: View {
         VStack(spacing: 0) {
             GeometryReader { geometry in
                 ZStack {
-                    Color.black.opacity(0.32)
+                    Color.black
                     if let photo, displayedFileID == store.focusedFile?.id {
                         PhotoCanvas(photo: photo, identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale) { failure = $0 }
                     } else if let thumbnail, displayedFileID == store.focusedFile?.id {
@@ -132,7 +133,7 @@ struct LargePreviewView: View {
                 Button("适应") { zoom = 1 }
                 Slider(value: $zoom, in: 0.1...10).frame(width: 110)
                 Text("\(Int(zoom * 100))% 放大").font(.caption2).foregroundStyle(.secondary).frame(width: 85)
-            }.padding(10)
+            }.padding(.horizontal, 14).padding(.vertical, 10).buttonStyle(.borderless)
         }
         .contextMenu {
             if let asset = store.focusedAsset {
