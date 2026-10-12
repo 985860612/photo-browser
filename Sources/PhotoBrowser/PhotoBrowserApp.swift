@@ -6,7 +6,7 @@ import AppKit
     @NSApplicationDelegateAdaptor(BrowserDelegate.self) private var delegate
 
     var body: some Scene {
-        WindowGroup("照片组浏览器") {
+        WindowGroup("照片浏览器") {
             Group {
                 if store.isFullscreenPreview { FullscreenPreview() }
                 else { BrowserView() }
