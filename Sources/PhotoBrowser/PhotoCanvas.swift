@@ -5,7 +5,7 @@ import CoreImage
 import BrowserCore
 
 struct PhotoCanvas: NSViewRepresentable {
-    let photo: DisplayPhoto
+    let photo: DisplayPhoto?
     let identity: String
     let hdr: Bool
     @Binding var zoom: Double
@@ -62,13 +62,14 @@ struct PhotoCanvas: NSViewRepresentable {
     override var isFlipped: Bool { false }
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); needsDisplay = true }
 
-    func configure(photo: DisplayPhoto, identity: String, hdr: Bool, zoom: Double) {
+    func configure(photo: DisplayPhoto?, identity: String, hdr: Bool, zoom: Double) {
+        guard self.photo?.image !== photo?.image || self.identity != identity || self.hdr != hdr || self.zoom != zoom else { return }
         if self.identity != identity { pan = .zero; self.identity = identity }
         self.photo = photo; self.hdr = hdr; self.zoom = zoom
         reportFit()
         if zoom == 1 { pan = .zero }
-        (layer as? CAMetalLayer)?.wantsExtendedDynamicRangeContent = hdr && photo.isHDR
-        if device == nil { DispatchQueue.main.async { [weak self] in self?.onFailure?(L10n.text("当前 Mac 无法建立 Metal 预览，请检查图形设备。")) } }
+        (layer as? CAMetalLayer)?.wantsExtendedDynamicRangeContent = hdr && photo?.isHDR == true
+        if device == nil, photo != nil { DispatchQueue.main.async { [weak self] in self?.onFailure?(L10n.text("当前 Mac 无法建立 Metal 预览，请检查图形设备。")) } }
         needsDisplay = true
     }
     private var fit: Double {

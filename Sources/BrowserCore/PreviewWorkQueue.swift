@@ -16,14 +16,32 @@ public final class PreviewWorkQueue: @unchecked Sendable {
     }
 
     public func run<Value>(background isBackground: Bool = false,
+                           priority: PreviewWorkPriority? = nil,
                            _ work: @escaping (@escaping () throws -> Void) throws -> Value) async throws -> Value {
         let request = PreviewWorkRequest<Value>()
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
             return try await withCheckedThrowingContinuation { continuation in
                 request.start(continuation, on: isBackground ? background : foreground, work: work)
+                priority?.install { [weak request, foreground] in request?.promote(on: foreground, work: work) }
             }
         } onCancel: { request.cancel() }
+    }
+}
+
+/// A visible waiter can promote shared work that has not begun decoding yet.
+public final class PreviewWorkPriority: @unchecked Sendable {
+    private let lock = NSLock()
+    private var promoted = false
+    private var callback: (() -> Void)?
+    public init() {}
+    public func promote() {
+        lock.lock(); promoted = true; let action = callback; lock.unlock()
+        action?()
+    }
+    fileprivate func install(_ action: @escaping () -> Void) {
+        lock.lock(); callback = action; let run = promoted; lock.unlock()
+        if run { action() }
     }
 }
 
@@ -32,13 +50,35 @@ private final class PreviewWorkRequest<Value>: @unchecked Sendable {
     private var cancelled = false
     private var continuation: CheckedContinuation<Value, Error>?
     private var operation: BlockOperation?
+    private var operationID = UUID()
+    private var began = false
 
     func start(_ continuation: CheckedContinuation<Value, Error>, on queue: OperationQueue,
                work: @escaping (@escaping () throws -> Void) throws -> Value) {
         lock.lock()
         guard !cancelled else { lock.unlock(); continuation.resume(throwing: CancellationError()); return }
         self.continuation = continuation
-        let operation = BlockOperation { [self] in
+        let operation = makeOperation(work: work)
+        self.operation = operation
+        lock.unlock()
+        queue.addOperation(operation)
+    }
+
+    func promote(on queue: OperationQueue, work: @escaping (@escaping () throws -> Void) throws -> Value) {
+        lock.lock()
+        guard !cancelled, !began, continuation != nil else { lock.unlock(); return }
+        operation?.cancel(); operationID = UUID()
+        let operation = makeOperation(work: work); self.operation = operation
+        lock.unlock(); queue.addOperation(operation)
+    }
+
+    /// Called with the lock held. Superseded queued operations never execute their work.
+    private func makeOperation(work: @escaping (@escaping () throws -> Void) throws -> Value) -> BlockOperation {
+        let ticket = operationID
+        return BlockOperation { [self] in
+            lock.lock()
+            guard !cancelled, !began, operationID == ticket else { lock.unlock(); return }
+            began = true; lock.unlock()
             let result = Result { try autoreleasepool {
                 try checkCancellation()
                 let value = try work { [self] in try checkCancellation() }
@@ -47,9 +87,6 @@ private final class PreviewWorkRequest<Value>: @unchecked Sendable {
             } }
             finish(result)
         }
-        self.operation = operation
-        lock.unlock()
-        queue.addOperation(operation)
     }
 
     func checkCancellation() throws {

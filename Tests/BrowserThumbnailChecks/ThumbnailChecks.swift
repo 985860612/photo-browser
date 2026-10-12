@@ -25,6 +25,7 @@ private final class Counts: @unchecked Sendable {
         do {
             try await workerChecks()
             try await cacheChecks()
+            try await displayCacheChecks()
             print("PASS all thumbnail checks")
         } catch { print("FAIL: \(error.localizedDescription)"); exit(1) }
     }

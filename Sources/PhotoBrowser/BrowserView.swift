@@ -32,6 +32,10 @@ final class WindowGlassView: NSVisualEffectView {
         window?.appearance = NSAppearance(named: .darkAqua)
         window?.titlebarAppearsTransparent = true
         window?.toolbarStyle = .unified
+        if let window, window.frameAutosaveName.isEmpty {
+            window.setFrameUsingName("PhotoBrowser.MainWindow")
+            window.setFrameAutosaveName("PhotoBrowser.MainWindow")
+        }
     }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
@@ -44,9 +48,12 @@ struct BrowserView: View {
     @EnvironmentObject private var store: BrowserStore
     @State private var confirmRegroup = false
     @State private var filmstripDragStart: Double?
+    @State private var panelDragStart: Double?
     @FocusState private var searchFocused: Bool
     @AppStorage("showDirectoryPanel") private var showDirectoryPanel = true
     @AppStorage("showInspectorPanel") private var showInspectorPanel = true
+    @AppStorage("directoryPanelWidth") private var directoryPanelWidth = 250.0
+    @AppStorage("inspectorPanelWidth") private var inspectorPanelWidth = 240.0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,10 +66,26 @@ struct BrowserView: View {
                     Button(L10n.text("查看移动记录")) { store.refreshHistory(); store.showHistory = true }
                 }.padding(10).background(.orange.opacity(0.1))
             }
-            HSplitView {
-                if showDirectoryPanel { SidebarView().frame(minWidth: 220, idealWidth: 250, maxWidth: 320) }
-                center.frame(minWidth: 550, maxWidth: .infinity)
-                if showInspectorPanel && !store.assets.isEmpty { InspectorView().frame(minWidth: 215, idealWidth: 240, maxWidth: 290) }
+            GeometryReader { geometry in
+                let inspectorVisible = showInspectorPanel && !store.assets.isEmpty
+                let layout = BrowserPanelLayout(available: geometry.size.width, directoryWidth: directoryPanelWidth,
+                                                inspectorWidth: inspectorPanelWidth, showDirectory: showDirectoryPanel,
+                                                showInspector: inspectorVisible)
+                HStack(spacing: 0) {
+                    if showDirectoryPanel {
+                        SidebarView().frame(width: layout.directory)
+                        panelDivider(width: $directoryPanelWidth, actualWidth: layout.directory,
+                                     range: BrowserPanelLayout.directoryRange, direction: 1,
+                                     maximum: geometry.size.width - 550 - layout.inspector - (inspectorVisible ? 12 : 6))
+                    }
+                    center.frame(minWidth: 550, maxWidth: .infinity, maxHeight: .infinity)
+                    if inspectorVisible {
+                        panelDivider(width: $inspectorPanelWidth, actualWidth: layout.inspector,
+                                     range: BrowserPanelLayout.inspectorRange, direction: -1,
+                                     maximum: geometry.size.width - 550 - layout.directory - (showDirectoryPanel ? 12 : 6))
+                        InspectorView().frame(width: layout.inspector)
+                    }
+                }
             }
             GlassDivider()
             HStack(spacing: 10) {
@@ -104,6 +127,23 @@ struct BrowserView: View {
 
     private var hasRecovery: Bool {
         store.history.contains { ["prepared", "moving", "undoing", "recoveryNeeded"].contains($0.state) }
+    }
+
+    private func panelDivider(width: Binding<Double>, actualWidth: Double, range: ClosedRange<Double>,
+                              direction: Double, maximum: Double) -> some View {
+        Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
+            .frame(width: 6).contentShape(Rectangle())
+            .onHover { hovering in if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() } }
+            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { value in
+                    if panelDragStart == nil { panelDragStart = actualWidth }
+                    width.wrappedValue = BrowserPanelLayout.clamp((panelDragStart ?? actualWidth) + value.translation.width * direction,
+                                                                  to: range.lowerBound...max(range.lowerBound, min(range.upperBound, maximum)),
+                                                                  fallback: actualWidth)
+                }
+                .onEnded { _ in panelDragStart = nil; NSCursor.arrow.set() })
+            .onDisappear { panelDragStart = nil; NSCursor.arrow.set() }
+            .help(L10n.text("左右拖动调整面板宽度，重开后保留"))
     }
 
     @ViewBuilder private var center: some View {

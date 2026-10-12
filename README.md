@@ -27,8 +27,8 @@ Examples from the Simplified Chinese interface. English is also supported.
 ## Features
 
 - **One capture, multiple formats:** pair matching RAW/HIF/JPG files and XMP sidecars. Choose a format in the inspector, or enable Prefer RAW for large previews.
-- **Fast browsing:** background thumbnail generation, persistent disk cache, and a filmstrip that can be resized by dragging its divider.
-- **Full-resolution preview:** press Space for fullscreen. A thumbnail appears first while the original loads. Pinch to zoom; scroll or drag to pan. Fit to Screen and 100% Pixels let you inspect detail.
+- **Fast browsing:** background thumbnails, decoded large-image caching, and adjacent-photo preloading. In Settings (⌘,), configure previous/next counts, defaulting to 2 previous and 5 next; 0 disables a direction. Memory is bounded and HDR precision is preserved. Drag panel dividers or the filmstrip divider to resize them; widths, filmstrip height, panel visibility, and window frame are saved between launches.
+- **Full-resolution preview:** press Space for fullscreen. A cached browsing preview or thumbnail appears while the original loads. Pinch to zoom; scroll or drag to pan. Fit to Screen and 100% Pixels let you inspect detail.
 - **HDR and color management:** Core Image and Metal render into a floating-point surface with EDR. Supported HLG, PQ, and gain-map images use the display's available range. SDR images stay SDR; a 10-bit HIF is not necessarily HDR.
 - **Panorama groups:** automatic candidates from capture time, burst sequence, and focal length; manual grouping, splitting, merging, renaming, and dissolving.
 - **Recoverable moves:** review the destination and full file list before moving a group. All formats and sidecars move together. Move History supports undo and interrupted-operation recovery.

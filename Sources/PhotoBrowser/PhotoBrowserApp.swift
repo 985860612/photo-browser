@@ -49,6 +49,9 @@ import AppKit
                 Button(L10n.text("在 Finder 显示")) { store.revealFocused() }.keyboardShortcut("f", modifiers: [.command, .shift])
             }
         }
+        Settings {
+            PreviewSettingsView().environmentObject(store)
+        }
     }
 }
 

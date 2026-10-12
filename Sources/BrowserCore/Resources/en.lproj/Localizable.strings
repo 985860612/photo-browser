@@ -260,3 +260,10 @@
 "已将 %@ 张照片、%@ 个文件移到 _del，可在移动记录中撤销" = "Moved to _del · Photos: %@ · Files: %@. You can undo this from Move History.";
 "移到 _del 待删除目录" = "Move to _del Pending Deletion Folder";
 "⌫ / Delete：将所选照片及配套文件移到 _del，可撤销" = "⌫ / Delete: move selected photos and their companion files to _del, with undo";
+"向前预加载" = "Preload Previous Photos";
+"向后预加载" = "Preload Next Photos";
+"前后指当前浏览顺序；设为 0 可关闭该方向。修改立即生效，重开软件后保留。" = "Previous and next follow the current browsing order. Set a direction to 0 to disable it. Changes apply immediately and are saved between launches.";
+"主窗口与全屏共用预加载范围，缓存受内存预算限制，当前照片优先。" = "Windowed and fullscreen browsing share these limits. Preloading respects the memory budget and prioritizes the current photo.";
+"恢复默认（前 2 张，后 5 张）" = "Restore Defaults (2 Previous, 5 Next)";
+"预览缓存" = "Preview Cache";
+"左右拖动调整面板宽度，重开后保留" = "Drag left or right to resize this panel. Its width is saved between launches.";
