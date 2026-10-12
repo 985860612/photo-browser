@@ -117,7 +117,6 @@ struct LargePreviewView: View {
                 }
             }
             HStack(spacing: 8) {
-                PreviewScopeMenu().frame(maxWidth: 160, alignment: .leading)
                 Button { store.step(-1) } label: { Image(systemName: "chevron.left") }
                 Text(store.focusedFile?.url.lastPathComponent ?? "请选择照片").font(.caption).lineLimit(1)
                     .help(store.focusedFile?.url.lastPathComponent ?? "请选择照片")

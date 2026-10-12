@@ -114,7 +114,6 @@ struct BrowserView: View {
 
     private var overviewControls: some View {
         HStack(spacing: 10) {
-            PreviewScopeMenu()
             Spacer()
             Button { store.showGroupOverview.toggle() } label: {
                 Image(systemName: store.showGroupOverview ? "rectangle" : "square.grid.2x2")
@@ -139,30 +138,6 @@ struct BrowserView: View {
             Button { store.refreshHistory(); store.showHistory = true } label: { Label("移动记录", systemImage: "clock.arrow.circlepath") }
             TextField("搜索文件名或格式", text: $store.search).textFieldStyle(.roundedBorder).frame(width: 180)
         }
-    }
-}
-
-struct PreviewScopeMenu: View {
-    @EnvironmentObject private var store: BrowserStore
-    var body: some View {
-        Menu {
-            if let group = store.currentGroup {
-                Text("\(group.assetIDs.count) 张 · \(group.confidence.rawValue)")
-                Button("重命名…") { store.renameGroup = group }
-                Button("确认全景") { store.confirmGroup() }.disabled(store.isReadingMetadata)
-                Button("归档整组…") { store.archiveGroup = group }.disabled(!store.canArchive)
-                Divider()
-            }
-            Button("网格预览") { store.showGroupOverview = true }
-            Button("大图浏览") { store.showGroupOverview = false }
-            Button("全屏高清预览") { store.toggleFullscreenPreview() }.disabled(store.focusedFile == nil)
-        } label: {
-            HStack(spacing: 6) {
-                Text(store.currentGroup?.name ?? (store.scope == "ungrouped" ? "未分组" : "全部照片"))
-                    .font(.system(size: 12, weight: .medium)).lineLimit(1)
-                Text(store.visibleAssets.count.formatted()).font(.caption2).foregroundStyle(.secondary).monospacedDigit()
-            }.foregroundStyle(.primary)
-        }.menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -203,7 +178,8 @@ struct SidebarView: View {
                             .contextMenu {
                                 Button("查看整组") { store.scope = group.id; store.showGroupOverview = true }
                                 Button("重命名…") { store.renameGroup = group }
-                                Button("归档整组…") { store.archiveGroup = group }.disabled(store.isReadingMetadata)
+                                Button("确认全景") { store.scope = group.id; store.confirmGroup() }.disabled(store.isReadingMetadata)
+                                Button("归档整组…") { store.archiveGroup = group }.disabled(!store.canArchive)
                                 Button("取消分组") { store.dissolveGroup(group) }.disabled(store.isReadingMetadata)
                             }
                     }
@@ -216,13 +192,6 @@ struct SidebarView: View {
                 .environment(\.defaultMinListRowHeight, 44)
                 .padding(.horizontal, 8)
                 .disabled(store.isReadingMetadata && store.isMoving)
-            GlassDivider()
-            VStack(alignment: .leading, spacing: 8) {
-                Button("导入分组 CSV…") { store.importCSV() }.disabled(store.assets.isEmpty || store.isReadingMetadata)
-                Text("⌘ / ⇧ 多选 · 空格全屏")
-                    .font(.caption2).foregroundStyle(.secondary)
-                    .help("← → 切换照片 · ⌘L 输入路径 · 右键打开 Camera Raw")
-            }.padding(14).buttonStyle(.borderless)
         }
     }
 
