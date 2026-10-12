@@ -33,7 +33,7 @@ struct NavigationBar: View {
             }
             Menu {
                 ForEach(store.subdirectories, id: \.path) { url in Button(url.lastPathComponent) { store.load(url) } }
-            } label: { Image(systemName: "folder.badge.plus") }.disabled(store.subdirectories.isEmpty).help("进入子文件夹")
+            } label: { Image(systemName: "folder") }.disabled(store.subdirectories.isEmpty).help("进入子文件夹")
         }.buttonStyle(.borderless).padding(.horizontal, 15).padding(.vertical, 10)
             .onChange(of: store.editingPath) { _, value in focused = value }
     }

@@ -134,7 +134,7 @@ struct BrowserView: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
-            Button { store.chooseDirectory() } label: { Label("打开目录", systemImage: "folder.badge.plus") }.help("打开目录 ⌘O")
+            Button { store.chooseDirectory() } label: { Label("打开目录", systemImage: "folder") }.help("打开目录 ⌘O")
             Button { if let dir = store.directory { store.load(dir) } } label: { Image(systemName: "arrow.clockwise") }
                 .disabled(store.directory == nil || store.isLoading || store.isMoving).help("刷新目录 ⌘R")
         }
