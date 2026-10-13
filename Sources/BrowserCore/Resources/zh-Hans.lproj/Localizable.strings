@@ -157,7 +157,8 @@
 "无法读取原图：%@" = "无法读取原图：%@";
 "有未完成的移动记录，请先检查并恢复文件。" = "有未完成的移动记录，请先检查并恢复文件。";
 "未分组" = "未分组";
-"未找到 Photoshop。请先安装 Photoshop 和 Camera Raw 插件。" = "未找到 Photoshop。请先安装 Photoshop 和 Camera Raw 插件。";
+"未找到 Adobe Bridge。请先安装 Bridge 并启用 Camera Raw。" = "未找到 Adobe Bridge。请先安装 Bridge 并启用 Camera Raw。";
+"Bridge 未能打开 Camera Raw。请确认 Camera Raw 已启用且支持此照片格式。" = "Bridge 未能打开 Camera Raw。请确认 Camera Raw 已启用且支持此照片格式。";
 "未知错误" = "未知错误";
 "查看整组" = "查看整组";
 "查看目标目录" = "查看目标目录";
