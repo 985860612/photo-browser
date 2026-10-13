@@ -62,6 +62,7 @@ struct InspectorView: View {
                         .foregroundStyle(selected ? .primary : .secondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 7)
                         .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.white.opacity(selected ? 0.13 : 0)))
+                        .contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityLabel(L10n.text("预览 \(file.format)"))
             }
         }.padding(3).background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white.opacity(0.04)))
