@@ -58,6 +58,7 @@ struct BrowserView: View {
     var body: some View {
         VStack(spacing: 0) {
             NavigationBar()
+            GlassDivider()
             if hasRecovery {
                 HStack {
                     Image(systemName: "arrow.uturn.backward.circle").foregroundStyle(.orange)
