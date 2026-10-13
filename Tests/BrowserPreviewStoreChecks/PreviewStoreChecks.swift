@@ -288,6 +288,12 @@ import BrowserCore
         let firstGroup = PhotoGroup(id: "first-group", name: "First", assetIDs: ["a", "c", "d"])
         let secondGroup = PhotoGroup(id: "second-group", name: "Second", assetIDs: ["b"])
         store.groups = [firstGroup, secondGroup]
+        try expect(store.directorySummary == L10n.text("\(4) 张照片 · \(6) 个图像文件 · \(2) 个分组"),
+                   "directory summary counts paired captures and groups independently of operation messages")
+        store.scope = secondGroup.id; store.changeScope()
+        try expect(store.visibleAssets.count == 1 && store.directorySummary == L10n.text("\(4) 张照片 · \(6) 个图像文件 · \(2) 个分组"),
+                   "viewing one group does not reduce the whole-directory totals")
+        store.scope = "all"; store.changeScope()
         store.select(original[0], modifiers: []); store.select(original[1], modifiers: [.command])
         store.showGroupOverview = true
 
@@ -342,12 +348,16 @@ import BrowserCore
                    "after deletion the next photo is selected without changing the browsing layout")
         try expect(store.groups.count == 1 && store.groups[0].assetIDs == ["c", "d"],
                    "deleted membership is removed and empty groups disappear")
+        try expect(store.directorySummary == L10n.text("\(2) 张照片 · \(2) 个图像文件 · \(1) 个分组") && !store.status.isEmpty,
+                   "directory counts update after deletion while its undo message remains visible")
         let firstRecord = store.history.first!
         _ = store.handleKeyDown(key(repeating: true), in: window)
         try expect(!store.isMoving && store.assets.count == 2,
                    "holding Backspace does not delete the automatically selected next photo")
         store.rename(store.groups[0], to: "Renamed while pending")
         store.scope = firstGroup.id; store.changeScope()
+        try expect(store.directorySummary == L10n.text("\(2) 张照片 · \(2) 个图像文件 · \(1) 个分组"),
+                   "directory summary remains the whole-directory count when a group is selected")
         try expect(store.handleKeyDown(key(117, modifiers: [.function]), in: window) == nil && store.isMoving,
                    "forward Delete / Fn-Backspace uses the same pending deletion action")
         try await until { !store.isMoving }
@@ -369,6 +379,8 @@ import BrowserCore
         try expect(store.errorMessage == nil && store.assets.count == 4
                    && store.groups.first { $0.id == firstGroup.id }?.assetIDs == ["a", "c", "d"],
                    "undo of the remaining batch restores group order and all captures")
+        try expect(store.directorySummary == L10n.text("\(4) 张照片 · \(6) 个图像文件 · \(2) 个分组"),
+                   "undo restores the directory photo, file and group totals")
         try expect(store.groups.allSatisfy { $0.id != firstRecord.group.id && $0.id != secondRecord.group.id },
                    "undo does not create artificial deletion groups")
 

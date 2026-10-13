@@ -90,7 +90,13 @@ struct BrowserView: View {
             GlassDivider()
             HStack(spacing: 10) {
                 if store.isLoading || store.isReadingMetadata || store.isMoving { ProgressView().controlSize(.small) }
-                Text(store.status).font(.caption).lineLimit(1)
+                if store.directory != nil && !store.isLoading {
+                    Text(store.directorySummary).font(.caption).monospacedDigit().lineLimit(1).layoutPriority(1)
+                }
+                if !store.status.isEmpty {
+                    if store.directory != nil && !store.isLoading { Text("·").foregroundStyle(.secondary) }
+                    Text(store.status).font(.caption).lineLimit(1).help(store.status)
+                }
                 if store.isReadingMetadata { Button(L10n.text("取消检测")) { store.cancelMetadata() }.font(.caption) }
                 Spacer()
                 if store.isGeneratingPreviews {
