@@ -16,7 +16,10 @@ import BrowserCore
             for _ in 0..<64 { values += [4, 4, 4, 1] }
             let data = values.withUnsafeBytes { Data($0) }
             var source = CIImage(bitmapData: data, bytesPerRow: 8 * 16, size: CGSize(width: 8, height: 8), format: .RGBAf, colorSpace: space)
+            // Runtime availability alone cannot type-check APIs absent from an older SDK.
+            #if compiler(>=6.2)
             if #available(macOS 26, *) { source = source.settingContentHeadroom(4) }
+            #endif
             let url = directory.appendingPathComponent("highlights.heic")
             try context.writeHEIF10Representation(of: source, to: url, colorSpace: CGColorSpace(name: CGColorSpace.itur_2100_PQ)!, options: [:])
             let file = PhotoFile(url: url, kind: .rendered)
