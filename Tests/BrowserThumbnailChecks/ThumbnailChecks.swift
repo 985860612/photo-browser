@@ -26,8 +26,54 @@ private final class Counts: @unchecked Sendable {
             try await workerChecks()
             try await cacheChecks()
             try await displayCacheChecks()
+            try await folderSizeChecks()
             print("PASS all thumbnail checks")
         } catch { print("FAIL: \(error.localizedDescription)"); exit(1) }
+    }
+
+    static func folderSizeChecks() async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("FolderSize-" + UUID().uuidString)
+        try fm.createDirectory(at: root.appendingPathComponent("nested"), withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        try Data(repeating: 0, count: 10).write(to: root.appendingPathComponent("photo.jpg"))
+        try Data(repeating: 0, count: 20).write(to: root.appendingPathComponent("photo.raw"))
+        try Data(repeating: 0, count: 30).write(to: root.appendingPathComponent("nested/photo.xmp"))
+        try Data(repeating: 0, count: 4).write(to: root.appendingPathComponent(".metadata"))
+        try fm.createSymbolicLink(at: root.appendingPathComponent("loop"), withDestinationURL: root)
+        try fm.createSymbolicLink(at: root.appendingPathComponent("link.jpg"), withDestinationURL: root.appendingPathComponent("photo.jpg"))
+        let cache = FolderSizeCache(lifetime: 0.15)
+        let initial = try await cache.size(of: root)
+        try expect(initial == 64, "folder size includes nested files, companion formats and hidden files without following links (\(initial) bytes)")
+        try Data(repeating: 0, count: 40).write(to: root.appendingPathComponent("nested/photo.xmp"))
+        let reused = try await cache.size(of: root)
+        try expect(reused == 64, "recent folder size is cached while scrolling")
+        try await Task.sleep(for: .milliseconds(180))
+        let refreshed = try await cache.size(of: root)
+        try expect(refreshed == 74, "expired folder statistics pick up changes inside nested directories")
+        try Data(repeating: 0, count: 8).write(to: root.appendingPathComponent("new.avif"))
+        try fm.setAttributes([.modificationDate: Date().addingTimeInterval(2)], ofItemAtPath: root.path)
+        let changed = try await cache.size(of: root)
+        try expect(changed == 82, "folder modification invalidates a fresh cached size")
+        let empty = root.appendingPathComponent("empty")
+        try fm.createDirectory(at: empty, withIntermediateDirectories: true)
+        let zero = try await cache.size(of: empty)
+        try expect(zero == 0, "an empty folder has zero file bytes")
+        do { _ = try await cache.size(of: root.appendingPathComponent("missing")); throw BrowserFailure.message("Missing folder succeeded") }
+        catch is CocoaError { print("PASS missing folder reports an error instead of a partial size") }
+        do { _ = try await cache.size(of: root.appendingPathComponent("loop")); throw BrowserFailure.message("Symbolic folder succeeded") }
+        catch is CocoaError { print("PASS symbolic folder is not traversed") }
+
+        let workers = PreviewWorkQueue(), blockedCache = FolderSizeCache(workers: workers)
+        let started = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        let blocker = Task { try await workers.run(background: true) { _ in started.signal(); try wait(release) } }
+        defer { release.signal() }
+        try wait(started)
+        let obsolete = Task { try await blockedCache.size(of: root) }
+        await Task.yield(); obsolete.cancel()
+        do { _ = try await obsolete.value; throw BrowserFailure.message("Cancelled folder scan succeeded") }
+        catch is CancellationError { print("PASS offscreen folder scan cancels without waiting for the active scan") }
+        release.signal(); try await blocker.value
     }
 
     static func workerChecks() async throws {

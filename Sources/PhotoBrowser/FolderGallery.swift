@@ -40,6 +40,8 @@ struct FolderCard: View {
     @State private var count: Int?
     @State private var loading = true
     @State private var failure: String?
+    @State private var folderBytes: Int64?
+    @State private var sizeFailure: String?
     var body: some View {
         card
             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -56,6 +58,9 @@ struct FolderCard: View {
                 Button(L10n.text("在 Finder 显示")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             }
             .task(id: url.path) { await loadCover() }
+            .task(id: "\(url.path)|\(store.isLoading)") {
+                if !store.isLoading { await loadSize() }
+            }
     }
 
     private var card: some View {
@@ -73,11 +78,27 @@ struct FolderCard: View {
                 Text(url.lastPathComponent).lineLimit(1)
             }.font(.system(size: thumbnailHeight != nil ? 11 : 14, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .center)
-            Text(failure == nil ? count.map { L10n.text("\($0) 张照片") } ?? L10n.text("读取中…") : L10n.text("读取失败"))
+            Text(summary)
                 .font(.system(size: thumbnailHeight != nil ? 9 : 12)).foregroundStyle(.secondary).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .help(failure ?? L10n.text("同名 RAW / HIF / JPG 合并计数"))
+                .help(failure ?? sizeFailure ?? L10n.text("同名格式合并计数；大小包含子目录中的全部文件，不跟随符号链接"))
         }.padding(7).multilineTextAlignment(.center).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private var summary: String {
+        let photos = failure == nil ? count.map { L10n.text("\($0) 张照片") } ?? L10n.text("读取中…") : L10n.text("读取失败")
+        let size = folderBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
+            ?? L10n.text(sizeFailure == nil ? "计算大小…" : "大小读取失败")
+        return photos + " · " + size
+    }
+
+    private func loadSize() async {
+        do {
+            let bytes = try await FolderSizeCache.shared.size(of: url)
+            try Task.checkCancellation()
+            folderBytes = bytes; sizeFailure = nil
+        } catch is CancellationError {}
+        catch { folderBytes = nil; sizeFailure = error.localizedDescription }
     }
 
     private func loadCover() async {
