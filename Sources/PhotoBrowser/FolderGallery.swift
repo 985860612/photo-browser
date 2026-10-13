@@ -72,7 +72,8 @@ struct FolderCard: View {
                 }
                 else if loading { ProgressView().controlSize(.small) }
                 else { Image(systemName: "folder").font(.system(size: 42, weight: .light)).foregroundStyle(.blue.opacity(0.7)) }
-            }.frame(maxWidth: .infinity, alignment: .center).frame(height: thumbnailHeight ?? 160).clipped()
+            }.frame(maxWidth: .infinity, alignment: .center).frame(height: thumbnailHeight ?? 160)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             HStack(spacing: 5) {
                 Image(systemName: "folder.fill").foregroundStyle(.blue)
                 Text(url.lastPathComponent).lineLimit(1)
