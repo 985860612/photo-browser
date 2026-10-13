@@ -9,6 +9,7 @@ public struct DisplayPhoto {
     public let bitsPerComponent: Int
     public let colorSpaceName: String
     public let memoryCost: Int
+    public var timing: DecodeTiming? = nil
     public var isHDR: Bool { headroom > 1.01 }
     public var size: CGSize { image.extent.size }
 }
@@ -22,14 +23,17 @@ extension ThumbnailCache {
 }
 
 enum OriginalPhotoDecoder {
-    static func decode(_ file: PhotoFile, hdr: Bool, maximum: Int?, check: () throws -> Void) throws -> DisplayPhoto {
+    static func decode(_ file: PhotoFile, hdr: Bool, maximum: Int?, queuedAt: TimeInterval = ProcessInfo.processInfo.systemUptime,
+                       check: () throws -> Void) throws -> DisplayPhoto {
         try check()
+        let started = ProcessInfo.processInfo.systemUptime
         guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
             throw BrowserFailure.message(L10n.text("无法读取原图：\(file.url.lastPathComponent)"))
         }
         var options: [CFString: Any] = [kCGImageSourceShouldCacheImmediately: true,
                                        kCGImageSourceShouldAllowFloat: true,
                                        kCGImageSourceDecodeRequest: hdr ? kCGImageSourceDecodeToHDR : kCGImageSourceDecodeToSDR]
+        let opened = ProcessInfo.processInfo.systemUptime
         let cg: CGImage?
         if let maximum {
             options[kCGImageSourceCreateThumbnailFromImageAlways] = true
@@ -49,6 +53,8 @@ enum OriginalPhotoDecoder {
         try check()
         return DisplayPhoto(image: image, metadata: ThumbnailCache.shared.nativeMetadata(source), headroom: headroom,
                             bitsPerComponent: cg.bitsPerComponent, colorSpaceName: cg.colorSpace?.name.map { $0 as String } ?? L10n.text("系统色彩配置"),
-                            memoryCost: cg.bytesPerRow * cg.height)
+                            memoryCost: cg.bytesPerRow * cg.height,
+                            timing: DecodeTiming(queue: (started - queuedAt) * 1000, source: (opened - started) * 1000,
+                                                 decode: (ProcessInfo.processInfo.systemUptime - opened) * 1000))
     }
 }

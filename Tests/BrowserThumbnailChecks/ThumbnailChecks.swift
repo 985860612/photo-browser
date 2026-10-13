@@ -29,6 +29,7 @@ private final class Counts: @unchecked Sendable {
             try await folderSizeChecks()
             try await persistentFolderChecks()
             try await videoChecks()
+            try await diskPolicyChecks()
             print("PASS all thumbnail checks")
         } catch { print("FAIL: \(error.localizedDescription)"); exit(1) }
     }
@@ -173,10 +174,10 @@ private final class Counts: @unchecked Sendable {
         let protectedURL = directory.appendingPathComponent(key + ".jpg")
         try fm.setAttributes([.modificationDate: Date.distantPast], ofItemAtPath: protectedURL.path)
         for index in 0..<2000 { try Data([0]).write(to: directory.appendingPathComponent("obsolete-\(index).jpg")) }
-        try await cache.trim(protecting: [file])
-        try expect(fm.fileExists(atPath: protectedURL.path), "cache cleanup preserves active directory images even when oldest")
-        try expect(try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == "jpg" }.count == 1600,
-                   "cache cleanup removes obsolete entries to the storage limit")
+        try await cache.trim()
+        try expect(fm.fileExists(atPath: protectedURL.path), "space-based cleanup retains entries when within the quota")
+        try expect(try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == "jpg" }.count == 2003,
+                   "cache cleanup leaves files outside the recognized cache namespace untouched")
 
         try fm.removeItem(at: sourceURL)
         let coldCache = ThumbnailCache(directory: directory)

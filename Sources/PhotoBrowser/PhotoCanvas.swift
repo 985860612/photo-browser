@@ -94,10 +94,12 @@ struct PhotoCanvas: NSViewRepresentable {
     func draw(in view: MTKView) {
         guard bounds.width > 0, bounds.height > 0,
               let drawable = currentDrawable, let command = makeFrameCommandBuffer() else { return }
+        let drawStarted = ProcessInfo.processInfo.systemUptime
         do { try encodeFrame(to: drawable.texture, command: command) }
         catch { DispatchQueue.main.async { [weak self] in self?.onFailure?(error.localizedDescription) }; return }
         frameRevision &+= 1
         let revision = frameRevision, retainedImage = photo?.image
+        trackFrameMetrics(command, started: drawStarted)
         command.addCompletedHandler { [weak self, retainedImage] buffer in
             withExtendedLifetime(retainedImage) {}
             let message = buffer.error?.localizedDescription
@@ -114,6 +116,13 @@ struct PhotoCanvas: NSViewRepresentable {
 
     /// Shared by the onscreen canvas and pixel-level render checks.
     func makeFrameCommandBuffer() -> MTLCommandBuffer? { queue?.makeCommandBuffer() }
+    func trackFrameMetrics(_ command: MTLCommandBuffer, started: TimeInterval) {
+        guard photo != nil, let sample = PreviewDiagnostics.shared.currentSample(path: identity) else { return }
+        command.addCompletedHandler { buffer in
+            if buffer.error == nil { PreviewDiagnostics.shared.rendered(sample, milliseconds: (ProcessInfo.processInfo.systemUptime - started) * 1000) }
+            else { PreviewDiagnostics.shared.failed(sample) }
+        }
+    }
 
     func encodeFrame(to texture: MTLTexture, command: MTLCommandBuffer) throws {
         guard bounds.width > 0, bounds.height > 0, let ciContext else { return }

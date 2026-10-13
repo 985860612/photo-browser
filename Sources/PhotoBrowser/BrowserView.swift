@@ -104,6 +104,15 @@ struct BrowserView: View {
                 }
                 if store.isReadingMetadata { Button(L10n.text("取消检测")) { store.cancelMetadata() }.font(.caption) }
                 Spacer()
+                if store.adjacentTotal > 0 && !store.showGroupOverview {
+                    Text(L10n.text("相邻就绪 \(store.adjacentReady)/\(store.adjacentTotal)"))
+                        .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                        .help(L10n.text("实际保留在内存中的相邻大图；内存不足时可能小于预加载数量"))
+                }
+                if store.adjacentVideoTotal > 0 && !store.showGroupOverview {
+                    Text(L10n.text("视频准备 \(store.adjacentVideoReady)/\(store.adjacentVideoTotal)"))
+                        .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                }
                 if store.isGeneratingPreviews {
                     ProgressView(value: Double(store.previewCompleted), total: Double(max(1, store.previewTotal)))
                         .frame(width: 50)
@@ -120,6 +129,12 @@ struct BrowserView: View {
         .background(GlassBackdrop().ignoresSafeArea())
         .tint(.blue)
         .controlSize(.small)
+        .task {
+            while !Task.isCancelled {
+                await store.updateAdjacentReadiness()
+                do { try await Task.sleep(for: .seconds(1)) } catch { break }
+            }
+        }
         .toolbar { toolbar }
         .disabled(store.isMoving)
         .onChange(of: store.scope) { _, _ in store.changeScope() }

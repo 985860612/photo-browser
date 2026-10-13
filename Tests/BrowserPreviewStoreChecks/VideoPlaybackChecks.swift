@@ -4,6 +4,8 @@ import BrowserCore
 
 extension PreviewStoreChecks {
     @MainActor static func videoPlaybackChecks() async throws {
+        let suite = "VideoPlaybackChecks-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
         let savedDirectory = UserDefaults.standard.object(forKey: "lastDirectory")
         defer {
             if let savedDirectory { UserDefaults.standard.set(savedDirectory, forKey: "lastDirectory") }
@@ -15,7 +17,7 @@ extension PreviewStoreChecks {
         let url = root.appendingPathComponent("clip.mp4")
         try await VideoFixture.create(at: url)
         let file = PhotoFile(url: url, kind: .video)
-        let playback = VideoPlayback()
+        let playback = VideoPlayback(defaults: defaults)
         await playback.load(file)
         try await until { !playback.loading }
         try expect(playback.failure == nil && playback.player.currentItem?.status == .readyToPlay, "native video player reaches ready state")
@@ -27,7 +29,7 @@ extension PreviewStoreChecks {
         try expect(playback.player.currentItem === item, "the same video player item survives preview layout changes")
         playback.stop()
         try expect(playback.fileID == nil && playback.player.currentItem == nil && playback.player.rate == 0, "stopping video releases the old player item")
-        let store = BrowserStore(supportDirectory: root.appendingPathComponent("support"))
+        let store = BrowserStore(supportDirectory: root.appendingPathComponent("support"), defaults: defaults)
         store.assets = try DirectoryScanner.scan(root)
         store.focusedID = store.assets[0].id; store.selection = [store.assets[0].id]
         try expect(store.focusedFile?.kind == .video && store.directorySummary.contains("1"), "video-only directories have a focused media file and status counts")

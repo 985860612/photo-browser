@@ -24,10 +24,19 @@ public actor ThumbnailCache {
     private var pending: [String: Pending] = [:]
     private let directory: URL
     private let workers: PreviewWorkQueue
+    private let disk: ThumbnailDiskStore
+    private let local = PreviewWorkQueue()
+    private var maintenance: Task<Void, Never>?
+    private var maintenanceNeeded = false
+    private var maintenanceFailure: String?
+    private var maintenanceID = UUID()
+    private var knownKeys: [String: Set<String>] = [:]
 
-    public init(directory: URL? = nil, workers: PreviewWorkQueue = .shared) {
-        self.directory = directory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    public init(directory: URL? = nil, workers: PreviewWorkQueue = .shared, diskLimit: Int64 = 2_000_000_000) {
+        let directory = directory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("PhotoBrowser/Thumbnails", isDirectory: true)
+        self.directory = directory
+        disk = ThumbnailDiskStore(directory: directory, limit: diskLimit)
         self.workers = workers
         memory.countLimit = 160; memory.totalCostLimit = 180 * 1024 * 1024
     }
@@ -62,7 +71,8 @@ public actor ThumbnailCache {
     public func image(_ file: PhotoFile, maximum: Int, background: Bool = false) async throws -> LoadedPreview {
         try Task.checkCancellation()
         let key = Self.key(file, maximum: maximum)
-        if let cached = memory.object(forKey: key as NSString) { return cached.preview }
+        knownKeys[file.id, default: []].insert(key)
+        if let cached = memory.object(forKey: key as NSString) { disk.touch(key); scheduleMaintenance(); return cached.preview }
         let waiter = UUID()
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
@@ -73,25 +83,25 @@ public actor ThumbnailCache {
                     pending[key] = current
                     return
                 }
-                let ticket = UUID(), directory = directory, workers = workers
+                let ticket = UUID(), directory = directory, workers = workers, disk = disk, diskToken = disk.token(key)
                 let task = Task {
                     let result: Result<LoadedPreview, Error>
                     do {
                         let preview: LoadedPreview
                         if file.kind == .video {
                             let saved = try await workers.run(background: background) { check in
-                                try Self.readCached(key: key, directory: directory, check: check)
+                                try disk.read { try Self.readCached(key: key, directory: directory, check: check) }
                             }
                             if let saved { preview = saved }
                             else {
                                 let generated = try await VideoMedia.preview(file, maximum: maximum, background: background)
                                 preview = try await workers.run(background: background) { check in
-                                    try Self.saveVideo(generated, key: key, directory: directory, check: check)
+                                    try Self.saveVideo(generated, key: key, disk: disk, token: diskToken, check: check)
                                 }
                             }
                         } else {
                             preview = try await workers.run(background: background) { check in
-                                try Self.readOrGenerate(file, maximum: maximum, key: key, directory: directory, check: check)
+                                try Self.readOrGenerate(file, maximum: maximum, key: key, directory: directory, disk: disk, token: diskToken, check: check)
                             }
                         }
                         result = .success(preview)
@@ -115,6 +125,7 @@ public actor ThumbnailCache {
     private func finish(_ key: String, ticket: UUID, result: Result<LoadedPreview, Error>) {
         guard let current = pending[key], current.ticket == ticket else { return }
         pending.removeValue(forKey: key)
+        if case .success = result { disk.touch(key); scheduleMaintenance() }
         if case .success(let preview) = result, current.keepInMemory {
             memory.setObject(Entry(preview), forKey: key as NSString,
                              cost: Int(preview.image.size.width * preview.image.size.height) * 4)
@@ -144,7 +155,7 @@ public actor ThumbnailCache {
         return nil
     }
 
-    private nonisolated static func saveVideo(_ preview: LoadedPreview, key: String, directory: URL,
+    private nonisolated static func saveVideo(_ preview: LoadedPreview, key: String, disk: ThumbnailDiskStore, token: UUID,
                                              check: () throws -> Void) throws -> LoadedPreview {
         try check()
         var rect = CGRect(origin: .zero, size: preview.image.size)
@@ -158,19 +169,17 @@ public actor ThumbnailCache {
         CGImageDestinationAddImage(output, cg, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
         guard CGImageDestinationFinalize(output) else { throw BrowserFailure.message(L10n.text("无法保存视频封面")) }
         try check()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try (data as Data).write(to: directory.appendingPathComponent(key + ".jpg"), options: .atomic)
+        try disk.write(data as Data, key: key, suffix: ".jpg", token: token)
         if let metadata = preview.metadata {
-            try JSONEncoder().encode(metadata).write(to: directory.appendingPathComponent(key + ".json"), options: .atomic)
+            try disk.write(JSONEncoder().encode(metadata), key: key, suffix: ".json", token: token)
         }
         try check()
         return preview
     }
 
     private nonisolated static func readOrGenerate(_ file: PhotoFile, maximum: Int, key: String,
-                                                   directory: URL, check: () throws -> Void) throws -> LoadedPreview {
-        if let saved = try readCached(key: key, directory: directory, check: check) { return saved }
-        let cachedURL = directory.appendingPathComponent(key + ".jpg"), metadataURL = directory.appendingPathComponent(key + ".json")
+                                                   directory: URL, disk: ThumbnailDiskStore, token: UUID, check: () throws -> Void) throws -> LoadedPreview {
+        if let saved = try disk.read({ try readCached(key: key, directory: directory, check: check) }) { return saved }
         let context = CIContext(options: [.cacheIntermediates: false])
         var source: CGImageSource?
         var orientation: Int32 = 1
@@ -207,7 +216,6 @@ public actor ThumbnailCache {
         }
         try check()
         let image = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let mutable = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(mutable, "public.jpeg" as CFString, 1, nil) else {
             throw BrowserFailure.message(L10n.text("无法创建预览缓存：\(file.url.lastPathComponent)"))
@@ -215,21 +223,71 @@ public actor ThumbnailCache {
         CGImageDestinationAddImage(destination, cg, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw BrowserFailure.message(L10n.text("无法保存预览缓存：\(file.url.lastPathComponent)")) }
         try check()
-        try (mutable as Data).write(to: cachedURL, options: .atomic)
+        try disk.write(mutable as Data, key: key, suffix: ".jpg", token: token)
         try check()
         let metadata = ThumbnailCache.shared.nativeMetadata(source)
-        if let metadata { try JSONEncoder().encode(metadata).write(to: metadataURL, options: .atomic) }
+        if let metadata { try disk.write(JSONEncoder().encode(metadata), key: key, suffix: ".json", token: token) }
         return LoadedPreview(image: image, metadata: metadata)
     }
 
     /// Maintenance also uses the utility lane; never blocks memory hits or visible decoding.
-    public func trim(protecting files: [PhotoFile] = [], maximum: Int = 520) async throws {
-        let protected = Set(files.map { Self.key($0, maximum: maximum) })
-            .union(pending.keys)
-        try await workers.run(background: true) { check in
+    public func trim() async throws {
+        // Only work in progress is protected. A large current directory cannot bypass the quota.
+        let protected = Set(pending.keys), disk = disk
+        try await local.run(background: true) { check in
             try check()
-            try Self.trimCache(self.directory, protecting: protected, check: check)
+            try disk.trim(protecting: protected, check: check)
         }
+    }
+
+    public func diskUsage() async throws -> ThumbnailDiskUsage {
+        let disk = disk
+        return try await local.run(background: true) { _ in try disk.usage() }
+    }
+    public func diskMaintenanceError() -> String? { maintenanceFailure }
+    /// Flush recent accesses when quitting, before the coalesced maintenance timer expires.
+    public nonisolated func persistAccesses() throws { try disk.persistAccesses() }
+    public func setDiskLimit(_ bytes: Int64) async throws { disk.setLimit(bytes); try await trim() }
+    public func clear() async throws {
+        maintenanceID = UUID()
+        maintenance?.cancel(); maintenance = nil; maintenanceNeeded = false
+        let requests = pending.values; pending.removeAll(); memory.removeAllObjects(); knownKeys.removeAll()
+        for request in requests { request.task.cancel(); request.waiters.values.forEach { $0.resume(throwing: CancellationError()) } }
+        let disk = disk
+        try await local.run(background: true) { _ in try disk.clear() }
+    }
+    public func invalidate(_ files: [PhotoFile]) async throws {
+        let keys = files.reduce(into: Set<String>()) { keys, file in
+            keys.formUnion(knownKeys[file.id] ?? []); keys.insert(Self.key(file, maximum: 520))
+        }
+        guard !keys.isEmpty else { return }
+        for key in keys {
+            memory.removeObject(forKey: key as NSString)
+            if let request = pending.removeValue(forKey: key) {
+                request.task.cancel(); request.waiters.values.forEach { $0.resume(throwing: CancellationError()) }
+            }
+        }
+        let disk = disk
+        try await local.run(background: true) { _ in try disk.invalidate(keys) }
+    }
+    private func scheduleMaintenance() {
+        maintenanceNeeded = true
+        guard maintenance == nil else { return }
+        let ticket = UUID(); maintenanceID = ticket
+        maintenance = Task { [weak self] in
+            // Coalesce rapid hits; do not enumerate local cache files for every thumbnail.
+            try? await Task.sleep(for: .seconds(2))
+            await self?.performMaintenance(ticket)
+        }
+    }
+    private func performMaintenance(_ ticket: UUID) async {
+        while !Task.isCancelled, maintenanceID == ticket, maintenanceNeeded {
+            maintenanceNeeded = false
+            do { try await trim(); maintenanceFailure = nil }
+            catch is CancellationError { break }
+            catch { maintenanceFailure = error.localizedDescription; break }
+        }
+        if maintenanceID == ticket { maintenance = nil }
     }
 
     nonisolated func nativeMetadata(_ source: CGImageSource) -> PhotoMetadata? {
@@ -253,16 +311,4 @@ public actor ThumbnailCache {
         return value
     }
 
-    private nonisolated static func trimCache(_ directory: URL, protecting protected: Set<String>, check: () throws -> Void) throws {
-        let urls = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]).filter { $0.pathExtension == "jpg" }
-        guard urls.count > 2000 else { return }
-        let ordered = try urls.map { ($0, try $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast) }.sorted { $0.1 < $1.1 }
-        let removable = ordered.filter { !protected.contains($0.0.deletingPathExtension().lastPathComponent) }
-        for item in removable.prefix(max(0, ordered.count - max(1600, protected.count))) {
-            try check()
-            try FileManager.default.removeItem(at: item.0)
-            let companion = item.0.deletingPathExtension().appendingPathExtension("json")
-            if FileManager.default.fileExists(atPath: companion.path) { try FileManager.default.removeItem(at: companion) }
-        }
-    }
 }

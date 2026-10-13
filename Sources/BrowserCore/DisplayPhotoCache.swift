@@ -25,6 +25,7 @@ public actor DisplayPhotoCache {
         var waiters: [UUID: CheckedContinuation<DisplayPhoto, Error>]
         let background: Bool
         let priority: PreviewWorkPriority
+        let generation: UUID
     }
     private let workers: PreviewWorkQueue
     private let budget: Int
@@ -35,6 +36,7 @@ public actor DisplayPhotoCache {
     private var bytes = 0
     private var decodes = 0
     private var hits = 0
+    private var generation = UUID()
     private var workingSet: [PhotoFile: Int] = [:]
     private var workingHDR = true
     private var memoryPressure: DispatchSourceMemoryPressure?
@@ -67,6 +69,14 @@ public actor DisplayPhotoCache {
         Statistics(decodes: decodes, hits: hits, bytes: bytes, entries: entries.count, pending: pending.count)
     }
 
+    /// Inspect actual residency without touching LRU order or counting a UI cache hit.
+    public func readyCount(_ files: [PhotoFile], hdr: Bool, maximum: Int?) -> Int {
+        files.filter { file in
+            entries[Key(file: file, hdr: hdr, maximum: maximum)] != nil
+                || (maximum != nil && entries[Key(file: file, hdr: hdr, maximum: nil)] != nil)
+        }.count
+    }
+
     /// A native-resolution entry can satisfy a smaller request, but never the reverse.
     public func cached(_ file: PhotoFile, hdr: Bool, maximum: Int?, protect: Bool = false) -> DisplayPhoto? {
         let key = Key(file: file, hdr: hdr, maximum: maximum)
@@ -94,24 +104,35 @@ public actor DisplayPhotoCache {
                     return
                 }
                 let ticket = UUID(), workers = workers, priority = PreviewWorkPriority()
+                let queuedAt = ProcessInfo.processInfo.systemUptime
                 let task = Task {
                     let result: Result<DisplayPhoto, Error>
                     do {
                         let photo = try await workers.run(background: background, priority: priority) { check in
-                            try OriginalPhotoDecoder.decode(file, hdr: hdr, maximum: maximum, check: check)
+                            try OriginalPhotoDecoder.decode(file, hdr: hdr, maximum: maximum, queuedAt: queuedAt, check: check)
                         }
                         result = .success(photo)
                     } catch { result = .failure(error) }
                     finish(key, ticket: ticket, result: result)
                 }
                 decodes += 1
-                pending[key] = Pending(ticket: ticket, task: task, waiters: [waiter: continuation], background: background, priority: priority)
+                pending[key] = Pending(ticket: ticket, task: task, waiters: [waiter: continuation], background: background, priority: priority, generation: generation)
             }
         } onCancel: { Task { await self.cancel(key, waiter: waiter) } }
     }
 
     public func removeAll() {
+        generation = UUID()
         entries.removeAll(); bytes = 0; protected = nil
+    }
+    public func invalidate(_ files: [PhotoFile]) {
+        let urls = Set(files.map(\.url))
+        for key in Array(entries.keys) where urls.contains(key.file.url) { remove(key) }
+        for key in Array(pending.keys) where urls.contains(key.file.url) {
+            if let request = pending.removeValue(forKey: key) {
+                request.task.cancel(); request.waiters.values.forEach { $0.resume(throwing: CancellationError()) }
+            }
+        }
     }
 
     private func cancel(_ key: Key, waiter: UUID) {
@@ -124,7 +145,7 @@ public actor DisplayPhotoCache {
     private func finish(_ key: Key, ticket: UUID, result: Result<DisplayPhoto, Error>) {
         guard let request = pending[key], request.ticket == ticket else { return }
         pending.removeValue(forKey: key)
-        if case .success(let photo) = result, photo.memoryCost <= budget {
+        if case .success(let photo) = result, request.generation == generation, photo.memoryCost <= budget {
             // A modified source must not leave obsolete versions occupying the cache.
             let obsolete = entries.keys.filter { $0.file.url == key.file.url && $0.file != key.file }
             for old in obsolete { remove(old) }

@@ -27,6 +27,7 @@ import BrowserCore
     }
 
     @MainActor static func run() async throws {
+        try await continuityChecks()
         try await videoPlaybackChecks()
         let fm = FileManager.default, defaults = UserDefaults.standard
         let lastDirectory = defaults.object(forKey: "lastDirectory")
