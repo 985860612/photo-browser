@@ -41,7 +41,8 @@ public actor DisplayPhotoCache {
 
     public init(memoryBudget: Int? = nil, workers: PreviewWorkQueue = PreviewWorkQueue()) {
         // Covers browsing and native-resolution entries together; independent of thumbnail RAM.
-        budget = max(0, memoryBudget ?? min(768 * 1024 * 1024, max(128 * 1024 * 1024,
+        // One sixteenth of physical RAM (128 MiB...4 GiB) accommodates neighboring high-resolution RAWs.
+        budget = max(0, memoryBudget ?? min(4 * 1024 * 1024 * 1024, max(128 * 1024 * 1024,
                                                                Int(ProcessInfo.processInfo.physicalMemory / 16))))
         self.workers = workers
         let pressure = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .global(qos: .utility))

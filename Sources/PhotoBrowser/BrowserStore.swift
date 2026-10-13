@@ -31,6 +31,17 @@ private struct BrowserSession: Codable {
     @Published var previewFailures = 0
     @Published var previewFailureDetails = ""
     private var previewTask: Task<Void, Never>?
+    private struct AdjacentKey: Hashable {
+        let file: PhotoFile
+        let hdr: Bool
+        let maximum: Int?
+    }
+    private struct AdjacentJob {
+        let ticket: UUID
+        let task: Task<Void, Never>
+    }
+    private var adjacentJobs: [AdjacentKey: AdjacentJob] = [:]
+    private let displayCache: DisplayPhotoCache
     private var previewID = UUID()
     private var previewQueue: [PhotoFile] = []
     @Published var status = L10n.text("选择照片目录开始浏览")
@@ -91,13 +102,14 @@ private struct BrowserSession: Codable {
     private let thumbnails: ThumbnailCache
     let engine: ArchiveEngine
 
-    init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared, defaults: UserDefaults = .standard) {
+    init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared, defaults: UserDefaults = .standard, displayCache: DisplayPhotoCache = .shared) {
         preferencesDefaults = defaults
         previewPreferences = PreviewPreferences(defaults: defaults)
         previewBefore = previewPreferences.before; previewAfter = previewPreferences.after
         thumbnailSize = BrowserPanelLayout.clamp(defaults.object(forKey: "thumbnailSize") as? Double ?? 155, to: 110...360, fallback: 155)
         support = supportDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("PhotoBrowser", isDirectory: true)
         self.thumbnails = thumbnails
+        self.displayCache = displayCache
         engine = ArchiveEngine(journalDirectory: support.appendingPathComponent("Moves", isDirectory: true))
     }
 
@@ -112,7 +124,7 @@ private struct BrowserSession: Codable {
     }
     var previewRequestID: String {
         let file = focusedFile
-        return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")"
+        return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")|\(isFullscreenPreview)"
     }
     var adjacentPreviewFiles: [PhotoFile] {
         guard selectedFolderID == nil, let index = visibleAssets.firstIndex(where: { $0.id == focusedID }) else { return [] }
@@ -121,21 +133,32 @@ private struct BrowserSession: Codable {
         }
     }
     func preparePreviewCache() async {
-        await DisplayPhotoCache.shared.setWorkingSet(current: selectedFolderID == nil ? focusedFile : nil,
-                                                     neighbors: adjacentPreviewFiles, hdr: hdrPreview)
-    }
-    func preloadAdjacentPreviews() async {
-        let files = adjacentPreviewFiles, hdr = hdrPreview
-        for file in files {
-            guard !Task.isCancelled, !isMoving, !isLoading else { return }
-            do {
-                _ = try await DisplayPhotoCache.shared.image(file, hdr: hdr, maximum: 2800, background: true)
-                // Stop distant warming when memory cannot retain it.
-                if await DisplayPhotoCache.shared.cached(file, hdr: hdr, maximum: 2800) == nil { return }
-            }
-            catch is CancellationError { return }
-            catch { /* A bad neighbor must not prevent the remaining photos from warming. */ }
+        let requestID = previewRequestID
+        let current = selectedFolderID == nil && !isMoving && !isLoading ? focusedFile : nil
+        let neighbors = current == nil ? [] : adjacentPreviewFiles
+        let hdr = hdrPreview, maximum: Int? = isFullscreenPreview ? nil : 2800
+        await displayCache.setWorkingSet(current: current, neighbors: neighbors, hdr: hdr)
+        guard !Task.isCancelled, requestID == previewRequestID, !isMoving, !isLoading else { return }
+        let keys = neighbors.map { AdjacentKey(file: $0, hdr: hdr, maximum: maximum) }
+        var retained = Set(keys)
+        // A neighbor that becomes visible keeps its decode: the foreground joins/promotes it.
+        if let current { retained.insert(AdjacentKey(file: current, hdr: hdr, maximum: maximum)) }
+        for key in Array(adjacentJobs.keys) where !retained.contains(key) {
+            adjacentJobs.removeValue(forKey: key)?.task.cancel()
         }
+        for key in keys where adjacentJobs[key] == nil {
+            let ticket = UUID(), cache = displayCache
+            let task = Task { [weak self] in
+                do { _ = try await cache.image(key.file, hdr: key.hdr, maximum: key.maximum, background: true) }
+                catch { /* Bad or cancelled neighbors must not stop the rest of the range. */ }
+                if self?.adjacentJobs[key]?.ticket == ticket { self?.adjacentJobs.removeValue(forKey: key) }
+            }
+            adjacentJobs[key] = AdjacentJob(ticket: ticket, task: task)
+        }
+    }
+    func cancelAdjacentPreviews() {
+        for job in adjacentJobs.values { job.task.cancel() }
+        adjacentJobs.removeAll()
     }
     var visibleAssets: [PhotoAsset] {
         let base: [PhotoAsset]
@@ -280,6 +303,7 @@ private struct BrowserSession: Codable {
     }
 
     func cancelPreviewGeneration() {
+        cancelAdjacentPreviews()
         previewID = UUID(); previewTask?.cancel(); previewTask = nil
         previewQueue = []; isGeneratingPreviews = false
         previewCompleted = 0; previewTotal = 0; previewFailures = 0; previewFailureDetails = ""

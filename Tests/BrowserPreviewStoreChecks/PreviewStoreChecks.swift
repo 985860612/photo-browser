@@ -87,8 +87,107 @@ import BrowserCore
         try await navigationChecks(root: root)
         try formatPreferenceChecks(root: root)
         try await previewPreferenceChecks(root: root, jpeg: data as Data)
+        try await adjacentDecodeChecks(root: root, jpeg: data as Data)
         try await deletionChecks(root: root, jpeg: data as Data)
         print("PASS all preview store and navigation checks")
+    }
+
+    @MainActor static func adjacentDecodeChecks(root: URL, jpeg: Data) async throws {
+        let workers = PreviewWorkQueue(), cache = DisplayPhotoCache(memoryBudget: 16 * 1024 * 1024, workers: workers)
+        let store = BrowserStore(supportDirectory: root.appendingPathComponent("neighbor-support"), displayCache: cache)
+        let oldRaw = store.preferRawPreview
+        defer { store.cancelAdjacentPreviews(); store.preferRawPreview = oldRaw }
+        store.preferRawPreview = false
+        store.assets = try (0..<12).map { index in
+            let url = root.appendingPathComponent("neighbor-\(index).jpg")
+            try jpeg.write(to: url)
+            return PhotoAsset(id: "neighbor-\(index)", name: "neighbor-\(index)", files: [PhotoFile(url: url, kind: .rendered)])
+        }
+        store.focusedID = store.assets[4].id; store.previewBefore = 2; store.previewAfter = 5
+        let started = DispatchSemaphore(value: 0), gate = DispatchSemaphore(value: 0)
+        let blockers = (0..<2).map { _ in Task.detached { try await workers.run { _ in
+            started.signal()
+            guard gate.wait(timeout: .now() + 8) == .success else { throw BrowserFailure.message("Foreground gate timed out") }
+        } } }
+        defer { gate.signal(); gate.signal() }
+        try expect(await Task.detached { waitForStart(started) && waitForStart(started) }.value,
+                   "foreground lanes are blocked while independent neighbor warming starts")
+        await store.preparePreviewCache()
+        let current = PreviewPresentation(cache: cache)
+        let currentLoad = Task { await current.load(store.focusedFile, hdr: store.hdrPreview, maximum: 2800) { _ in } }
+        defer { currentLoad.cancel() }
+        try await waitForCached(store.adjacentPreviewFiles, cache: cache, hdr: store.hdrPreview, maximum: 2800)
+        try expect(current.loading && current.photo == nil, "all two previous and five next photos warm before current HD decoding finishes")
+        for offset in 1...5 {
+            try expect(await cache.cached(store.assets[4 + offset].preferred, hdr: store.hdrPreview, maximum: 2800) != nil,
+                       "next +\(offset) has decoded browsing pixels")
+        }
+        currentLoad.cancel(); await currentLoad.value
+        gate.signal(); gate.signal()
+        for blocker in blockers { try await blocker.value }
+
+        store.isFullscreenPreview = true
+        await store.preparePreviewCache()
+        try await waitForCached(store.adjacentPreviewFiles, cache: cache, hdr: store.hdrPreview, maximum: nil)
+        let before = await cache.statistics().decodes
+        await current.load(store.assets[9].preferred, hdr: store.hdrPreview, maximum: nil) { _ in }
+        try expect(await cache.statistics().decodes == before && current.photo != nil && !current.loading,
+                   "fullscreen next +5 hits preloaded native pixels without another decode")
+
+        await cache.removeAll()
+        store.isFullscreenPreview = false
+        let bgStarted = DispatchSemaphore(value: 0), bgGate = DispatchSemaphore(value: 0)
+        let bgBlocker = Task.detached { try await workers.run(background: true) { _ in
+            bgStarted.signal()
+            guard bgGate.wait(timeout: .now() + 8) == .success else { throw BrowserFailure.message("Background gate timed out") }
+        } }
+        defer { bgGate.signal() }
+        try expect(await Task.detached { waitForStart(bgStarted) }.value, "background lane held for rapid navigation")
+        await store.preparePreviewCache()
+        try await waitForPending(cache, count: 7)
+        store.focusedID = store.assets[5].id
+        await store.preparePreviewCache()
+        try await waitForPending(cache, count: 8)
+        let joinedBefore = await cache.statistics().decodes
+        _ = try await cache.image(store.focusedFile!, hdr: store.hdrPreview, maximum: 2800)
+        try expect(await cache.statistics().decodes == joinedBefore,
+                   "navigation retains an overlapping prefetch and promotes it instead of decoding again")
+        store.selectFolder(root)
+        await store.preparePreviewCache()
+        try await waitForPending(cache, count: 0)
+        bgGate.signal(); try await bgBlocker.value
+        try expect(await cache.statistics().pending == 0, "folder selection cancels obsolete neighboring work")
+        store.selectedFolderID = nil
+        let cancelledPreparation = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            await store.preparePreviewCache()
+        }
+        await cancelledPreparation.value
+        try expect(await cache.statistics().pending == 0, "cancelled viewer cannot restart neighboring tasks after disappearing")
+        store.previewBefore = 0; store.previewAfter = 0
+        await cache.removeAll(); await store.preparePreviewCache()
+        try await Task.sleep(for: .milliseconds(30))
+        let cacheStatistics = await cache.statistics()
+        try expect(cacheStatistics.pending == 0 && cacheStatistics.entries == 0,
+                   "zero configured directions do not schedule any neighboring decode")
+    }
+
+    static func waitForCached(_ files: [PhotoFile], cache: DisplayPhotoCache, hdr: Bool, maximum: Int?) async throws {
+        let deadline = Date().addingTimeInterval(8)
+        while true {
+            var complete = true
+            for file in files where await cache.cached(file, hdr: hdr, maximum: maximum) == nil { complete = false }
+            if complete { return }
+            guard Date() < deadline else { throw BrowserFailure.message("Neighbor cache warming timed out") }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+    static func waitForPending(_ cache: DisplayPhotoCache, count: Int) async throws {
+        let deadline = Date().addingTimeInterval(8)
+        while await cache.statistics().pending != count {
+            guard Date() < deadline else { throw BrowserFailure.message("Pending neighbor count timed out") }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     @MainActor static func previewPreferenceChecks(root: URL, jpeg: Data) async throws {

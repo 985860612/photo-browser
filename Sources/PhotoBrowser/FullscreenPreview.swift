@@ -20,7 +20,7 @@ struct FullscreenPreview: View {
                 if case .active = phase { revealControls() }
             }
             .onAppear { revealControls() }
-            .onDisappear { hideControlsTask?.cancel() }
+            .onDisappear { hideControlsTask?.cancel(); store.cancelAdjacentPreviews() }
             .onChange(of: store.focusedFile?.id) { _, _ in revealControls() }
             .onExitCommand { store.closeFullscreenPreview() }
             .alert(L10n.text("操作未完成"), isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
@@ -40,7 +40,6 @@ struct FullscreenPreview: View {
                 await preview.load(store.focusedFile, hdr: store.hdrPreview, maximum: nil) { metadata in
                     if let assetID { store.updateMetadata(assetID, value: metadata) }
                 }
-                await store.preloadAdjacentPreviews()
             }
     }
 
