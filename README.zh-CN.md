@@ -34,7 +34,7 @@ macOS 原生照片浏览器，同名 RAW、HIF、JPG 合并成一次拍摄，全
 4. ⌘ 点击多选、⇧ 点击连选；⇧＋左右方向键以起始照片为锚点延伸连续选择，反向按键收缩范围，普通左右键恢复单张切换。⌘G 手动成组；在右侧按当前照片拆分、合并到其他组、或移出所选照片。
 5. 右键分组选择“重命名…”，名称会保存，移动整组时默认使用此名称作为文件夹名；原照片名保持不变。“移动整组到新文件夹…”列出目标位置、所有格式及 XMP 文件，选择存放位置并填写新文件夹名称后，点击“确认移动”才修改原文件位置；可通过移动记录撤销。目标文件夹必须是新目录。
 6. “移动记录”可撤销，也可恢复因退出或连接中断而未完成的操作。遇到同名文件、文件变化或缺失会报告并停止。
-7. 在照片网格、底部缩略图或大图上右键，选择“在 Camera Raw 中打开”。优先选同名 RAW；也可在“指定格式”子菜单选择 HIF/JPG。RAW 直接交给 Photoshop 打开；HIF/JPG 通过 JSX 调用 Camera Raw 对话框，Photoshop 若提示外部脚本来源，请核对后允许。需要安装 Photoshop 及 Camera Raw，格式和相机支持由所装版本决定，打开失败会提示。此入口只打开素材，是否保存修改由你在 Camera Raw 中决定。参见 [Adobe Camera Raw 说明](https://helpx.adobe.com/camera-raw/desktop/get-started/overview-and-setup/introduction-camera-raw.html) 与 [Photoshop 脚本说明](https://helpx.adobe.com/photoshop/using/scripting.html)。
+7. 在照片网格、底部缩略图或大图上右键，选择“在 Camera Raw 中打开”。优先选同名 RAW；也可在“指定格式”子菜单选择 HIF/JPG。通过 JSX 在 Adobe Bridge 中定位照片并执行“在 Camera Raw 中打开”，使用 Bridge 承载的 Camera Raw，无需启动 Photoshop。需要安装 Bridge 并启用 Camera Raw；若 Bridge 提示外部脚本来源，请核对后允许。格式和相机支持由所装版本决定，打开失败会提示。此入口只打开素材，是否保存修改由你在 Camera Raw 中决定。参见 [Adobe Bridge 打开文件说明](https://helpx.adobe.com/bridge/desktop/organize-and-find-files/organize-files-and-folders/open-files.html)。
 8. 大图和全屏均支持触控板捏合缩放、双指/鼠标滚动平移、鼠标拖拽平移（触控手势让照片跟随手指，兼容自然滚动开关）、⌘或 Option＋滚轮缩放，双击切换适应屏幕与 100% 像素。空白目录页显示子文件夹封面与合并后的照片数量，双击卡片进入，自动隐藏空的照片信息栏。
 9. 苹果键盘按 **⌫（Backspace / Delete）**，将选中照片的全部 RAW、HIF/JPG 和 XMP 移到当前目录下的 `_del` 文件夹；Fn＋⌫ 或独立前向 Delete 键同样可用。连续删除复用 `_del`，不会永久清除文件，可从“移动记录”恢复文件及原有分组。遇到同名文件会在整批移动前停止。输入文字时仍是普通退格；长按不会继续删除下一张，目录卡片不参与删除。
 

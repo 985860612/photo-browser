@@ -157,7 +157,8 @@
 "无法读取原图：%@" = "Cannot read the original image: %@";
 "有未完成的移动记录，请先检查并恢复文件。" = "Some moves did not finish. Check and recover the files first.";
 "未分组" = "Ungrouped";
-"未找到 Photoshop。请先安装 Photoshop 和 Camera Raw 插件。" = "Photoshop was not found. Install Photoshop and the Camera Raw plug-in first.";
+"未找到 Adobe Bridge。请先安装 Bridge 并启用 Camera Raw。" = "Adobe Bridge was not found. Install Bridge and enable Camera Raw first.";
+"Bridge 未能打开 Camera Raw。请确认 Camera Raw 已启用且支持此照片格式。" = "Bridge could not open Camera Raw. Make sure Camera Raw is enabled and supports this photo format.";
 "未知错误" = "Unknown error";
 "查看整组" = "View Group";
 "查看目标目录" = "Show Destination";
