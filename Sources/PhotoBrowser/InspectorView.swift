@@ -12,7 +12,7 @@ struct InspectorView: View {
                 if let asset = store.focusedAsset {
                     metadataFields(asset.metadata)
                     if let metadataFailure { Text(metadataFailure).font(.caption2).foregroundStyle(.orange) }
-                    GlassDivider()
+                    GlassDivider(inset: 0)
                     VStack(alignment: .leading, spacing: 13) {
                         sectionTitle(L10n.text("文件信息"), icon: "doc.text")
                         Text(asset.name).font(.title3).textSelection(.enabled)
@@ -24,13 +24,13 @@ struct InspectorView: View {
                         }
                     }
                     if let group = store.currentGroup {
-                        GlassDivider()
+                        GlassDivider(inset: 0)
                         sectionTitle(L10n.text("当前分组"), icon: "rectangle.stack")
                         Text(L10n.lookup(group.reason)).font(.caption).foregroundStyle(.secondary)
                         information(L10n.text("照片数量"), L10n.text("\(group.assetIDs.count) 张"), icon: "photo.on.rectangle")
                         groupActions(group)
                     }
-                    GlassDivider()
+                    GlassDivider(inset: 0)
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             sectionTitle(L10n.text("预览格式"), icon: "square.on.square")

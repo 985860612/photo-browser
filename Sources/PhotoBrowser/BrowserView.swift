@@ -41,7 +41,11 @@ final class WindowGlassView: NSVisualEffectView {
 }
 
 struct GlassDivider: View {
-    var body: some View { Rectangle().fill(Color.white.opacity(0.07)).frame(height: 0.5) }
+    var inset: CGFloat = 15
+    var body: some View {
+        Capsule().fill(Color.white.opacity(0.07)).frame(height: 0.5)
+            .padding(.horizontal, inset)
+    }
 }
 
 struct BrowserView: View {
@@ -138,7 +142,7 @@ struct BrowserView: View {
 
     private func panelDivider(width: Binding<Double>, actualWidth: Double, range: ClosedRange<Double>,
                               direction: Double, maximum: Double) -> some View {
-        Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
+        Capsule().fill(Color.white.opacity(0.07)).frame(width: 0.5).padding(.vertical, 16)
             .frame(width: 6).contentShape(Rectangle())
             .onHover { hovering in if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() } }
             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
