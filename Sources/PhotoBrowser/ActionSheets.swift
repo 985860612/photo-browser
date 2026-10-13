@@ -29,7 +29,7 @@ struct ArchiveSheet: View {
         let plan = try? makePlan()
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "folder.badge.checkmark").font(.title).foregroundStyle(.cyan)
+                Image(systemName: "folder.badge.checkmark").font(.title).foregroundStyle(.blue)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L10n.text("移动整组到新文件夹")).font(.title2)
                     Text(L10n.text("\(group.name) · \(group.assetIDs.count) 张照片")).foregroundStyle(.secondary)
@@ -148,7 +148,7 @@ struct HistorySheet: View {
                         HStack {
                             Text(record.group.name).font(.headline)
                             Spacer()
-                            Text(stateName(record.state)).font(.caption).foregroundStyle(record.state == "complete" ? Color.cyan : Color.secondary)
+                            Text(stateName(record.state)).font(.caption).foregroundStyle(record.state == "complete" ? Color.blue : Color.secondary)
                         }
                         Text(L10n.text("\(record.created.formatted(date: .numeric, time: .standard)) · \(record.group.assetIDs.count) 张照片 · \(record.entries.count) 个文件"))
                             .font(.caption).foregroundStyle(.secondary)

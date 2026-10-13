@@ -99,7 +99,7 @@ struct InspectorView: View {
                 .frame(width: 16, height: 16).accessibilityHidden(true)
             Text(title).font(.system(size: 12)).foregroundStyle(Color(white: 0.72)).frame(width: 82, alignment: .leading)
             Spacer(minLength: 0)
-            Text(value).font(.system(size: 13)).foregroundStyle(Color(white: 0.94)).multilineTextAlignment(.trailing).lineLimit(2).textSelection(.enabled)
+            Text(value).font(.system(size: 12)).foregroundStyle(Color(white: 0.94)).multilineTextAlignment(.trailing).lineLimit(2).textSelection(.enabled)
         }.padding(.vertical, 2)
     }
 }

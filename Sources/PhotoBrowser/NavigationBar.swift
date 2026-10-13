@@ -13,13 +13,13 @@ struct NavigationBar: View {
                 .disabled(!store.canGoForward).help(L10n.text("前进 ⌘]"))
             Button { if let url = store.directory { store.load(url.deletingLastPathComponent()) } } label: { Image(systemName: "arrow.up") }
                 .disabled(store.directory == nil || store.directory?.path == "/" || store.isLoading).help(L10n.text("上一级 ⌘↑"))
-            Image(systemName: "folder").foregroundStyle(.cyan)
+            Image(systemName: "folder").foregroundStyle(.blue)
             if store.editingPath {
                 TextField(L10n.text("输入文件夹路径"), text: $store.pathText).textFieldStyle(.plain)
                     .font(.system(size: 13)).padding(.horizontal, 10).padding(.vertical, 7)
                     .frame(minHeight: 32)
                     .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.04)))
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.cyan.opacity(0.5), lineWidth: 0.75))
+                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.blue.opacity(0.5), lineWidth: 0.75))
                     .focusEffectDisabled()
                     .focused($focused).onSubmit { store.openTypedPath() }
                     .onExitCommand { store.editingPath = false }

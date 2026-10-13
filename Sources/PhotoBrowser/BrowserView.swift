@@ -107,7 +107,7 @@ struct BrowserView: View {
             }.padding(.horizontal, 15).padding(.vertical, 9)
         }
         .background(GlassBackdrop().ignoresSafeArea())
-        .tint(.cyan)
+        .tint(.blue)
         .controlSize(.small)
         .toolbar { toolbar }
         .disabled(store.isMoving)
@@ -230,7 +230,7 @@ struct BrowserView: View {
                 .frame(width: 180)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.04)))
                 .overlay(RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(searchFocused ? Color.cyan.opacity(0.55) : Color.white.opacity(0.12), lineWidth: 0.75))
+                    .strokeBorder(searchFocused ? Color.blue.opacity(0.55) : Color.white.opacity(0.12), lineWidth: 0.75))
                 .focusEffectDisabled()
                 .focused($searchFocused)
         }
@@ -294,7 +294,7 @@ struct SidebarView: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Image(systemName: group.confidence == .candidate ? "checkmark.circle" : "rectangle.stack")
-                    .foregroundStyle(group.confidence == .candidate ? .cyan : .secondary)
+                    .foregroundStyle(group.confidence == .candidate ? .blue : .secondary)
                 Text(group.name).lineLimit(1)
                 Spacer()
                 Text(L10n.text("\(group.assetIDs.count) 张")).foregroundStyle(.secondary).monospacedDigit()
