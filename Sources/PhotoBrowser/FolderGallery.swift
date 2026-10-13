@@ -43,7 +43,7 @@ struct FolderCard: View {
     var body: some View {
         card
             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(store.selectedFolderID == url.path ? Color.cyan.opacity(0.65) : .clear, lineWidth: 1))
+                .strokeBorder(store.selectedFolderID == url.path ? Color.blue.opacity(0.65) : .clear, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .background(ImmediateCardClick { count, _ in
                 if count == 2 { open() } else { store.selectFolder(url) }
@@ -66,10 +66,10 @@ struct FolderCard: View {
                     else { Image(nsImage: cover).resizable().scaledToFill() }
                 }
                 else if loading { ProgressView().controlSize(.small) }
-                else { Image(systemName: "folder").font(.system(size: 42, weight: .light)).foregroundStyle(.cyan.opacity(0.7)) }
+                else { Image(systemName: "folder").font(.system(size: 42, weight: .light)).foregroundStyle(.blue.opacity(0.7)) }
             }.frame(maxWidth: .infinity, alignment: .center).frame(height: thumbnailHeight ?? 160).clipped()
             HStack(spacing: 5) {
-                Image(systemName: "folder.fill").foregroundStyle(.cyan)
+                Image(systemName: "folder.fill").foregroundStyle(.blue)
                 Text(url.lastPathComponent).lineLimit(1)
             }.font(.system(size: thumbnailHeight != nil ? 11 : 14, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .center)

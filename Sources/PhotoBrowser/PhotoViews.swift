@@ -25,7 +25,7 @@ struct PhotoThumbnail: View {
         }
         .padding(7)
         .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white.opacity(selected ? 0.09 : (hovered ? 0.045 : 0))))
-        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(focused ? Color.cyan.opacity(0.65) : (selected ? Color.white.opacity(0.16) : .clear), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(focused ? Color.blue.opacity(0.65) : (selected ? Color.white.opacity(0.16) : .clear), lineWidth: 1))
         .contentShape(Rectangle())
         .onHover { hovered = $0 }
         .onAppear { store.previewAppeared(asset) }
