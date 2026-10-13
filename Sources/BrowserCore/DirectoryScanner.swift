@@ -2,7 +2,7 @@ import Foundation
 
 public enum DirectoryScanner {
     public static let rawExtensions: Set<String> = ["arw", "dng", "cr2", "cr3", "nef", "nrw", "raf", "orf", "rw2", "pef", "srw", "raw"]
-    public static let renderedExtensions: Set<String> = ["hif", "heic", "heif", "jpg", "jpeg", "png", "tif", "tiff"]
+    public static let renderedExtensions: Set<String> = ["hif", "heic", "heif", "avif", "jpg", "jpeg", "png", "tif", "tiff"]
 
     public static func scan(_ directory: URL) throws -> [PhotoAsset] {
         let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
