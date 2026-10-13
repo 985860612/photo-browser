@@ -39,11 +39,17 @@ import AppKit
                 Button(L10n.text("移到 _del 待删除目录")) { store.deleteSelection() }
                     .disabled(!store.canDeleteSelection).help(L10n.text("⌫ / Delete：将所选照片及配套文件移到 _del，可撤销"))
                 Divider()
-                Button(L10n.text("全屏高清预览")) { store.toggleFullscreenPreview() }.keyboardShortcut(.space, modifiers: [])
+                if store.focusedFile?.kind == .video {
+                    Button(L10n.text("播放 / 暂停")) { store.toggleVideoPlayback() }.keyboardShortcut(.space, modifiers: [])
+                        .disabled(store.selectedFolderID != nil || store.isMoving || store.isLoading)
+                    Button(L10n.text("全屏播放")) { store.toggleFullscreenPreview() }.keyboardShortcut("f", modifiers: [.command, .control])
+                        .disabled(store.selectedFolderID != nil || store.isMoving || store.isLoading)
+                } else { Button(L10n.text("全屏高清预览")) { store.toggleFullscreenPreview() }.keyboardShortcut(.space, modifiers: [])
                     .disabled(store.focusedFile == nil || store.selectedFolderID != nil || store.isMoving || store.isLoading)
+                }
                 Button(L10n.text("切换网格 / 大图")) { store.showGroupOverview.toggle() }.keyboardShortcut("j")
                 Button(L10n.text("在 Camera Raw 中打开")) { if let asset = store.focusedAsset { store.openInCameraRaw(asset) } }
-                    .disabled(store.focusedAsset == nil || store.isMoving)
+                    .disabled(store.focusedAsset == nil || store.focusedAsset?.isVideo == true || store.isMoving)
                 Button(L10n.text("将所选照片组成一组")) { store.createGroup() }.keyboardShortcut("g")
                     .disabled(store.selection.count < 2 || store.isMoving || store.isReadingMetadata)
                 Button(L10n.text("在 Finder 显示")) { store.revealFocused() }.keyboardShortcut("f", modifiers: [.command, .shift])
@@ -76,6 +82,7 @@ import AppKit
         }
         store?.cancelMetadata()
         store?.cancelPreviewGeneration()
+        store?.video.stop()
         return .terminateNow
     }
 }

@@ -38,6 +38,7 @@ struct FolderCard: View {
     var open: () -> Void
     @State private var cover: NSImage?
     @State private var count: Int?
+    @State private var videoCount = 0
     @State private var loading = true
     @State private var failure: String?
     @State private var folderBytes: Int64?
@@ -101,7 +102,7 @@ struct FolderCard: View {
         let photos = count.map { L10n.text("\($0) 张照片") } ?? L10n.text(failure == nil ? "读取中…" : "读取失败")
         let size = folderBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
             ?? L10n.text(sizeFailure == nil ? "计算大小…" : "大小读取失败")
-        return photos + " · " + size
+        return photos + (videoCount > 0 ? " · " + L10n.text("\(videoCount) 个视频") : "") + " · " + size
     }
 
     private var cacheHelp: String {
@@ -149,6 +150,7 @@ struct FolderCard: View {
     private func applySummary(_ summary: FolderSummary) async {
         guard !Task.isCancelled else { return }
         count = summary.count
+        videoCount = summary.videoCount ?? 0
         guard let file = summary.cover else { cover = nil; coverFile = nil; loading = false; coverFailure = nil; return }
         if coverFile == file && cover != nil { loading = false; return }
         do {

@@ -21,8 +21,8 @@ private struct BrowserSession: Codable {
     @Published var selection: Set<String> = []
     @Published var selectedFolderID: String?
     @Published private(set) var navigationScrollTarget: String?
-    @Published var focusedID: String?
-    @Published var preferredFileID: String?
+    @Published var focusedID: String? { didSet { if focusedID != oldValue { video.stop() } } }
+    @Published var preferredFileID: String? { didSet { if preferredFileID != oldValue, video.fileID != focusedFile?.id { video.stop() } } }
     @Published var isLoading = false
     @Published var isReadingMetadata = false
     @Published var isMoving = false
@@ -43,6 +43,7 @@ private struct BrowserSession: Codable {
     }
     private var adjacentJobs: [AdjacentKey: AdjacentJob] = [:]
     private let displayCache: DisplayPhotoCache
+    let video = VideoPlayback()
     private let clipboardWorkers = PreviewWorkQueue()
     @Published private(set) var isCopyingImage = false
     private var clipboardTask: Task<Void, Never>?
@@ -78,7 +79,7 @@ private struct BrowserSession: Codable {
     }
     private let previewPreferences: PreviewPreferences
     private let preferencesDefaults: UserDefaults
-    @Published var showGroupOverview = false
+    @Published var showGroupOverview = false { didSet { if showGroupOverview { video.pause() } } }
     @Published var renameGroup: PhotoGroup?
     @Published var subdirectories: [URL] = []
     @Published private(set) var folderCacheRevision = UUID()
@@ -128,7 +129,7 @@ private struct BrowserSession: Codable {
     var currentGroup: PhotoGroup? { groups.first { $0.id == scope } }
     var focusedFile: PhotoFile? {
         guard let asset = focusedAsset else { return nil }
-        return asset.imageFiles.first { $0.id == preferredFileID }
+        return asset.mediaFiles.first { $0.id == preferredFileID }
             ?? asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) }
             ?? asset.preferred
     }
@@ -138,13 +139,13 @@ private struct BrowserSession: Codable {
     }
     var adjacentPreviewFiles: [PhotoFile] {
         guard selectedFolderID == nil, let index = visibleAssets.firstIndex(where: { $0.id == focusedID }) else { return [] }
-        return PreviewPreferences.neighbors(in: visibleAssets, index: index, before: previewBefore, after: previewAfter).map { asset in
+        return PreviewPreferences.neighbors(in: visibleAssets, index: index, before: previewBefore, after: previewAfter).filter { !$0.isVideo }.map { asset in
             asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) } ?? asset.preferred
         }
     }
     func preparePreviewCache() async {
         let requestID = previewRequestID
-        let current = selectedFolderID == nil && !isMoving && !isLoading ? focusedFile : nil
+        let current = selectedFolderID == nil && !isMoving && !isLoading && focusedFile?.kind != .video ? focusedFile : nil
         let neighbors = current == nil ? [] : adjacentPreviewFiles
         let hdr = hdrPreview, maximum: Int? = isFullscreenPreview ? nil : 2800
         await displayCache.setWorkingSet(current: current, neighbors: neighbors, hdr: hdr)
@@ -189,7 +190,9 @@ private struct BrowserSession: Codable {
     var ungroupedCount: Int { assets.count - Set(groups.flatMap(\.assetIDs)).count }
     var totalFiles: Int { assets.reduce(0) { $0 + $1.imageFiles.count } }
     var directorySummary: String {
-        L10n.text("\(assets.count) 张照片 · \(totalFiles) 个图像文件 · \(groups.count) 个分组")
+        let videos = assets.filter(\.isVideo).count
+        if videos > 0 { return L10n.text("\(assets.count - videos) 张照片 · \(videos) 个视频 · \(totalFiles + videos) 个媒体文件 · \(groups.count) 个分组") }
+        return L10n.text("\(assets.count) 张照片 · \(totalFiles) 个图像文件 · \(groups.count) 个分组")
     }
     var canArchive: Bool {
         !isMoving && !isReadingMetadata && !history.contains { ["prepared", "moving", "undoing", "recoveryNeeded"].contains($0.state) }
@@ -210,7 +213,7 @@ private struct BrowserSession: Codable {
         if event.keyCode == 8, modifiers == .command, canCopyFiles {
             copyFilesToClipboard(); return nil
         }
-        if event.keyCode == 8, modifiers == [.command, .shift], selectedFolderID == nil, focusedFile != nil {
+        if event.keyCode == 8, modifiers == [.command, .shift], selectedFolderID == nil, focusedFile != nil, focusedFile?.kind != .video {
             if !event.isARepeat { copyImageToClipboard() }
             return nil
         }
@@ -228,6 +231,7 @@ private struct BrowserSession: Codable {
             openSelectedFolder(); return nil
         }
         if event.keyCode == 49, focusedFile != nil, selectedFolderID == nil {
+            if focusedFile?.kind == .video { if !event.isARepeat { toggleVideoPlayback() }; return nil }
             toggleFullscreenPreview(); return nil
         }
         return event
@@ -344,6 +348,7 @@ private struct BrowserSession: Codable {
     }
 
     func cancelPreviewGeneration() {
+        video.stop()
         cancelAdjacentPreviews()
         previewID = UUID(); previewTask?.cancel(); previewTask = nil
         previewQueue = []; isGeneratingPreviews = false
@@ -434,6 +439,18 @@ private struct BrowserSession: Codable {
         isFullscreenPreview = true
         if enteredFullscreen { previewWindow?.toggleFullScreen(nil) }
     }
+
+    func toggleVideoPlayback() {
+        guard !isMoving, !isLoading, selectedFolderID == nil, let file = focusedFile, file.kind == .video else { return }
+        if showGroupOverview { showGroupOverview = false; video.playWhenReady(file) }
+        else if video.fileID == file.id { video.toggle() }
+        else { video.playWhenReady(file) }
+    }
+
+    func playVideo(_ asset: PhotoAsset) {
+        guard asset.isVideo, !isMoving, !isLoading else { return }
+        select(asset, modifiers: []); showGroupOverview = false; video.playWhenReady(asset.preferred)
+    }
     func closeFullscreenPreview() {
         isFullscreenPreview = false
         if enteredFullscreen, previewWindow?.styleMask.contains(.fullScreen) == true { previewWindow?.toggleFullScreen(nil) }
@@ -441,7 +458,7 @@ private struct BrowserSession: Codable {
     }
     func fullscreenWindowExited() { isFullscreenPreview = false; enteredFullscreen = false }
     func openInCameraRaw(_ asset: PhotoAsset, file: PhotoFile? = nil) {
-        guard !isMoving else { return }
+        guard !isMoving, !asset.isVideo else { return }
         let source = file ?? asset.imageFiles.first(where: { $0.kind == .raw }) ?? asset.preferred
         do { try CameraRawLauncher.open(source) { [weak self] error in
             if let error { self?.report(error) }
@@ -475,7 +492,7 @@ private struct BrowserSession: Codable {
         if let asset, asset.id != focusedID {
             source = asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) } ?? asset.preferred
         } else { source = focusedFile }
-        guard let source, asset != nil || selectedFolderID == nil else { return }
+        guard let source, source.kind != .video, asset != nil || selectedFolderID == nil else { return }
         clipboardTask?.cancel()
         let ticket = UUID(), count = pasteboard.changeCount, cache = displayCache, workers = clipboardWorkers
         clipboardTicket = ticket; isCopyingImage = true
@@ -525,6 +542,7 @@ private struct BrowserSession: Codable {
     }
 
     func selectFolder(_ url: URL) {
+        video.stop()
         guard !isMoving, !isLoading else { return }
         navigationScrollTarget = nil
         selectedFolderID = url.path
@@ -627,14 +645,15 @@ private struct BrowserSession: Codable {
 
     func autoGroup() {
         guard let directory, !isReadingMetadata, !isMoving, !assets.isEmpty else { return }
-        let snapshot = assets, job = MetadataReader(), ticket = UUID()
+        let snapshot = assets.filter { !$0.isVideo }, job = MetadataReader(), ticket = UUID()
+        guard !snapshot.isEmpty else { return }
         metadataJob = job; metadataID = ticket; isReadingMetadata = true
         status = L10n.text("读取 \(snapshot.count) 张照片的拍摄信息…NAS 首次读取可能需要几分钟，可继续浏览")
         Task {
             do {
                 let metadata = try await Task.detached(priority: .utility) { try job.read(directory: directory, assets: snapshot) }.value
                 guard metadataID == ticket else { return }
-                for index in assets.indices { assets[index].metadata = metadata[assets[index].id] }
+                for index in assets.indices where !assets[index].isVideo { assets[index].metadata = metadata[assets[index].id] }
                 groups = Grouping.candidates(assets)
                 scope = "all"; showGroupOverview = false; metadataJob = nil; isReadingMetadata = false
                 persistChanges(L10n.text("生成 \(groups.count) 个候选组；请检查画面重叠，自动分组不代表已确认全景"))
@@ -686,6 +705,7 @@ private struct BrowserSession: Codable {
         guard canArchive else { report(BrowserFailure.message(L10n.text("请先完成当前任务或恢复未完成的移动记录。"))); return }
         let deleting = plan.record.isPendingDeletion
         let moved = Set(plan.record.group.assetIDs), list = visibleAssets
+        let includesVideo = list.contains { moved.contains($0.id) && $0.isVideo }
         let index = list.firstIndex { $0.id == focusedID } ?? 0
         let nextID = list.first { $0.id == focusedID && !moved.contains($0.id) }?.id
             ?? list.dropFirst(index + 1).first { !moved.contains($0.id) }?.id
@@ -718,9 +738,13 @@ private struct BrowserSession: Codable {
                 if let focusedID { selection = [focusedID] }
                 selectionAnchorID = focusedID; rangeSelectionBase = nil
                 isMoving = false
-                persistChanges(deleting
+                let message = includesVideo
+                    ? (deleting ? L10n.text("已将 \(record.group.assetIDs.count) 个项目、\(record.entries.count) 个文件移到 _del，可在移动记录中撤销")
+                       : L10n.text("已移动 \(record.group.assetIDs.count) 个项目、\(record.entries.count) 个文件，可在移动记录中撤销"))
+                    : (deleting
                     ? L10n.text("已将 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件移到 _del，可在移动记录中撤销")
                     : L10n.text("已移动 \(record.group.assetIDs.count) 张照片、\(record.entries.count) 个文件，可在移动记录中撤销"))
+                persistChanges(message)
                 refreshHistory()
                 startPreviewGeneration()
             } catch { isMoving = false; startPreviewGeneration(); status = L10n.text("移动失败，请查看提示和移动记录"); report(error); refreshHistory() }

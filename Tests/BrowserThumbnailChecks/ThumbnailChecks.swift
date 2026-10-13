@@ -28,6 +28,7 @@ private final class Counts: @unchecked Sendable {
             try await displayCacheChecks()
             try await folderSizeChecks()
             try await persistentFolderChecks()
+            try await videoChecks()
             print("PASS all thumbnail checks")
         } catch { print("FAIL: \(error.localizedDescription)"); exit(1) }
     }

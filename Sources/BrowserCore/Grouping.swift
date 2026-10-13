@@ -3,7 +3,7 @@ import Foundation
 public enum Grouping {
     /// Metadata provides candidates only; the user reviews the actual image overlap.
     public static func candidates(_ assets: [PhotoAsset]) -> [PhotoGroup] {
-        let sorted = assets.sorted {
+        let sorted = assets.filter { !$0.isVideo }.sorted {
             let left = $0.metadata?.captured ?? .distantFuture
             let right = $1.metadata?.captured ?? .distantFuture
             return left == right ? $0.name < $1.name : left < right

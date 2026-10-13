@@ -10,7 +10,7 @@ struct InspectorView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if let asset = store.focusedAsset {
-                    metadataFields(asset.metadata)
+                    if asset.isVideo { videoFields(asset.metadata) } else { metadataFields(asset.metadata) }
                     if let metadataFailure { Text(metadataFailure).font(.caption2).foregroundStyle(.orange) }
                     GlassDivider(inset: 0)
                     VStack(alignment: .leading, spacing: 13) {
@@ -55,7 +55,7 @@ struct InspectorView: View {
 
     private func formatPicker(_ asset: PhotoAsset) -> some View {
         HStack(spacing: 4) {
-            ForEach(asset.imageFiles) { file in
+            ForEach(asset.mediaFiles) { file in
                 let selected = file.id == store.focusedFile?.id
                 Button { store.preferredFileID = file.id } label: {
                     Text(file.format).font(.system(size: 11, weight: .medium))
@@ -78,6 +78,15 @@ struct InspectorView: View {
             information("ISO", value?.iso.map(String.init) ?? "—", icon: "sun.max")
             information(L10n.text("焦距"), value?.focalLength.map { String(format: "%.0f mm", $0) } ?? "—", icon: "viewfinder")
             information(L10n.text("连拍序号"), value?.sequence.map(String.init) ?? "—", icon: "square.stack.3d.up")
+        }
+    }
+
+    private func videoFields(_ value: PhotoMetadata?) -> some View {
+        VStack(alignment: .leading, spacing: 13) {
+            sectionTitle(L10n.text("视频参数"), icon: "film")
+            information(L10n.text("时长"), VideoMedia.durationLabel(value?.duration), icon: "timer")
+            information(L10n.text("分辨率"), value?.width.flatMap { width in value?.height.map { "\(width) × \($0)" } } ?? "—", icon: "viewfinder")
+            information(L10n.text("帧率"), value?.frameRate.map { String(format: "%.2f fps", $0) } ?? "—", icon: "speedometer")
         }
     }
 

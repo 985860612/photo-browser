@@ -33,6 +33,9 @@ public actor ThumbnailCache {
     }
 
     public nonisolated static func digest(_ string: String) -> String { SHA256.hash(data: Data(string.utf8)).map { String(format: "%02x", $0) }.joined() }
+    private nonisolated static func key(_ file: PhotoFile, maximum: Int) -> String {
+        Self.digest("\(file.kind == .video ? "video-v1" : "v1")|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)|\(maximum)")
+    }
 
     /// Decode the original at native resolution; never substitute a camera's small embedded JPEG.
     public nonisolated func fullResolution(_ file: PhotoFile) async throws -> LoadedPreview {
@@ -58,7 +61,7 @@ public actor ThumbnailCache {
     /// Visible requests share the same decode with prefetch, but only visible images enter RAM.
     public func image(_ file: PhotoFile, maximum: Int, background: Bool = false) async throws -> LoadedPreview {
         try Task.checkCancellation()
-        let key = Self.digest("v1|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)|\(maximum)")
+        let key = Self.key(file, maximum: maximum)
         if let cached = memory.object(forKey: key as NSString) { return cached.preview }
         let waiter = UUID()
         return try await withTaskCancellationHandler {
@@ -74,8 +77,22 @@ public actor ThumbnailCache {
                 let task = Task {
                     let result: Result<LoadedPreview, Error>
                     do {
-                        let preview = try await workers.run(background: background) { check in
-                            try Self.readOrGenerate(file, maximum: maximum, key: key, directory: directory, check: check)
+                        let preview: LoadedPreview
+                        if file.kind == .video {
+                            let saved = try await workers.run(background: background) { check in
+                                try Self.readCached(key: key, directory: directory, check: check)
+                            }
+                            if let saved { preview = saved }
+                            else {
+                                let generated = try await VideoMedia.preview(file, maximum: maximum, background: background)
+                                preview = try await workers.run(background: background) { check in
+                                    try Self.saveVideo(generated, key: key, directory: directory, check: check)
+                                }
+                            }
+                        } else {
+                            preview = try await workers.run(background: background) { check in
+                                try Self.readOrGenerate(file, maximum: maximum, key: key, directory: directory, check: check)
+                            }
                         }
                         result = .success(preview)
                     } catch { result = .failure(error) }
@@ -105,8 +122,7 @@ public actor ThumbnailCache {
         current.waiters.values.forEach { $0.resume(with: result) }
     }
 
-    private nonisolated static func readOrGenerate(_ file: PhotoFile, maximum: Int, key: String,
-                                                   directory: URL, check: () throws -> Void) throws -> LoadedPreview {
+    private nonisolated static func readCached(key: String, directory: URL, check: () throws -> Void) throws -> LoadedPreview? {
         try check()
         let cachedURL = directory.appendingPathComponent(key + ".jpg")
         let metadataURL = directory.appendingPathComponent(key + ".json")
@@ -125,6 +141,36 @@ public actor ThumbnailCache {
                 return LoadedPreview(image: NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)), metadata: metadata)
             }
         }
+        return nil
+    }
+
+    private nonisolated static func saveVideo(_ preview: LoadedPreview, key: String, directory: URL,
+                                             check: () throws -> Void) throws -> LoadedPreview {
+        try check()
+        var rect = CGRect(origin: .zero, size: preview.image.size)
+        guard let cg = preview.image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+            throw BrowserFailure.message(L10n.text("无法保存视频封面"))
+        }
+        let data = NSMutableData()
+        guard let output = CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil) else {
+            throw BrowserFailure.message(L10n.text("无法保存视频封面"))
+        }
+        CGImageDestinationAddImage(output, cg, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        guard CGImageDestinationFinalize(output) else { throw BrowserFailure.message(L10n.text("无法保存视频封面")) }
+        try check()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try (data as Data).write(to: directory.appendingPathComponent(key + ".jpg"), options: .atomic)
+        if let metadata = preview.metadata {
+            try JSONEncoder().encode(metadata).write(to: directory.appendingPathComponent(key + ".json"), options: .atomic)
+        }
+        try check()
+        return preview
+    }
+
+    private nonisolated static func readOrGenerate(_ file: PhotoFile, maximum: Int, key: String,
+                                                   directory: URL, check: () throws -> Void) throws -> LoadedPreview {
+        if let saved = try readCached(key: key, directory: directory, check: check) { return saved }
+        let cachedURL = directory.appendingPathComponent(key + ".jpg"), metadataURL = directory.appendingPathComponent(key + ".json")
         let context = CIContext(options: [.cacheIntermediates: false])
         var source: CGImageSource?
         var orientation: Int32 = 1
@@ -178,7 +224,7 @@ public actor ThumbnailCache {
 
     /// Maintenance also uses the utility lane; never blocks memory hits or visible decoding.
     public func trim(protecting files: [PhotoFile] = [], maximum: Int = 520) async throws {
-        let protected = Set(files.map { Self.digest("v1|\($0.url.path)|\($0.size)|\($0.modified.timeIntervalSince1970)|\(maximum)") })
+        let protected = Set(files.map { Self.key($0, maximum: maximum) })
             .union(pending.keys)
         try await workers.run(background: true) { check in
             try check()

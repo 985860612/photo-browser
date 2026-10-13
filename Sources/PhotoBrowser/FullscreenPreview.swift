@@ -30,8 +30,9 @@ struct FullscreenPreview: View {
             .contextMenu {
                 if let asset = store.focusedAsset {
                     PhotoClipboardMenu(asset: asset)
+                    MediaDeleteMenu(asset: asset)
                     Divider()
-                    Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
+                    CameraRawMenu(asset: asset)
                     Button(L10n.text("在 Finder 显示")) { store.revealFocused() }
                 }
             }
@@ -39,7 +40,7 @@ struct FullscreenPreview: View {
                 if preview.fileID != store.focusedFile?.id { zoom = 1 }
                 await store.preparePreviewCache()
                 let assetID = store.focusedID
-                await preview.load(store.focusedFile, hdr: store.hdrPreview, maximum: nil) { metadata in
+                await preview.load(store.focusedFile?.kind == .video ? nil : store.focusedFile, hdr: store.hdrPreview, maximum: nil) { metadata in
                     if let assetID { store.updateMetadata(assetID, value: metadata) }
                 }
             }
@@ -48,6 +49,9 @@ struct FullscreenPreview: View {
     private var canvas: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+            if let file = store.focusedFile, file.kind == .video, !store.isMoving, !store.isLoading {
+                VideoPreviewView(file: file, playback: store.video).ignoresSafeArea()
+            } else {
             PhotoCanvas(photo: preview.fileID == store.focusedFile?.id ? photo : nil,
                         identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale) { preview.failure = $0 }
                 .ignoresSafeArea().opacity(photo != nil && preview.fileID == store.focusedFile?.id ? 1 : 0)
@@ -62,6 +66,7 @@ struct FullscreenPreview: View {
                         .padding(.bottom, controlsVisible ? 60 : 20)
                 }
             } else if photo == nil && thumbnail == nil { ProgressView(L10n.text("加载照片预览…")) }
+            }
         }
     }
 
@@ -84,6 +89,7 @@ struct FullscreenPreview: View {
             Button { store.closeFullscreenPreview() } label: { Label(L10n.text("退出全屏"), systemImage: "arrow.down.right.and.arrow.up.left") }
             Text(store.focusedFile?.url.lastPathComponent ?? "").lineLimit(1)
             Spacer()
+            if store.focusedFile?.kind != .video {
             Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).help(L10n.text("启用原图 HDR / EDR 显示；普通照片保持 SDR"))
             Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch)
                 .help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG"))
@@ -96,6 +102,7 @@ struct FullscreenPreview: View {
             if loading { ProgressView().controlSize(.small); Text(L10n.text("加载高清原图…")) }
             else if let photo {
                 Text(L10n.text("\(Int(photo.size.width)) × \(Int(photo.size.height)) · \(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位")).foregroundStyle(.secondary)
+            }
             }
         }.padding(20).onHover { hoveringControls = $0; revealControls() }
     }

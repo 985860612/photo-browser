@@ -1,7 +1,7 @@
 import Foundation
 
 public enum PhotoKind: String, Codable, Sendable {
-    case raw, rendered, sidecar
+    case raw, rendered, video, sidecar
 }
 
 public struct PhotoFile: Codable, Hashable, Sendable, Identifiable {
@@ -26,6 +26,8 @@ public struct PhotoMetadata: Codable, Sendable {
     public var camera: String?
     public var width: Int?
     public var height: Int?
+    public var duration: Double?
+    public var frameRate: Float?
     public init(captured: Date? = nil, sequence: Int? = nil, focalLength: Double? = nil) {
         self.captured = captured; self.sequence = sequence; self.focalLength = focalLength
     }
@@ -36,10 +38,12 @@ public struct PhotoAsset: Codable, Sendable, Identifiable {
     public let name: String
     public let files: [PhotoFile]
     public var metadata: PhotoMetadata?
-    public var imageFiles: [PhotoFile] { files.filter { $0.kind != .sidecar } }
-    public var preferred: PhotoFile { imageFiles.first { $0.kind == .rendered } ?? imageFiles[0] }
+    public var imageFiles: [PhotoFile] { files.filter { $0.kind == .raw || $0.kind == .rendered } }
+    public var mediaFiles: [PhotoFile] { files.filter { $0.kind != .sidecar } }
+    public var isVideo: Bool { mediaFiles.contains { $0.kind == .video } }
+    public var preferred: PhotoFile { mediaFiles.first { $0.kind == .rendered } ?? mediaFiles[0] }
     public var metadataFile: PhotoFile { imageFiles.first { $0.kind == .raw } ?? preferred }
-    public var formatLabel: String { imageFiles.map(\.format).joined(separator: " + ") }
+    public var formatLabel: String { mediaFiles.map(\.format).joined(separator: " + ") }
     public init(id: String, name: String, files: [PhotoFile], metadata: PhotoMetadata? = nil) {
         self.id = id; self.name = name; self.files = files; self.metadata = metadata
     }

@@ -3,6 +3,7 @@ import Foundation
 public struct FolderSummary: Codable, Sendable {
     public let count: Int
     public let cover: PhotoFile?
+    public let videoCount: Int?
 }
 
 /// Directory listings use one utility lane. Saved summaries load independently
@@ -34,7 +35,7 @@ public final class FolderSummaryCache: @unchecked Sendable {
             let record: (snapshot: CachedFolderValue<FolderSummary>, modified: Date?)?
             do { record = try storage.read(url) }
             catch is DecodingError { record = nil } // The card reports damaged saved data before rebuilding it.
-            let fresh = record.map { let age = Date().timeIntervalSince($0.snapshot.computedAt); return age >= 0 && age < lifetime } ?? false
+            let fresh = record.map { let age = Date().timeIntervalSince($0.snapshot.computedAt); return age >= 0 && age < lifetime && $0.snapshot.value.videoCount != nil } ?? false
             if fresh, storage.recentlyChecked(url, interval: checkInterval), let record { try check(); return record.snapshot.value }
             let modified = try folderModification(url)
             if fresh, let record, record.modified == modified {
@@ -55,17 +56,19 @@ public final class FolderSummaryCache: @unchecked Sendable {
             let files = try FileManager.default.contentsOfDirectory(at: url,
                 includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey], options: [.skipsHiddenFiles])
             var images: [PhotoFile] = []
-            let extensions = DirectoryScanner.rawExtensions.union(DirectoryScanner.renderedExtensions)
+            let extensions = DirectoryScanner.rawExtensions.union(DirectoryScanner.renderedExtensions).union(DirectoryScanner.videoExtensions)
             for file in files where extensions.contains(file.pathExtension.lowercased()) {
                 try check()
                 let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey])
                 guard values.isRegularFile == true, values.isSymbolicLink != true else { continue }
-                images.append(PhotoFile(url: file, kind: DirectoryScanner.rawExtensions.contains(file.pathExtension.lowercased()) ? .raw : .rendered,
+                let ext = file.pathExtension.lowercased()
+                images.append(PhotoFile(url: file, kind: DirectoryScanner.rawExtensions.contains(ext) ? .raw : (DirectoryScanner.videoExtensions.contains(ext) ? .video : .rendered),
                                         size: Int64(values.fileSize ?? 0), modified: values.contentModificationDate ?? .distantPast))
             }
             images.sort { $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent) == .orderedAscending }
-            let count = Set(images.map { $0.url.deletingPathExtension().lastPathComponent.lowercased() }).count
-            let result = FolderSummary(count: count, cover: images.first { $0.kind == .rendered } ?? images.first)
+            let count = Set(images.filter { $0.kind != .video }.map { $0.url.deletingPathExtension().lastPathComponent.lowercased() }).count
+            let result = FolderSummary(count: count, cover: images.first { $0.kind == .rendered } ?? images.first { $0.kind == .raw } ?? images.first,
+                                       videoCount: images.filter { $0.kind == .video }.count)
             try check(); try storage.write(result, for: url, modified: modified, token: token)
             return result
         }

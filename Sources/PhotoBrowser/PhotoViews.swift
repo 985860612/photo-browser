@@ -11,6 +11,7 @@ struct PhotoThumbnail: View {
     @State private var image: NSImage?
     @State private var failure: String?
     @State private var hovered = false
+    @State private var duration: Double?
 
     var body: some View {
         VStack(spacing: 7) {
@@ -20,6 +21,12 @@ struct PhotoThumbnail: View {
                     Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure)
                 } else { ProgressView().controlSize(.small) }
             }.frame(maxWidth: .infinity).frame(height: height)
+                .overlay(alignment: .bottomTrailing) {
+                    if asset.isVideo {
+                        Label(VideoMedia.durationLabel(duration), systemImage: "play.fill")
+                            .font(.system(size: 10, weight: .medium)).padding(4).background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 4)).padding(5)
+                    }
+                }
             Text(asset.name).font(.system(size: 11, weight: focused ? .semibold : .regular)).lineLimit(1)
             Text(asset.formatLabel).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
         }
@@ -30,7 +37,7 @@ struct PhotoThumbnail: View {
         .onHover { hovered = $0 }
         .onAppear { store.previewAppeared(asset) }
         .task(id: asset.preferred.id + "\(asset.preferred.modified.timeIntervalSince1970)") {
-            do { image = try await ThumbnailCache.shared.image(asset.preferred, maximum: 520).image; failure = nil }
+            do { let result = try await ThumbnailCache.shared.image(asset.preferred, maximum: 520); image = result.image; duration = result.metadata?.duration; failure = nil }
             catch is CancellationError {}
             catch { failure = error.localizedDescription }
         }
@@ -44,9 +51,35 @@ struct PhotoClipboardMenu: View {
         Button { store.copyFilesToClipboard(asset) } label: {
             Label(L10n.text("复制文件到剪贴板"), systemImage: "doc.on.doc")
         }.disabled(store.isMoving || store.isLoading).help("⌘C")
-        Button { store.copyImageToClipboard(asset) } label: {
+        if !asset.isVideo { Button { store.copyImageToClipboard(asset) } label: {
             Label(L10n.text("复制图片到剪贴板"), systemImage: "photo.on.rectangle")
-        }.disabled(store.isMoving || store.isLoading || store.isCopyingImage).help("⌘⇧C")
+        }.disabled(store.isMoving || store.isLoading || store.isCopyingImage).help("⌘⇧C") }
+    }
+}
+
+struct CameraRawMenu: View {
+    @EnvironmentObject private var store: BrowserStore
+    let asset: PhotoAsset
+    var body: some View {
+        if !asset.isVideo {
+            Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
+            Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
+                ForEach(asset.imageFiles) { file in Button(file.format) { store.openInCameraRaw(asset, file: file) } }
+            }
+        } else {
+            Button(L10n.text("播放视频")) { store.playVideo(asset) }.disabled(store.isMoving || store.isLoading)
+        }
+    }
+}
+
+struct MediaDeleteMenu: View {
+    @EnvironmentObject private var store: BrowserStore
+    let asset: PhotoAsset
+    var body: some View {
+        Button(L10n.text("移到 _del 待删除目录")) {
+            if !store.selection.contains(asset.id) { store.select(asset, modifiers: []) }
+            store.deleteSelection()
+        }.disabled(!store.canArchive || store.isLoading)
     }
 }
 
@@ -70,20 +103,21 @@ struct PhotoGridView: View {
                             .id(asset.id)
                             .background(ImmediateCardClick { count, modifiers in
                                 store.select(asset, modifiers: count == 2 ? [] : modifiers)
-                                if count == 2 { store.showGroupOverview = false }
+                                if count == 2 {
+                                    store.showGroupOverview = false
+                                    if asset.isVideo { store.video.playWhenReady(asset.preferred) }
+                                }
                             })
                             .accessibilityAddTraits(.isButton)
                             .accessibilityAction { store.select(asset, modifiers: []) }
                             .contextMenu {
                                 PhotoClipboardMenu(asset: asset)
+                                MediaDeleteMenu(asset: asset)
                                 Divider()
-                                Button(L10n.text("全屏高清预览")) { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
-                                Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
-                                Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
-                                    ForEach(asset.imageFiles) { file in Button(file.format) { store.openInCameraRaw(asset, file: file) } }
-                                }
+                                Button(L10n.text(asset.isVideo ? "全屏播放" : "全屏高清预览")) { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
+                                CameraRawMenu(asset: asset)
                                 Divider()
-                                Button(L10n.text("在 Finder 显示所有格式")) { NSWorkspace.shared.activateFileViewerSelecting(asset.imageFiles.map(\.url)) }
+                                Button(L10n.text("在 Finder 显示所有格式")) { NSWorkspace.shared.activateFileViewerSelecting(asset.mediaFiles.map(\.url)) }
                             }
                     }
                 }.padding(15)
@@ -110,19 +144,18 @@ struct FilmstripView: View {
                         PhotoThumbnail(asset: asset, selected: store.selection.contains(asset.id), focused: store.focusedID == asset.id && store.selectedFolderID == nil, height: size - 15)
                             .frame(width: size).id(asset.id)
                             .background(ImmediateCardClick { count, modifiers in
-                                if count == 1 { store.select(asset, modifiers: modifiers) }
+                                store.select(asset, modifiers: count == 2 ? [] : modifiers)
+                                if count == 2, asset.isVideo { store.video.playWhenReady(asset.preferred) }
                             })
                             .accessibilityAddTraits(.isButton)
                             .accessibilityAction { store.select(asset, modifiers: []) }
                             .contextMenu {
                                 PhotoClipboardMenu(asset: asset)
+                                MediaDeleteMenu(asset: asset)
                                 Divider()
-                                Button(L10n.text("全屏高清预览")) { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
-                                Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
-                                Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
-                                    ForEach(asset.imageFiles) { file in Button(file.format) { store.openInCameraRaw(asset, file: file) } }
-                                }
-                                Button(L10n.text("在 Finder 显示所有格式")) { NSWorkspace.shared.activateFileViewerSelecting(asset.imageFiles.map(\.url)) }
+                                Button(L10n.text(asset.isVideo ? "全屏播放" : "全屏高清预览")) { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
+                                CameraRawMenu(asset: asset)
+                                Button(L10n.text("在 Finder 显示所有格式")) { NSWorkspace.shared.activateFileViewerSelecting(asset.mediaFiles.map(\.url)) }
                             }
                     }
                 }.padding(10)
@@ -152,6 +185,9 @@ struct LargePreviewView: View {
             GeometryReader { geometry in
                 ZStack {
                     Color.black
+                    if let file = store.focusedFile, file.kind == .video, store.selectedFolderID == nil, !store.isMoving, !store.isLoading {
+                        VideoPreviewView(file: file, playback: store.video)
+                    } else {
                     PhotoCanvas(photo: preview.fileID == store.focusedFile?.id ? photo : nil,
                                 identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale) { preview.failure = $0 }
                         .opacity(photo != nil && preview.fileID == store.focusedFile?.id ? 1 : 0)
@@ -160,6 +196,7 @@ struct LargePreviewView: View {
                     } else if photo == nil, let failure {
                         ContentUnavailableView(L10n.text("预览加载失败"), systemImage: "photo.badge.exclamationmark", description: Text(failure))
                     } else if photo == nil, store.focusedFile != nil { ProgressView(L10n.text("加载照片…")) }
+                    }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -169,6 +206,7 @@ struct LargePreviewView: View {
                     .help(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片"))
                 Button { store.step(1) } label: { Image(systemName: "chevron.right") }
                 Spacer()
+                if store.focusedFile?.kind != .video {
                 if loading { ProgressView().controlSize(.small).help(L10n.text("正在加载高清图")) }
                 if let failure, thumbnail != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure) }
                 Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch)
@@ -178,21 +216,20 @@ struct LargePreviewView: View {
                 Button(L10n.text("适应")) { zoom = 1 }
                 Slider(value: $zoom, in: 0.1...10).frame(width: 70).help(L10n.text("缩放"))
                 Text("\(Int(zoom * 100))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40)
+                }
                 Button { store.showGroupOverview = true } label: { Image(systemName: "square.grid.2x2") }.help(L10n.text("网格预览"))
                 Button { store.toggleFullscreenPreview() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
-                    .disabled(store.focusedFile == nil).help(L10n.text("全屏高清预览（空格）"))
+                    .disabled(store.focusedFile == nil).help(L10n.text(store.focusedFile?.kind == .video ? "全屏播放" : "全屏高清预览（空格）"))
             }.font(.system(size: 12)).controlSize(.mini)
                 .padding(.horizontal, 14).padding(.vertical, 8).buttonStyle(.borderless)
         }
         .contextMenu {
             if let asset = store.focusedAsset {
                 PhotoClipboardMenu(asset: asset)
+                MediaDeleteMenu(asset: asset)
                 Divider()
-                Button(L10n.text("全屏高清预览")) { store.toggleFullscreenPreview() }
-                Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
-                Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
-                    ForEach(asset.imageFiles) { file in Button(file.format) { store.openInCameraRaw(asset, file: file) } }
-                }
+                Button(L10n.text(asset.isVideo ? "全屏播放" : "全屏高清预览")) { store.toggleFullscreenPreview() }
+                CameraRawMenu(asset: asset)
                 Button(L10n.text("在 Finder 显示")) { store.revealFocused() }
             }
         }
@@ -201,7 +238,7 @@ struct LargePreviewView: View {
             if preview.fileID != store.focusedFile?.id { zoom = 1 }
             await store.preparePreviewCache()
             let assetID = store.focusedID
-            await preview.load(store.selectedFolderID == nil ? store.focusedFile : nil, hdr: store.hdrPreview, maximum: 2800) { metadata in
+            await preview.load(store.selectedFolderID == nil && store.focusedFile?.kind != .video ? store.focusedFile : nil, hdr: store.hdrPreview, maximum: 2800) { metadata in
                 if let assetID { store.updateMetadata(assetID, value: metadata) }
             }
         }
