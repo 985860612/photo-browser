@@ -7,9 +7,11 @@ swift build "${PREVIEW_BUILD_ARGS[@]}" --product PhotoBrowser
 PREVIEW_BUILD_PATH="$(swift build "${PREVIEW_BUILD_ARGS[@]}" --show-bin-path)"
 swiftc -parse-as-library -I "$PREVIEW_BUILD_PATH/Modules" \
   Sources/PhotoBrowser/BrowserStore.swift Sources/PhotoBrowser/CameraRawLauncher.swift \
+  Sources/PhotoBrowser/VideoPlayback.swift \
   Sources/PhotoBrowser/PreviewPresentation.swift Sources/PhotoBrowser/PhotoCanvas.swift \
   Tests/BrowserPreviewStoreChecks/PreviewStoreChecks.swift \
   Tests/BrowserPreviewStoreChecks/CanvasRenderChecks.swift \
+  Tests/BrowserPreviewStoreChecks/VideoPlaybackChecks.swift Tests/BrowserThumbnailChecks/VideoFixture.swift \
   "$PREVIEW_BUILD_PATH"/BrowserCore.build/*.swift.o \
   -o "$PREVIEW_BUILD_PATH/PreviewStoreChecks"
 "$PREVIEW_BUILD_PATH/PreviewStoreChecks"

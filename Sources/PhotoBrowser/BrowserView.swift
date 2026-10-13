@@ -212,7 +212,7 @@ struct BrowserView: View {
                 Image(systemName: store.showGroupOverview ? "rectangle" : "square.grid.2x2")
             }.help(store.showGroupOverview ? L10n.text("大图浏览") : L10n.text("网格预览"))
             Button { store.toggleFullscreenPreview() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
-                .disabled(store.focusedFile == nil).help(L10n.text("全屏高清预览（空格）"))
+                .disabled(store.focusedFile == nil).help(L10n.text(store.focusedFile?.kind == .video ? "全屏播放" : "全屏高清预览（空格）"))
         }.padding(.horizontal, 14).padding(.vertical, 10).buttonStyle(.borderless)
     }
 
@@ -257,7 +257,7 @@ struct SidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             List(selection: $store.scope) {
                 Section {
-                    directoryRow(L10n.text("全部照片"), count: store.assets.count, icon: "photo.on.rectangle").tag("all")
+                    directoryRow(L10n.text(store.assets.contains(where: \.isVideo) ? "全部照片与视频" : "全部照片"), count: store.assets.count, icon: "photo.on.rectangle").tag("all")
                     directoryRow(L10n.text("未分组"), count: store.ungroupedCount, icon: "square.dashed").tag("ungrouped")
                 } header: {
                     sectionHeader(L10n.text("照片目录"))
