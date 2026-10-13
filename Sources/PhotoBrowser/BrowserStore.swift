@@ -21,7 +21,7 @@ private struct BrowserSession: Codable {
     @Published var selection: Set<String> = []
     @Published var selectedFolderID: String?
     @Published private(set) var navigationScrollTarget: String?
-    @Published var focusedID: String? { didSet { if focusedID != oldValue { video.stop() } } }
+    @Published var focusedID: String? { didSet { if focusedID != oldValue { video.stop(); observeFocusedFiles() } } }
     @Published var preferredFileID: String? { didSet { if preferredFileID != oldValue, video.fileID != focusedFile?.id { video.stop() } } }
     @Published var isLoading = false
     @Published var isReadingMetadata = false
@@ -42,8 +42,30 @@ private struct BrowserSession: Codable {
         let task: Task<Void, Never>
     }
     private var adjacentJobs: [AdjacentKey: AdjacentJob] = [:]
-    private let displayCache: DisplayPhotoCache
-    let video = VideoPlayback()
+    let displayCache: DisplayPhotoCache
+    let video: VideoPlayback
+    @Published var adjacentReady = 0
+    @Published var adjacentTotal = 0
+    @Published var adjacentVideoReady = 0
+    @Published var adjacentVideoTotal = 0
+    @Published var previewContentRevision = UUID()
+    @Published var diskLimitGB = 2 {
+        didSet { preferencesDefaults.set(diskLimitGB, forKey: "thumbnailDiskLimitGB") }
+    }
+    @Published var diskUsage: ThumbnailDiskUsage?
+    @Published var previewStatistics: DisplayPhotoCache.Statistics?
+    @Published var diagnostics = PreviewDiagnostics.shared.snapshot()
+    @Published var cacheBusy = false
+    @Published var cacheFailure: String?
+    var directoryObserver: DirectoryObserver?
+    var observationStartTask: Task<Void, Never>?
+    var automaticRefreshTask: Task<Void, Never>?
+    var refreshRequested = false
+    var refreshFullRequested = false
+    var observedFolderDates: [String: Date] = [:]
+    var observationRevision = UUID()
+    let observationWorkers = PreviewWorkQueue()
+    private let monitoringEnabled: Bool
     private let clipboardWorkers = PreviewWorkQueue()
     @Published private(set) var isCopyingImage = false
     private var clipboardTask: Task<Void, Never>?
@@ -78,7 +100,7 @@ private struct BrowserSession: Codable {
         }
     }
     private let previewPreferences: PreviewPreferences
-    private let preferencesDefaults: UserDefaults
+    let preferencesDefaults: UserDefaults
     @Published var showGroupOverview = false { didSet { if showGroupOverview { video.pause() } } }
     @Published var renameGroup: PhotoGroup?
     @Published var subdirectories: [URL] = []
@@ -108,13 +130,16 @@ private struct BrowserSession: Codable {
     private var selectionAnchorID: String?
     private var rangeSelectionBase: Set<String>?
     private let support: URL
-    private let thumbnails: ThumbnailCache
+    let thumbnails: ThumbnailCache
     let engine: ArchiveEngine
 
     init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared, defaults: UserDefaults = .standard, displayCache: DisplayPhotoCache = .shared,
-         folderSummaries: FolderSummaryCache = .shared, folderSizes: FolderSizeCache = .shared) {
+         folderSummaries: FolderSummaryCache = .shared, folderSizes: FolderSizeCache = .shared, monitoringEnabled: Bool = true) {
         self.folderSummaries = folderSummaries; self.folderSizes = folderSizes
         preferencesDefaults = defaults
+        self.monitoringEnabled = monitoringEnabled
+        video = VideoPlayback(defaults: defaults)
+        diskLimitGB = min(20, max(1, defaults.object(forKey: "thumbnailDiskLimitGB") as? Int ?? 2))
         previewPreferences = PreviewPreferences(defaults: defaults)
         previewBefore = previewPreferences.before; previewAfter = previewPreferences.after
         thumbnailSize = BrowserPanelLayout.clamp(defaults.object(forKey: "thumbnailSize") as? Double ?? 155, to: 110...360, fallback: 155)
@@ -135,7 +160,7 @@ private struct BrowserSession: Codable {
     }
     var previewRequestID: String {
         let file = focusedFile
-        return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")|\(isFullscreenPreview)"
+        return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")|\(isFullscreenPreview)|\(previewContentRevision)"
     }
     var adjacentPreviewFiles: [PhotoFile] {
         guard selectedFolderID == nil, let index = visibleAssets.firstIndex(where: { $0.id == focusedID }) else { return [] }
@@ -143,13 +168,20 @@ private struct BrowserSession: Codable {
             asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) } ?? asset.preferred
         }
     }
+    var adjacentVideoFiles: [PhotoFile] {
+        guard selectedFolderID == nil, let index = visibleAssets.firstIndex(where: { $0.id == focusedID }) else { return [] }
+        return PreviewPreferences.neighbors(in: visibleAssets, index: index, before: previewBefore, after: previewAfter).filter(\.isVideo).map(\.preferred)
+    }
     func preparePreviewCache() async {
         let requestID = previewRequestID
         let current = selectedFolderID == nil && !isMoving && !isLoading && focusedFile?.kind != .video ? focusedFile : nil
-        let neighbors = current == nil ? [] : adjacentPreviewFiles
+        let neighbors = selectedFolderID == nil && !isMoving && !isLoading && focusedFile != nil ? adjacentPreviewFiles : []
         let hdr = hdrPreview, maximum: Int? = isFullscreenPreview ? nil : 2800
+        video.prepareNeighbors(selectedFolderID == nil && !isMoving && !isLoading ? adjacentVideoFiles : [])
         await displayCache.setWorkingSet(current: current, neighbors: neighbors, hdr: hdr)
         guard !Task.isCancelled, requestID == previewRequestID, !isMoving, !isLoading else { return }
+        adjacentTotal = neighbors.count
+        adjacentReady = await displayCache.readyCount(neighbors, hdr: hdr, maximum: maximum)
         let keys = neighbors.map { AdjacentKey(file: $0, hdr: hdr, maximum: maximum) }
         var retained = Set(keys)
         // A neighbor that becomes visible keeps its decode: the foreground joins/promotes it.
@@ -163,6 +195,7 @@ private struct BrowserSession: Codable {
                 do { _ = try await cache.image(key.file, hdr: key.hdr, maximum: key.maximum, background: true) }
                 catch { /* Bad or cancelled neighbors must not stop the rest of the range. */ }
                 if self?.adjacentJobs[key]?.ticket == ticket { self?.adjacentJobs.removeValue(forKey: key) }
+                await self?.updateAdjacentReadiness()
             }
             adjacentJobs[key] = AdjacentJob(ticket: ticket, task: task)
         }
@@ -170,6 +203,9 @@ private struct BrowserSession: Codable {
     func cancelAdjacentPreviews() {
         for job in adjacentJobs.values { job.task.cancel() }
         adjacentJobs.removeAll()
+        adjacentReady = 0; adjacentTotal = 0
+        adjacentVideoReady = 0; adjacentVideoTotal = 0
+        video.cancelPreparation()
     }
     var visibleAssets: [PhotoAsset] {
         let base: [PhotoAsset]
@@ -239,10 +275,11 @@ private struct BrowserSession: Codable {
 
     func start() {
         guard !started else { return }; started = true
+        Task { await applyDiskLimit() }
         let arguments = CommandLine.arguments
         if let index = arguments.firstIndex(of: "--directory"), index + 1 < arguments.count {
             load(URL(fileURLWithPath: arguments[index + 1], isDirectory: true))
-        } else if let path = UserDefaults.standard.string(forKey: "lastDirectory") {
+        } else if let path = preferencesDefaults.string(forKey: "lastDirectory") {
             load(URL(fileURLWithPath: path, isDirectory: true))
         }
     }
@@ -265,7 +302,7 @@ private struct BrowserSession: Codable {
         }
     }
 
-    private func invalidateFolderCaches(_ urls: [URL], descendants: Bool = false) async {
+    func invalidateFolderCaches(_ urls: [URL], descendants: Bool = false) async {
         // Cache errors must not undo or misreport a completed filesystem move.
         do { try await folderSummaries.invalidate(urls, descendants: descendants) }
         catch { report(BrowserFailure.message(L10n.text("缓存更新失败：\(error.localizedDescription)"))) }
@@ -277,6 +314,7 @@ private struct BrowserSession: Codable {
     func load(_ inputURL: URL, restoring restoredGroup: PhotoGroup? = nil,
               restoringDeletedGroups: [PhotoGroup]? = nil, recordNavigation: Bool = true) {
         guard !isMoving else { return }
+        stopDirectoryObservation()
         cancelPreviewGeneration()
         let url = inputURL.standardizedFileURL
         if isFullscreenPreview { closeFullscreenPreview() }
@@ -336,10 +374,11 @@ private struct BrowserSession: Codable {
                 if let focusedID { selection = [focusedID] }
                 isLoading = false
                 status = result.2
-                UserDefaults.standard.set(url.path, forKey: "lastDirectory")
+                preferencesDefaults.set(url.path, forKey: "lastDirectory")
                 try saveSession()
                 refreshHistory()
                 startPreviewGeneration()
+                if monitoringEnabled { startDirectoryObservation() }
             } catch {
                 guard loadID == ticket else { return }
                 isLoading = false; status = L10n.text("目录加载失败"); report(error)
@@ -347,16 +386,16 @@ private struct BrowserSession: Codable {
         }
     }
 
-    func cancelPreviewGeneration() {
-        video.stop()
+    func cancelPreviewGeneration(stopVideo: Bool = true) {
+        if stopVideo { video.stop() }
         cancelAdjacentPreviews()
         previewID = UUID(); previewTask?.cancel(); previewTask = nil
         previewQueue = []; isGeneratingPreviews = false
         previewCompleted = 0; previewTotal = 0; previewFailures = 0; previewFailureDetails = ""
     }
 
-    private func startPreviewGeneration() {
-        cancelPreviewGeneration()
+    func startPreviewGeneration() {
+        cancelPreviewGeneration(stopVideo: false)
         guard !isMoving, !isLoading, !assets.isEmpty else { return }
         previewQueue = assets.map(\.preferred)
         previewTotal = previewQueue.count; isGeneratingPreviews = true
@@ -383,7 +422,7 @@ private struct BrowserSession: Codable {
                 }
             }
             guard previewID == ticket, !Task.isCancelled else { return }
-            do { try await thumbnails.trim(protecting: assets.map(\.preferred)) }
+            do { try await thumbnails.trim() }
             catch is CancellationError { return }
             catch { previewFailureDetails += L10n.text("\n缓存清理失败：\(error.localizedDescription)") }
             guard previewID == ticket, !Task.isCancelled else { return }
@@ -817,11 +856,11 @@ private struct BrowserSession: Codable {
             .appendingPathComponent(ThumbnailCache.digest(directory.resolvingSymlinksInPath().path) + ".json")
     }
 
-    private nonisolated static func fingerprint(_ asset: PhotoAsset) -> String {
+    nonisolated static func fingerprint(_ asset: PhotoAsset) -> String {
         asset.files.map { "\($0.url.lastPathComponent)|\($0.size)|\($0.modified.timeIntervalSince1970)" }.joined(separator: ";")
     }
 
-    private func saveSession() throws {
+    func saveSession() throws {
         guard let directory else { return }
         let url = sessionURL(for: directory)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

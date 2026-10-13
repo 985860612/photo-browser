@@ -74,6 +74,27 @@ extension ThumbnailChecks {
         let uncached = DisplayPhotoCache(memoryBudget: 0)
         _ = try await uncached.image(files[0], hdr: true, maximum: 200)
         try require(await uncached.statistics().bytes == 0, "oversized images remain displayable without exceeding cache capacity")
+        let fencedWorkers = PreviewWorkQueue(), fenced = DisplayPhotoCache(workers: fencedWorkers)
+        let fencedStarted = DispatchSemaphore(value: 0), fencedGate = DispatchSemaphore(value: 0)
+        let blockers = (0..<2).map { _ in Task { try await fencedWorkers.run { _ in
+            fencedStarted.signal(); try gateWait(fencedGate)
+        } } }
+        defer { fencedGate.signal(); fencedGate.signal() }
+        try gateWait(fencedStarted); try gateWait(fencedStarted)
+        let original = Task { try await fenced.image(files[0], hdr: true, maximum: 200) }
+        let deadline = Date().addingTimeInterval(5)
+        while await fenced.statistics().pending == 0 {
+            guard Date() < deadline else { throw BrowserFailure.message("old decode did not queue") }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        await fenced.removeAll(); fencedGate.signal(); fencedGate.signal()
+        for blocker in blockers { try await blocker.value }
+        let retainedPhoto = try await original.value
+        let afterClear = await fenced.statistics()
+        try require(retainedPhoto.size.height == 200 && afterClear.entries == 0,
+                    "clear lets the current decode display while fencing its old cache insertion")
+        _ = try await fenced.image(files[0], hdr: true, maximum: 200)
+        try require(await fenced.statistics().entries == 1, "fresh decoded requests can populate the new cache generation")
         let missing = PhotoFile(url: root.appendingPathComponent("missing.hif"), kind: .rendered)
         do { _ = try await shared.image(missing, hdr: true); throw BrowserFailure.message("Missing image succeeded") }
         catch let error as BrowserFailure {

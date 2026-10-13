@@ -21,9 +21,11 @@ import BrowserCore
         let request = UUID(); ticket = request
         failure = nil; loading = file != nil
         guard let file else { photo = nil; thumbnail = nil; fileID = nil; return }
+        let sample = PreviewDiagnostics.shared.begin(file)
         if let cached = await cache.cached(file, hdr: hdr, maximum: maximum, protect: true) {
             guard ticket == request, !Task.isCancelled else { return }
             photo = cached; thumbnail = nil; fileID = file.id; loading = false; metadata(cached.metadata)
+            PreviewDiagnostics.shared.loaded(sample, cached: true, timing: nil)
             return
         }
         guard ticket == request, !Task.isCancelled else { return }
@@ -45,10 +47,12 @@ import BrowserCore
             let result = try await cache.image(file, hdr: hdr, maximum: maximum)
             guard ticket == request, !Task.isCancelled else { return }
             photo = result; thumbnail = nil; loading = false; metadata(result.metadata)
+            PreviewDiagnostics.shared.loaded(sample, cached: false, timing: result.timing)
         } catch is CancellationError {}
         catch {
             guard ticket == request, !Task.isCancelled else { return }
             failure = error.localizedDescription; loading = false
+            PreviewDiagnostics.shared.failed(sample)
         }
     }
 }

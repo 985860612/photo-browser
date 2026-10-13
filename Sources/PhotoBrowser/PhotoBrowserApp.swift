@@ -73,6 +73,7 @@ import AppKit
         }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationDidBecomeActive(_ notification: Notification) { store?.scheduleAutomaticRefresh(full: true) }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if store?.isMoving == true {
             let alert = NSAlert()
@@ -81,8 +82,14 @@ import AppKit
             return .terminateCancel
         }
         store?.cancelMetadata()
+        store?.stopDirectoryObservation()
         store?.cancelPreviewGeneration()
         store?.video.stop()
+        do { try store?.thumbnails.persistAccesses() }
+        catch {
+            let alert = NSAlert(); alert.messageText = L10n.text("缓存更新失败：\(error.localizedDescription)")
+            alert.addButton(withTitle: L10n.text("知道了")); alert.runModal()
+        }
         return .terminateNow
     }
 }

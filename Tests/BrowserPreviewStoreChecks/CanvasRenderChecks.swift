@@ -29,11 +29,17 @@ extension PreviewStoreChecks {
         zero.withUnsafeBytes { texture.replace(region: MTLRegionMake2D(0, 0, texture.width, texture.height), mipmapLevel: 0,
                                                withBytes: $0.baseAddress!, bytesPerRow: texture.width * 8) }
         guard let command = canvas.makeFrameCommandBuffer() else { throw BrowserFailure.message("Canvas command unavailable") }
+        let sample = PreviewDiagnostics.shared.begin(file)
+        PreviewDiagnostics.shared.loaded(sample, cached: false, timing: photo.timing)
+        let drawStarted = ProcessInfo.processInfo.systemUptime
         try canvas.encodeFrame(to: texture, command: command)
+        canvas.trackFrameMetrics(command, started: drawStarted)
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             command.addCompletedHandler { _ in continuation.resume() }; command.commit()
         }
         if let error = command.error { throw error }
+        try expect(PreviewDiagnostics.shared.snapshot().samples.last(where: { $0.id == sample })?.render != nil,
+                   "render diagnostics complete only after the actual Metal command buffer finishes")
         for y in stride(from: 16, to: texture.height, by: 128) {
             for x in stride(from: 16, to: texture.width, by: 128) {
                 var pixel = [UInt16](repeating: 0, count: 4)
