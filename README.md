@@ -33,6 +33,7 @@ Examples from the Simplified Chinese interface. English is also supported.
 - **Panorama groups:** automatic candidates from capture time, burst sequence, and focal length; manual grouping, splitting, merging, renaming, and dissolving.
 - **Recoverable moves:** review the destination and full file list before moving a group. All formats and sidecars move together. Move History supports undo and interrupted-operation recovery.
 - **Folder navigation:** clickable breadcrumbs, a path field, history, parent navigation, and subfolder cards. Single-click selects a card; double-click opens it. Folder and photo-info panels can be collapsed independently.
+- **Folder caching:** cover fingerprints, photo counts and recursive file sizes persist locally. Folder cards show saved results first, then validate in the background. Directory checks are throttled to five minutes, sizes expire after six hours, and moves/deletion/undo invalidate affected folders and ancestors. ⌘R forces a refresh; cached timestamps and update failures appear in the card tooltip. The first visit calculates any missing entries.
 - **Camera Raw:** open the preferred RAW or a specific format in Photoshop's Camera Raw. Photoshop and the Camera Raw plug-in are optional and must be installed separately.
 - **English and Simplified Chinese:** menus, buttons, tooltips, status text, dialogs, capture settings, and application error messages are localized.
 

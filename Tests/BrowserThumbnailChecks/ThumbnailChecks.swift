@@ -27,22 +27,24 @@ private final class Counts: @unchecked Sendable {
             try await cacheChecks()
             try await displayCacheChecks()
             try await folderSizeChecks()
+            try await persistentFolderChecks()
             print("PASS all thumbnail checks")
         } catch { print("FAIL: \(error.localizedDescription)"); exit(1) }
     }
 
     static func folderSizeChecks() async throws {
         let fm = FileManager.default
-        let root = fm.temporaryDirectory.appendingPathComponent("FolderSize-" + UUID().uuidString)
+        let workspace = fm.temporaryDirectory.appendingPathComponent("FolderSize-" + UUID().uuidString)
+        let root = workspace.appendingPathComponent("photos")
         try fm.createDirectory(at: root.appendingPathComponent("nested"), withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: root) }
+        defer { try? fm.removeItem(at: workspace) }
         try Data(repeating: 0, count: 10).write(to: root.appendingPathComponent("photo.jpg"))
         try Data(repeating: 0, count: 20).write(to: root.appendingPathComponent("photo.raw"))
         try Data(repeating: 0, count: 30).write(to: root.appendingPathComponent("nested/photo.xmp"))
         try Data(repeating: 0, count: 4).write(to: root.appendingPathComponent(".metadata"))
         try fm.createSymbolicLink(at: root.appendingPathComponent("loop"), withDestinationURL: root)
         try fm.createSymbolicLink(at: root.appendingPathComponent("link.jpg"), withDestinationURL: root.appendingPathComponent("photo.jpg"))
-        let cache = FolderSizeCache(lifetime: 0.15)
+        let cache = FolderSizeCache(directory: workspace.appendingPathComponent("cache"), lifetime: 0.15, checkInterval: 0)
         let initial = try await cache.size(of: root)
         try expect(initial == 64, "folder size includes nested files, companion formats and hidden files without following links (\(initial) bytes)")
         try Data(repeating: 0, count: 40).write(to: root.appendingPathComponent("nested/photo.xmp"))
@@ -64,7 +66,7 @@ private final class Counts: @unchecked Sendable {
         do { _ = try await cache.size(of: root.appendingPathComponent("loop")); throw BrowserFailure.message("Symbolic folder succeeded") }
         catch is CocoaError { print("PASS symbolic folder is not traversed") }
 
-        let workers = PreviewWorkQueue(), blockedCache = FolderSizeCache(workers: workers)
+        let workers = PreviewWorkQueue(), blockedCache = FolderSizeCache(directory: workspace.appendingPathComponent("blocked"), workers: workers)
         let started = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
         let blocker = Task { try await workers.run(background: true) { _ in started.signal(); try wait(release) } }
         defer { release.signal() }

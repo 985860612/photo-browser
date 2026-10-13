@@ -20,7 +20,7 @@ import AppKit
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button(L10n.text("打开照片目录…")) { store.chooseDirectory() }.keyboardShortcut("o")
-                Button(L10n.text("刷新目录")) { if let directory = store.directory { store.load(directory) } }.keyboardShortcut("r")
+                Button(L10n.text("刷新目录")) { store.refreshDirectory() }.keyboardShortcut("r")
                     .disabled(store.isMoving || store.isLoading)
                 Button(L10n.text("输入文件夹路径…")) { store.editPath() }.keyboardShortcut("l").disabled(store.isMoving || store.isFullscreenPreview)
                 Button(L10n.text("后退")) { store.navigateHistory(-1) }.keyboardShortcut("[").disabled(!store.canGoBack)

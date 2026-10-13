@@ -76,6 +76,9 @@ private struct BrowserSession: Codable {
     @Published var showGroupOverview = false
     @Published var renameGroup: PhotoGroup?
     @Published var subdirectories: [URL] = []
+    @Published private(set) var folderCacheRevision = UUID()
+    let folderSummaries: FolderSummaryCache
+    let folderSizes: FolderSizeCache
     @Published var navigationHistory: [URL] = []
     @Published var navigationIndex = -1
     @Published var editingPath = false
@@ -102,7 +105,9 @@ private struct BrowserSession: Codable {
     private let thumbnails: ThumbnailCache
     let engine: ArchiveEngine
 
-    init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared, defaults: UserDefaults = .standard, displayCache: DisplayPhotoCache = .shared) {
+    init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared, defaults: UserDefaults = .standard, displayCache: DisplayPhotoCache = .shared,
+         folderSummaries: FolderSummaryCache = .shared, folderSizes: FolderSizeCache = .shared) {
+        self.folderSummaries = folderSummaries; self.folderSizes = folderSizes
         preferencesDefaults = defaults
         previewPreferences = PreviewPreferences(defaults: defaults)
         previewBefore = previewPreferences.before; previewAfter = previewPreferences.after
@@ -230,6 +235,25 @@ private struct BrowserSession: Codable {
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
         panel.prompt = L10n.text("打开照片目录"); panel.directoryURL = directory
         if panel.runModal() == .OK, let url = panel.url { load(url) }
+    }
+
+    func refreshDirectory() {
+        guard let directory, !isMoving, !isLoading else { return }
+        isLoading = true; status = L10n.text("扫描照片并合并同名格式…")
+        Task {
+            await invalidateFolderCaches([directory], descendants: true)
+            guard self.directory == directory, !isMoving else { return }
+            load(directory)
+        }
+    }
+
+    private func invalidateFolderCaches(_ urls: [URL], descendants: Bool = false) async {
+        // Cache errors must not undo or misreport a completed filesystem move.
+        do { try await folderSummaries.invalidate(urls, descendants: descendants) }
+        catch { report(BrowserFailure.message(L10n.text("缓存更新失败：\(error.localizedDescription)"))) }
+        do { try await folderSizes.invalidate(urls, descendants: descendants) }
+        catch { report(BrowserFailure.message(L10n.text("缓存更新失败：\(error.localizedDescription)"))) }
+        folderCacheRevision = UUID()
     }
 
     func load(_ inputURL: URL, restoring restoredGroup: PhotoGroup? = nil,
@@ -594,6 +618,7 @@ private struct BrowserSession: Codable {
         Task {
             do {
                 let record = try await Task.detached(priority: .userInitiated) { try worker.archive(plan) }.value
+                await invalidateFolderCaches([record.sourceDirectory, record.destination] + [directory].compactMap { $0 })
                 if record.destination.deletingLastPathComponent().resolvingSymlinksInPath() == directory?.resolvingSymlinksInPath(),
                    !subdirectories.contains(where: { $0.resolvingSymlinksInPath() == record.destination }) {
                     subdirectories.append(record.destination)
@@ -630,6 +655,7 @@ private struct BrowserSession: Codable {
         Task {
             do {
                 let restored = try await Task.detached(priority: .userInitiated) { try worker.undo(record) }.value
+                await invalidateFolderCaches([restored.sourceDirectory, restored.destination] + [directory].compactMap { $0 })
                 isMoving = false; showHistory = false
                 load(restored.sourceDirectory, restoring: restored.group, restoringDeletedGroups: restored.deletionGroups)
             } catch { isMoving = false; startPreviewGeneration(); report(error); refreshHistory() }
