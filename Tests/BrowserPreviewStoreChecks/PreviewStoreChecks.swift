@@ -89,6 +89,7 @@ import BrowserCore
         try await previewPreferenceChecks(root: root, jpeg: data as Data)
         try await adjacentDecodeChecks(root: root, jpeg: data as Data)
         try await deletionChecks(root: root, jpeg: data as Data)
+        try await canvasRenderChecks(root: root)
         print("PASS all preview store and navigation checks")
     }
 

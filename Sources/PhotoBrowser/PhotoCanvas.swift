@@ -38,6 +38,8 @@ struct PhotoCanvas: NSViewRepresentable {
     private var dragPoint: CGPoint?
     private var screenObserver: NSObjectProtocol?
     private var lastReportedFit: Double = 0
+    private var frameRevision: UInt64 = 0
+    private var retriedFrame = false
     var onZoom: ((Double) -> Void)?
     var onFitScale: ((Double) -> Void)?
     var onFailure: ((String) -> Void)?
@@ -47,9 +49,9 @@ struct PhotoCanvas: NSViewRepresentable {
         colorPixelFormat = .rgba16Float; framebufferOnly = false
         isPaused = true; enableSetNeedsDisplay = true; autoResizeDrawable = true
         delegate = self
-        if let device {
-            ciContext = CIContext(mtlDevice: device, options: [.workingColorSpace: outputSpace, .workingFormat: CIFormat.RGBAh, .cacheIntermediates: false])
-            queue = device.makeCommandQueue()
+        if let device, let queue = device.makeCommandQueue() {
+            self.queue = queue
+            ciContext = CIContext(mtlCommandQueue: queue, options: [.workingColorSpace: outputSpace, .workingFormat: CIFormat.RGBAh, .cacheIntermediates: false])
         }
         (layer as? CAMetalLayer)?.colorspace = outputSpace
         screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
@@ -61,15 +63,19 @@ struct PhotoCanvas: NSViewRepresentable {
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { false }
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); needsDisplay = true }
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties(); reportFit(); needsDisplay = true
+    }
 
     func configure(photo: DisplayPhoto?, identity: String, hdr: Bool, zoom: Double) {
         guard self.photo?.image !== photo?.image || self.identity != identity || self.hdr != hdr || self.zoom != zoom else { return }
         if self.identity != identity { pan = .zero; self.identity = identity }
         self.photo = photo; self.hdr = hdr; self.zoom = zoom
+        frameRevision &+= 1; retriedFrame = false
         reportFit()
         if zoom == 1 { pan = .zero }
         (layer as? CAMetalLayer)?.wantsExtendedDynamicRangeContent = hdr && photo?.isHDR == true
-        if device == nil, photo != nil { DispatchQueue.main.async { [weak self] in self?.onFailure?(L10n.text("当前 Mac 无法建立 Metal 预览，请检查图形设备。")) } }
+        if ciContext == nil, photo != nil { DispatchQueue.main.async { [weak self] in self?.onFailure?(L10n.text("当前 Mac 无法建立 Metal 预览，请检查图形设备。")) } }
         needsDisplay = true
     }
     private var fit: Double {
@@ -77,7 +83,7 @@ struct PhotoCanvas: NSViewRepresentable {
         return max(0.0001, min(bounds.width / photo.size.width, bounds.height / photo.size.height))
     }
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        reportFit()
+        reportFit(); needsDisplay = true
     }
     private func reportFit() {
         let value = fit
@@ -86,27 +92,52 @@ struct PhotoCanvas: NSViewRepresentable {
         DispatchQueue.main.async { [weak self] in self?.onFitScale?(value) }
     }
     func draw(in view: MTKView) {
-        guard bounds.width > 0, bounds.height > 0, let photo, let ciContext,
-              let drawable = currentDrawable, let command = queue?.makeCommandBuffer() else { return }
-        var image = photo.image
-        if #available(macOS 15, *), photo.isHDR {
-            let target = hdr ? max(1, window?.screen?.maximumExtendedDynamicRangeColorComponentValue ?? 1) : 1
-            if let mapped = CIFilter(name: "CIToneMapHeadroom", parameters: [kCIInputImageKey: image, "inputSourceHeadroom": photo.headroom, "inputTargetHeadroom": Float(target)])?.outputImage { image = mapped }
+        guard bounds.width > 0, bounds.height > 0,
+              let drawable = currentDrawable, let command = makeFrameCommandBuffer() else { return }
+        do { try encodeFrame(to: drawable.texture, command: command) }
+        catch { DispatchQueue.main.async { [weak self] in self?.onFailure?(error.localizedDescription) }; return }
+        frameRevision &+= 1
+        let revision = frameRevision, retainedImage = photo?.image
+        command.addCompletedHandler { [weak self, retainedImage] buffer in
+            withExtendedLifetime(retainedImage) {}
+            let message = buffer.error?.localizedDescription
+            Task { @MainActor [weak self] in
+                guard let self, self.frameRevision == revision else { return }
+                if let message {
+                    if self.retriedFrame { self.onFailure?(message) }
+                    else { self.retriedFrame = true; self.needsDisplay = true }
+                } else { self.retriedFrame = false }
+            }
         }
-        let backing = drawableSize.width / bounds.width
-        let scale = fit * zoom * backing
-        let x = (drawableSize.width - photo.size.width * scale) / 2 + pan.x * backing
-        let y = (drawableSize.height - photo.size.height * scale) / 2 + pan.y * backing
-        let viewport = CGRect(origin: .zero, size: drawableSize)
-        let placed = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            .transformed(by: CGAffineTransform(translationX: x, y: y))
+        command.present(drawable); command.commit()
+    }
+
+    /// Shared by the onscreen canvas and pixel-level render checks.
+    func makeFrameCommandBuffer() -> MTLCommandBuffer? { queue?.makeCommandBuffer() }
+
+    func encodeFrame(to texture: MTLTexture, command: MTLCommandBuffer) throws {
+        guard bounds.width > 0, bounds.height > 0, let ciContext else { return }
+        let viewport = CGRect(x: 0, y: 0, width: texture.width, height: texture.height)
         let background = CIImage(color: .black).cropped(to: viewport)
-        let destination = CIRenderDestination(mtlTexture: drawable.texture, commandBuffer: command)
+        var frame = background
+        if let photo {
+            var image = photo.image
+            if #available(macOS 15, *), photo.isHDR {
+                let target = hdr ? max(1, window?.screen?.maximumExtendedDynamicRangeColorComponentValue ?? 1) : 1
+                if let mapped = CIFilter(name: "CIToneMapHeadroom", parameters: [kCIInputImageKey: image, "inputSourceHeadroom": photo.headroom, "inputTargetHeadroom": Float(target)])?.outputImage { image = mapped }
+            }
+            let scale = min(viewport.width / photo.size.width, viewport.height / photo.size.height) * zoom
+            let x = (viewport.width - photo.size.width * scale) / 2 + pan.x * viewport.width / bounds.width
+            let y = (viewport.height - photo.size.height * scale) / 2 + pan.y * viewport.height / bounds.height
+            let placed = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                .transformed(by: CGAffineTransform(translationX: x, y: y))
+            frame = placed.composited(over: background).cropped(to: viewport)
+        }
+        let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: command)
         destination.colorSpace = outputSpace
         destination.isFlipped = true
-        do { _ = try ciContext.startTask(toRender: placed.composited(over: background), to: destination) }
-        catch { DispatchQueue.main.async { [weak self] in self?.onFailure?(error.localizedDescription) }; return }
-        command.present(drawable); command.commit()
+        destination.alphaMode = .none
+        _ = try ciContext.startTask(toRender: frame, from: viewport, to: destination, at: .zero)
     }
     private func changeZoom(_ value: Double, at anchor: CGPoint) {
         let new = min(10, max(0.1, value)), ratio = new / zoom
