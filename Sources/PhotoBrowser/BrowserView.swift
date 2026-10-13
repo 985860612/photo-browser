@@ -142,7 +142,7 @@ struct BrowserView: View {
 
     private func panelDivider(width: Binding<Double>, actualWidth: Double, range: ClosedRange<Double>,
                               direction: Double, maximum: Double) -> some View {
-        Capsule().fill(Color.white.opacity(0.07)).frame(width: 0.5).padding(.vertical, 16)
+        Capsule().fill(Color.white.opacity(0.07)).frame(width: 0.5).padding(.vertical, 8)
             .frame(width: 6).contentShape(Rectangle())
             .onHover { hovering in if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() } }
             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
