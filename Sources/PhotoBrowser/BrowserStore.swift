@@ -178,6 +178,9 @@ private struct BrowserSession: Codable {
     }
     var ungroupedCount: Int { assets.count - Set(groups.flatMap(\.assetIDs)).count }
     var totalFiles: Int { assets.reduce(0) { $0 + $1.imageFiles.count } }
+    var directorySummary: String {
+        L10n.text("\(assets.count) 张照片 · \(totalFiles) 个图像文件 · \(groups.count) 个分组")
+    }
     var canArchive: Bool {
         !isMoving && !isReadingMetadata && !history.contains { ["prepared", "moving", "undoing", "recoveryNeeded"].contains($0.state) }
     }
@@ -290,7 +293,7 @@ private struct BrowserSession: Codable {
                 focusedID = assets.first?.id
                 if let focusedID { selection = [focusedID] }
                 isLoading = false
-                status = L10n.text("\(assets.count) 张照片 · \(totalFiles) 个图像文件 · \(groups.count) 个分组") + (result.2.isEmpty ? "" : " · \(result.2)")
+                status = result.2
                 UserDefaults.standard.set(url.path, forKey: "lastDirectory")
                 try saveSession()
                 refreshHistory()
