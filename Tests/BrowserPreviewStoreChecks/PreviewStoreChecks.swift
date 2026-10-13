@@ -281,11 +281,15 @@ import BrowserCore
             try Data("original \(name)".utf8).write(to: directory.appendingPathComponent(name))
         }
         let cache = ThumbnailCache(directory: root.appendingPathComponent("deletion-cache"))
-        let store = BrowserStore(supportDirectory: root.appendingPathComponent("deletion-support"), thumbnails: cache)
+        let folderSummaries = FolderSummaryCache(directory: root.appendingPathComponent("deletion-summaries"))
+        let folderSizes = FolderSizeCache(directory: root.appendingPathComponent("deletion-sizes"))
+        let store = BrowserStore(supportDirectory: root.appendingPathComponent("deletion-support"), thumbnails: cache,
+                                 folderSummaries: folderSummaries, folderSizes: folderSizes)
         defer { store.cancelPreviewGeneration() }
         store.load(directory)
         try await until { !store.isLoading }
         let original = store.assets
+        _ = try await folderSummaries.summary(of: directory); _ = try await folderSizes.size(of: directory)
         let firstGroup = PhotoGroup(id: "first-group", name: "First", assetIDs: ["a", "c", "d"])
         let secondGroup = PhotoGroup(id: "second-group", name: "Second", assetIDs: ["b"])
         store.groups = [firstGroup, secondGroup]
@@ -340,6 +344,8 @@ import BrowserCore
         try await until { !store.isMoving }
         try expect(store.errorMessage == nil && store.assets.map(\.id) == ["c", "d"],
                    "Backspace moves both selected captures and removes them from the browser")
+        let deletedSummary = try await folderSummaries.cached(of: directory), deletedSize = try await folderSizes.cached(of: directory)
+        try expect(deletedSummary == nil && deletedSize == nil, "deletion invalidates cached source cover, count and size")
         let target = directory.appendingPathComponent("_del")
         let expectedFiles = original.filter { ["a", "b"].contains($0.id) }.flatMap(\.files)
         try expect(expectedFiles.count == 6 && expectedFiles.allSatisfy {
@@ -365,10 +371,13 @@ import BrowserCore
         try expect(store.errorMessage == nil && store.assets.map(\.id) == ["d"] && store.scope == firstGroup.id,
                    "consecutive deletion reuses _del and preserves the current group scope")
         let secondRecord = store.history.first!
+        _ = try await folderSummaries.summary(of: directory); _ = try await folderSizes.size(of: directory)
         store.undo(firstRecord)
         try await until { !store.isMoving && !store.isLoading }
         try expect(store.errorMessage == nil && store.assets.map(\.id) == ["a", "b", "d"],
                    "undoing an earlier batch restores only that batch")
+        let undoSummary = try await folderSummaries.cached(of: directory), undoSize = try await folderSizes.cached(of: directory)
+        try expect(undoSummary == nil && undoSize == nil, "undo invalidates cached directory statistics before restoring the browser")
         try expect(store.groups.first { $0.id == firstGroup.id }?.assetIDs == ["a", "d"]
                    && store.groups.first { $0.id == firstGroup.id }?.name == "Renamed while pending"
                    && store.groups.first { $0.id == secondGroup.id }?.assetIDs == ["b"],
@@ -384,6 +393,12 @@ import BrowserCore
                    "undo restores the directory photo, file and group totals")
         try expect(store.groups.allSatisfy { $0.id != firstRecord.group.id && $0.id != secondRecord.group.id },
                    "undo does not create artificial deletion groups")
+        _ = try await folderSummaries.summary(of: directory); _ = try await folderSizes.size(of: directory)
+        let revision = store.folderCacheRevision
+        store.refreshDirectory()
+        try await until { store.folderCacheRevision != revision && !store.isLoading }
+        let refreshedSummary = try await folderSummaries.cached(of: directory), refreshedSize = try await folderSizes.cached(of: directory)
+        try expect(refreshedSummary == nil && refreshedSize == nil, "explicit refresh clears persisted folder caches without requiring the six-hour expiry")
 
         let marker = target.appendingPathComponent("a.XMP")
         try Data("existing pending sidecar".utf8).write(to: marker)

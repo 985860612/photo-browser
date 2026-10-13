@@ -42,6 +42,10 @@ struct FolderCard: View {
     @State private var failure: String?
     @State private var folderBytes: Int64?
     @State private var sizeFailure: String?
+    @State private var coverFailure: String?
+    @State private var coverFile: PhotoFile?
+    @State private var summaryComputedAt: Date?
+    @State private var sizeComputedAt: Date?
     var body: some View {
         card
             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -57,8 +61,10 @@ struct FolderCard: View {
                 Button(L10n.text("打开目录")) { open() }
                 Button(L10n.text("在 Finder 显示")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             }
-            .task(id: url.path) { await loadCover() }
-            .task(id: "\(url.path)|\(store.isLoading)") {
+            .task(id: "\(url.path)|\(store.isLoading)|\(store.folderCacheRevision)") {
+                if !store.isLoading { await loadCover() }
+            }
+            .task(id: "\(url.path)|\(store.isLoading)|\(store.folderCacheRevision)") {
                 if !store.isLoading { await loadSize() }
             }
     }
@@ -79,47 +85,77 @@ struct FolderCard: View {
                 Text(url.lastPathComponent).lineLimit(1)
             }.font(.system(size: thumbnailHeight != nil ? 11 : 14, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .center)
-            Text(summary)
+            HStack(spacing: 4) {
+                Text(summary)
+                if failure != nil || coverFailure != nil || sizeFailure != nil {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                }
+            }
                 .font(.system(size: thumbnailHeight != nil ? 9 : 12)).foregroundStyle(.secondary).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .help(failure ?? sizeFailure ?? L10n.text("同名格式合并计数；大小包含子目录中的全部文件，不跟随符号链接"))
+                .help(cacheHelp)
         }.padding(7).multilineTextAlignment(.center).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private var summary: String {
-        let photos = failure == nil ? count.map { L10n.text("\($0) 张照片") } ?? L10n.text("读取中…") : L10n.text("读取失败")
+        let photos = count.map { L10n.text("\($0) 张照片") } ?? L10n.text(failure == nil ? "读取中…" : "读取失败")
         let size = folderBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
             ?? L10n.text(sizeFailure == nil ? "计算大小…" : "大小读取失败")
         return photos + " · " + size
     }
 
+    private var cacheHelp: String {
+        var lines = [L10n.text("同名格式合并计数；大小包含子目录中的全部文件，不跟随符号链接")]
+        if let summaryComputedAt { lines.append(L10n.text("数量与封面缓存：\(summaryComputedAt.formatted(date: .abbreviated, time: .shortened))")) }
+        if let sizeComputedAt { lines.append(L10n.text("大小缓存：\(sizeComputedAt.formatted(date: .abbreviated, time: .shortened))")) }
+        lines.append(L10n.text("先显示本机缓存，后台检查变化；⌘R 强制刷新"))
+        for error in [failure, coverFailure, sizeFailure].compactMap({ $0 }) { lines.append(L10n.text("缓存更新失败：\(error)")) }
+        return lines.joined(separator: "\n")
+    }
+
     private func loadSize() async {
         do {
-            let bytes = try await FolderSizeCache.shared.size(of: url)
+            if let cached = try await store.folderSizes.cached(of: url) {
+                try Task.checkCancellation(); folderBytes = cached.value; sizeComputedAt = cached.computedAt
+            }
+        } catch is CancellationError { return }
+        catch { sizeFailure = error.localizedDescription }
+        do {
+            let bytes = try await store.folderSizes.size(of: url)
             try Task.checkCancellation()
             folderBytes = bytes; sizeFailure = nil
+            sizeComputedAt = try await store.folderSizes.cached(of: url)?.computedAt
         } catch is CancellationError {}
-        catch { folderBytes = nil; sizeFailure = error.localizedDescription }
+        catch { sizeFailure = error.localizedDescription }
     }
 
     private func loadCover() async {
+        var saved: CachedFolderValue<FolderSummary>?
+        do { saved = try await store.folderSummaries.cached(of: url); try Task.checkCancellation() }
+        catch is CancellationError { return }
+        catch { failure = error.localizedDescription }
+        let validation = Task { try await store.folderSummaries.summary(of: url) }
+        defer { validation.cancel() }
+        if let saved { summaryComputedAt = saved.computedAt; await applySummary(saved.value) }
         do {
-            let summary = try await Task.detached(priority: .utility) { () -> (Int, PhotoFile?) in
-                let children = try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
-                let candidates = children.filter { DirectoryScanner.rawExtensions.union(DirectoryScanner.renderedExtensions).contains($0.pathExtension.lowercased()) }
-                    .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-                let count = Set(candidates.map { $0.deletingPathExtension().lastPathComponent.lowercased() }).count
-                guard let file = candidates.first(where: { DirectoryScanner.renderedExtensions.contains($0.pathExtension.lowercased()) }) ?? candidates.first else { return (count, nil) }
-                let values = try file.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey])
-                guard values.isRegularFile == true else { return (count, nil) }
-                return (count, PhotoFile(url: file, kind: DirectoryScanner.rawExtensions.contains(file.pathExtension.lowercased()) ? .raw : .rendered,
-                                         size: Int64(values.fileSize ?? 0), modified: values.contentModificationDate ?? .distantPast))
-            }.value
-            try Task.checkCancellation(); count = summary.0
-            if let file = summary.1 { cover = try await ThumbnailCache.shared.image(file, maximum: 720).image }
-            loading = false
+            let fresh = try await validation.value
+            try Task.checkCancellation(); failure = nil
+            await applySummary(fresh)
+            summaryComputedAt = try await store.folderSummaries.cached(of: url)?.computedAt
         } catch is CancellationError {}
         catch { loading = false; failure = error.localizedDescription }
+    }
+
+    private func applySummary(_ summary: FolderSummary) async {
+        guard !Task.isCancelled else { return }
+        count = summary.count
+        guard let file = summary.cover else { cover = nil; coverFile = nil; loading = false; coverFailure = nil; return }
+        if coverFile == file && cover != nil { loading = false; return }
+        do {
+            let image = try await ThumbnailCache.shared.image(file, maximum: 720).image
+            try Task.checkCancellation(); cover = image; coverFile = file; loading = false; coverFailure = nil
+        } catch is CancellationError {}
+        catch { loading = false; coverFailure = error.localizedDescription }
     }
 }
 

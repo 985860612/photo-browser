@@ -5,37 +5,39 @@ public final class FolderSizeCache: @unchecked Sendable {
     public static let shared = FolderSizeCache()
     private let workers: PreviewWorkQueue
     private let lifetime: TimeInterval
-    private let entries = NSCache<NSURL, Entry>()
+    private let checkInterval: TimeInterval
+    private let storage: FolderCacheStorage<Int64>
+    private let local = PreviewWorkQueue()
 
-    private final class Entry: NSObject {
-        let bytes: Int64
-        let modified: Date?
-        let expires: Date
-        init(bytes: Int64, modified: Date?, expires: Date) {
-            self.bytes = bytes; self.modified = modified; self.expires = expires
-        }
+    public init(directory: URL? = nil, lifetime: TimeInterval = 6 * 3600, checkInterval: TimeInterval = 300,
+                workers: PreviewWorkQueue = PreviewWorkQueue()) {
+        self.lifetime = lifetime; self.workers = workers; self.checkInterval = checkInterval
+        storage = FolderCacheStorage(directory: directory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("PhotoBrowser/FolderSizes", isDirectory: true))
     }
-
-    public init(lifetime: TimeInterval = 60, workers: PreviewWorkQueue = PreviewWorkQueue()) {
-        self.lifetime = lifetime; self.workers = workers
-        entries.countLimit = 512
+    public func cached(of url: URL) async throws -> CachedFolderValue<Int64>? {
+        try await local.run { [storage] _ in try storage.read(url)?.snapshot }
+    }
+    public func invalidate(_ urls: [URL], descendants: Bool = false) async throws {
+        try await local.run { [storage] _ in try storage.invalidate(urls, descendants: descendants) }
     }
 
     public func size(of url: URL) async throws -> Int64 {
-        try await workers.run(background: true) { [self] check in
-            var freshURL = url
-            freshURL.removeAllCachedResourceValues()
-            let values = try freshURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey])
-            guard values.isDirectory == true, values.isSymbolicLink != true else {
-                throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        try await workers.run(background: true) { [self] cancelled in
+            let token = storage.token(url)
+            let check = { try cancelled(); try self.storage.check(url, token: token) }
+            let record: (snapshot: CachedFolderValue<Int64>, modified: Date?)?
+            do { record = try storage.read(url) }
+            catch is DecodingError { record = nil }
+            let fresh = record.map { let age = Date().timeIntervalSince($0.snapshot.computedAt); return age >= 0 && age < lifetime } ?? false
+            if fresh, storage.recentlyChecked(url, interval: checkInterval), let record { try check(); return record.snapshot.value }
+            let modified = try folderModification(url)
+            if fresh, let record, record.modified == modified {
+                try storage.markChecked(url, token: token); return record.snapshot.value
             }
-            let key = url.standardizedFileURL as NSURL
-            if let entry = entries.object(forKey: key), entry.expires > Date(),
-               entry.modified == values.contentModificationDate { return entry.bytes }
             let bytes = try Self.measure(url, check: check)
             try check()
-            entries.setObject(Entry(bytes: bytes, modified: values.contentModificationDate,
-                                   expires: Date().addingTimeInterval(lifetime)), forKey: key)
+            try storage.write(bytes, for: url, modified: modified, token: token)
             return bytes
         }
     }

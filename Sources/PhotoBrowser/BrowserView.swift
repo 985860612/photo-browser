@@ -222,7 +222,7 @@ struct BrowserView: View {
                 .help(showDirectoryPanel ? L10n.text("收起目录面板") : L10n.text("展开目录面板"))
                 .accessibilityValue(showDirectoryPanel ? L10n.text("展开") : L10n.text("收起"))
             Button { store.chooseDirectory() } label: { Label(L10n.text("打开目录"), systemImage: "folder") }.help(L10n.text("打开目录 ⌘O"))
-            Button { if let dir = store.directory { store.load(dir) } } label: { Image(systemName: "arrow.clockwise") }
+            Button { store.refreshDirectory() } label: { Image(systemName: "arrow.clockwise") }
                 .disabled(store.directory == nil || store.isLoading || store.isMoving).help(L10n.text("刷新目录 ⌘R"))
         }
         ToolbarItemGroup {
