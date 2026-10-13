@@ -37,6 +37,19 @@ struct PhotoThumbnail: View {
     }
 }
 
+struct PhotoClipboardMenu: View {
+    @EnvironmentObject private var store: BrowserStore
+    let asset: PhotoAsset
+    var body: some View {
+        Button { store.copyFilesToClipboard(asset) } label: {
+            Label(L10n.text("复制文件到剪贴板"), systemImage: "doc.on.doc")
+        }.disabled(store.isMoving || store.isLoading).help("⌘C")
+        Button { store.copyImageToClipboard(asset) } label: {
+            Label(L10n.text("复制图片到剪贴板"), systemImage: "photo.on.rectangle")
+        }.disabled(store.isMoving || store.isLoading || store.isCopyingImage).help("⌘⇧C")
+    }
+}
+
 struct PhotoGridView: View {
     @EnvironmentObject private var store: BrowserStore
     var body: some View {
@@ -62,6 +75,8 @@ struct PhotoGridView: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityAction { store.select(asset, modifiers: []) }
                             .contextMenu {
+                                PhotoClipboardMenu(asset: asset)
+                                Divider()
                                 Button(L10n.text("全屏高清预览")) { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
                                 Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
                                 Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
@@ -100,6 +115,8 @@ struct FilmstripView: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityAction { store.select(asset, modifiers: []) }
                             .contextMenu {
+                                PhotoClipboardMenu(asset: asset)
+                                Divider()
                                 Button(L10n.text("全屏高清预览")) { store.select(asset, modifiers: []); store.toggleFullscreenPreview() }
                                 Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
                                 Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
@@ -169,6 +186,8 @@ struct LargePreviewView: View {
         }
         .contextMenu {
             if let asset = store.focusedAsset {
+                PhotoClipboardMenu(asset: asset)
+                Divider()
                 Button(L10n.text("全屏高清预览")) { store.toggleFullscreenPreview() }
                 Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
                 Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
