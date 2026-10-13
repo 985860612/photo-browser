@@ -159,6 +159,14 @@
 "未分组" = "Ungrouped";
 "未找到 Adobe Bridge。请先安装 Bridge 并启用 Camera Raw。" = "Adobe Bridge was not found. Install Bridge and enable Camera Raw first.";
 "Bridge 未能打开 Camera Raw。请确认 Camera Raw 已启用且支持此照片格式。" = "Bridge could not open Camera Raw. Make sure Camera Raw is enabled and supports this photo format.";
+"复制文件到剪贴板" = "Copy Files to Clipboard";
+"复制图片到剪贴板" = "Copy Image to Clipboard";
+"已复制 %d 个文件到剪贴板" = "Copied %d files to the clipboard";
+"无法写入剪贴板，请重试。" = "Could not write to the clipboard. Please try again.";
+"正在复制图片…" = "Copying image…";
+"无法生成剪贴板图片，请切换照片格式后重试。" = "Could not prepare the clipboard image. Switch photo format and try again.";
+"剪贴板已有新内容，已取消复制图片" = "Image copy cancelled because the clipboard has newer content";
+"已复制图片到剪贴板" = "Copied the image to the clipboard";
 "未知错误" = "Unknown error";
 "查看整组" = "View Group";
 "查看目标目录" = "Show Destination";

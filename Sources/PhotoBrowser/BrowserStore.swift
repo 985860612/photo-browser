@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import BrowserCore
+import CoreImage
 
 private struct StoredMetadata: Codable {
     let fingerprint: String
@@ -42,6 +43,10 @@ private struct BrowserSession: Codable {
     }
     private var adjacentJobs: [AdjacentKey: AdjacentJob] = [:]
     private let displayCache: DisplayPhotoCache
+    private let clipboardWorkers = PreviewWorkQueue()
+    @Published private(set) var isCopyingImage = false
+    private var clipboardTask: Task<Void, Never>?
+    private var clipboardTicket = UUID()
     private var previewID = UUID()
     private var previewQueue: [PhotoFile] = []
     @Published var status = L10n.text("选择照片目录开始浏览")
@@ -196,11 +201,20 @@ private struct BrowserSession: Codable {
     }
 
     func handleKeyDown(_ event: NSEvent, in window: NSWindow?) -> NSEvent? {
-        guard !isMoving, event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
-        if isFullscreenPreview, event.keyCode == 53 { closeFullscreenPreview(); return nil }
+        guard !isMoving else { return event }
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if isFullscreenPreview, event.keyCode == 53, modifiers.intersection([.command, .control, .option]).isEmpty { closeFullscreenPreview(); return nil }
         guard let window, !(window.firstResponder is NSTextView), !(window.firstResponder is NSTextField),
               window.identifier?.rawValue != "PhotoBrowser.Settings",
               !isLoading, window.attachedSheet == nil, NSApp.modalWindow == nil else { return event }
+        if event.keyCode == 8, modifiers == .command, canCopyFiles {
+            copyFilesToClipboard(); return nil
+        }
+        if event.keyCode == 8, modifiers == [.command, .shift], selectedFolderID == nil, focusedFile != nil {
+            if !event.isARepeat { copyImageToClipboard() }
+            return nil
+        }
+        guard modifiers.intersection([.command, .control, .option]).isEmpty else { return event }
         if event.keyCode == 51 || event.keyCode == 117 {
             // Holding Delete must not remove the next automatically selected photo.
             if !event.isARepeat { deleteSelection() }
@@ -432,6 +446,71 @@ private struct BrowserSession: Codable {
         do { try CameraRawLauncher.open(source) { [weak self] error in
             if let error { self?.report(error) }
         } } catch { report(error) }
+    }
+
+    var canCopyFiles: Bool {
+        !isMoving && !isLoading && (selectedFolderID != nil || visibleAssets.contains { selection.contains($0.id) })
+    }
+
+    func copyFilesToClipboard(_ asset: PhotoAsset? = nil, pasteboard: NSPasteboard = .general) {
+        guard !isMoving, !isLoading else { return }
+        let targets = asset.map { selection.contains($0.id) ? visibleAssets.filter { selection.contains($0.id) } : [$0] }
+            ?? visibleAssets.filter { selection.contains($0.id) }
+        let urls: [URL]
+        if asset == nil, let folder = selectedFolderID { urls = [URL(fileURLWithPath: folder)] }
+        else { urls = targets.flatMap { $0.files.map(\.url) } }
+        var seen = Set<URL>()
+        let unique = urls.filter { seen.insert($0.standardizedFileURL).inserted }
+        guard !unique.isEmpty else { return }
+        clipboardTask?.cancel(); clipboardTicket = UUID(); isCopyingImage = false
+        pasteboard.clearContents()
+        if pasteboard.writeObjects(unique.map { $0 as NSURL }) {
+            status = L10n.text("已复制 \(unique.count) 个文件到剪贴板")
+        } else { report(BrowserFailure.message(L10n.text("无法写入剪贴板，请重试。"))) }
+    }
+
+    func copyImageToClipboard(_ asset: PhotoAsset? = nil, pasteboard: NSPasteboard = .general) {
+        guard !isMoving, !isLoading, !isCopyingImage else { return }
+        let source: PhotoFile?
+        if let asset, asset.id != focusedID {
+            source = asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) } ?? asset.preferred
+        } else { source = focusedFile }
+        guard let source, asset != nil || selectedFolderID == nil else { return }
+        clipboardTask?.cancel()
+        let ticket = UUID(), count = pasteboard.changeCount, cache = displayCache, workers = clipboardWorkers
+        clipboardTicket = ticket; isCopyingImage = true
+        status = L10n.text("正在复制图片…")
+        clipboardTask = Task { [weak self] in
+            defer { if self?.clipboardTicket == ticket { self?.isCopyingImage = false } }
+            do {
+                let photo = try await cache.image(source, hdr: false, maximum: nil)
+                try Task.checkCancellation()
+                let data = try await workers.run(background: true) { check in
+                    try check()
+                    let context = CIContext(), colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+                    guard let png = context.pngRepresentation(of: photo.image, format: .RGBA8, colorSpace: colorSpace) else {
+                        throw BrowserFailure.message(L10n.text("无法生成剪贴板图片，请切换照片格式后重试。"))
+                    }
+                    try check()
+                    guard let tiff = context.tiffRepresentation(of: photo.image, format: .RGBA8, colorSpace: colorSpace) else {
+                        throw BrowserFailure.message(L10n.text("无法生成剪贴板图片，请切换照片格式后重试。"))
+                    }
+                    return (png, tiff)
+                }
+                try Task.checkCancellation()
+                guard let self, self.clipboardTicket == ticket else { return }
+                guard pasteboard.changeCount == count else {
+                    self.status = L10n.text("剪贴板已有新内容，已取消复制图片")
+                    return
+                }
+                let item = NSPasteboardItem()
+                item.setData(data.0, forType: .png); item.setData(data.1, forType: .tiff)
+                pasteboard.clearContents()
+                guard pasteboard.writeObjects([item]) else { throw BrowserFailure.message(L10n.text("无法写入剪贴板，请重试。")) }
+                self.status = L10n.text("已复制图片到剪贴板")
+            } catch is CancellationError {}
+            catch { if self?.clipboardTicket == ticket { self?.report(error) } }
+        }
     }
 
     func changeScope() {

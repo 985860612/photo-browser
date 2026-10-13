@@ -29,6 +29,8 @@ struct FullscreenPreview: View {
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in store.fullscreenWindowExited() }
             .contextMenu {
                 if let asset = store.focusedAsset {
+                    PhotoClipboardMenu(asset: asset)
+                    Divider()
                     Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
                     Button(L10n.text("在 Finder 显示")) { store.revealFocused() }
                 }
