@@ -177,6 +177,7 @@ struct LargePreviewView: View {
                 Button(L10n.text("在 Finder 显示")) { store.revealFocused() }
             }
         }
+        .onDisappear { store.cancelAdjacentPreviews() }
         .task(id: store.previewRequestID) {
             if preview.fileID != store.focusedFile?.id { zoom = 1 }
             await store.preparePreviewCache()
@@ -184,7 +185,6 @@ struct LargePreviewView: View {
             await preview.load(store.selectedFolderID == nil ? store.focusedFile : nil, hdr: store.hdrPreview, maximum: 2800) { metadata in
                 if let assetID { store.updateMetadata(assetID, value: metadata) }
             }
-            await store.preloadAdjacentPreviews()
         }
     }
 }
