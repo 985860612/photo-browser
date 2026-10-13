@@ -9,6 +9,7 @@ swiftc -parse-as-library -I "$PREVIEW_BUILD_PATH/Modules" \
   Sources/PhotoBrowser/BrowserStore.swift Sources/PhotoBrowser/CameraRawLauncher.swift \
   Sources/PhotoBrowser/PreviewPresentation.swift Sources/PhotoBrowser/PhotoCanvas.swift \
   Tests/BrowserPreviewStoreChecks/PreviewStoreChecks.swift \
+  Tests/BrowserPreviewStoreChecks/CanvasRenderChecks.swift \
   "$PREVIEW_BUILD_PATH"/BrowserCore.build/*.swift.o \
   -o "$PREVIEW_BUILD_PATH/PreviewStoreChecks"
 "$PREVIEW_BUILD_PATH/PreviewStoreChecks"
