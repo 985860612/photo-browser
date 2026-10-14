@@ -19,6 +19,25 @@ extension PreviewStoreChecks {
         let thumbs = ThumbnailCache(directory: root.appendingPathComponent("cache")), cache = DisplayPhotoCache(memoryBudget: 32 * 1024 * 1024)
         let store = BrowserStore(supportDirectory: root.appendingPathComponent("support"), thumbnails: thumbs, defaults: defaults, displayCache: cache)
         defer { store.stopDirectoryObservation(); store.cancelPreviewGeneration() }
+        await store.applyDecodeConcurrency()
+        let initialConcurrency = await cache.decodeConcurrency
+        try expect(store.previewDecodeConcurrency == 4 && initialConcurrency == 4,
+                   "browser uses four background decoders with fresh settings")
+        let beforeConcurrencyRequest = store.previewRequestID
+        store.previewDecodeConcurrency = 2; await store.applyDecodeConcurrency()
+        let concurrencyCache = DisplayPhotoCache(memoryBudget: 1024 * 1024)
+        let concurrencyReopened = BrowserStore(supportDirectory: root.appendingPathComponent("concurrency-support"), defaults: defaults,
+                                               displayCache: concurrencyCache, monitoringEnabled: false)
+        await concurrencyReopened.applyDecodeConcurrency()
+        let restoredConcurrency = await concurrencyCache.decodeConcurrency
+        try expect(concurrencyReopened.previewDecodeConcurrency == 2 && restoredConcurrency == 2
+                   && store.previewRequestID == beforeConcurrencyRequest,
+                   "decode settings restore after reopening and changing the limit does not restart the visible image")
+        store.previewDecodeConcurrency = 99; await store.applyDecodeConcurrency()
+        let boundedConcurrency = await cache.decodeConcurrency
+        try expect(store.previewDecodeConcurrency == 8 && boundedConcurrency == 8
+                   && defaults.integer(forKey: "previewDecodeConcurrency") == 8, "out-of-range concurrency is bounded, applied and saved")
+        store.previewDecodeConcurrency = 4; await store.applyDecodeConcurrency()
         store.load(directory)
         try await until { !store.isLoading && store.directoryObserver != nil && store.automaticRefreshTask == nil }
         store.diskLimitGB = 3; await store.applyDiskLimit()

@@ -1,18 +1,24 @@
 import Foundation
 
-/// Two visible-image workers stay available while one utility worker warms the disk cache.
+/// Two visible-image workers stay available independently of bounded background decoding.
 public final class PreviewWorkQueue: @unchecked Sendable {
     public static let shared = PreviewWorkQueue()
     private let foreground = OperationQueue()
     private let background = OperationQueue()
 
-    public init() {
+    public init(backgroundConcurrency: Int = 1) {
         foreground.name = "PhotoBrowser.visiblePreviews"
         foreground.maxConcurrentOperationCount = 2
         foreground.qualityOfService = .userInitiated
         background.name = "PhotoBrowser.backgroundPreviews"
-        background.maxConcurrentOperationCount = 1
+        background.maxConcurrentOperationCount = PreviewPreferences.clampConcurrency(backgroundConcurrency)
         background.qualityOfService = .utility
+    }
+
+    public var backgroundConcurrency: Int { background.maxConcurrentOperationCount }
+    /// Changing the limit affects queued work; running decoders finish without restarting.
+    public func setBackgroundConcurrency(_ count: Int) {
+        background.maxConcurrentOperationCount = PreviewPreferences.clampConcurrency(count)
     }
 
     public func run<Value>(background isBackground: Bool = false,

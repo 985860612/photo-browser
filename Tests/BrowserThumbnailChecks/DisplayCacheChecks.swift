@@ -106,6 +106,16 @@ extension ThumbnailChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = PreviewPreferences(defaults: defaults)
+        try require(preferences.decodeConcurrency == 4, "background large-image decoding defaults to four workers")
+        preferences.decodeConcurrency = 2
+        try require(PreviewPreferences(defaults: defaults).decodeConcurrency == 2, "decode concurrency persists across preference recreation")
+        preferences.decodeConcurrency = 0
+        try require(preferences.decodeConcurrency == 1, "decode concurrency cannot disable the worker pool")
+        preferences.decodeConcurrency = 99
+        try require(preferences.decodeConcurrency == 8, "decode concurrency has a bounded maximum of eight workers")
+        try require(await cache.decodeConcurrency == 4, "large-image cache starts with four background decode lanes")
+        await cache.setDecodeConcurrency(2)
+        try require(await cache.decodeConcurrency == 2, "large-image cache applies a changed background concurrency limit")
         try require(preferences.before == 2 && preferences.after == 5, "preload defaults are two previous and five next")
         preferences.before = 0; preferences.after = 9
         let reopened = PreviewPreferences(defaults: defaults)

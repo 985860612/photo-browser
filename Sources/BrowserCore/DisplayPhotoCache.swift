@@ -41,7 +41,7 @@ public actor DisplayPhotoCache {
     private var workingHDR = true
     private var memoryPressure: DispatchSourceMemoryPressure?
 
-    public init(memoryBudget: Int? = nil, workers: PreviewWorkQueue = PreviewWorkQueue()) {
+    public init(memoryBudget: Int? = nil, workers: PreviewWorkQueue = PreviewWorkQueue(backgroundConcurrency: PreviewPreferences.defaultConcurrency)) {
         // Covers browsing and native-resolution entries together; independent of thumbnail RAM.
         // One sixteenth of physical RAM (128 MiB...4 GiB) accommodates neighboring high-resolution RAWs.
         budget = max(0, memoryBudget ?? min(4 * 1024 * 1024 * 1024, max(128 * 1024 * 1024,
@@ -54,6 +54,9 @@ public actor DisplayPhotoCache {
     }
 
     deinit { memoryPressure?.cancel() }
+
+    public var decodeConcurrency: Int { workers.backgroundConcurrency }
+    public func setDecodeConcurrency(_ count: Int) { workers.setBackgroundConcurrency(count) }
 
     public func setWorkingSet(current: PhotoFile?, neighbors: [PhotoFile], hdr: Bool) {
         workingHDR = hdr
