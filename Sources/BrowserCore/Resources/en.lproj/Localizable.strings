@@ -338,6 +338,6 @@
 "已更新外部文件变化" = "Updated external file changes";
 "镜头型号" = "Lens model";
 "后台解码并发" = "Background decode concurrency";
-"%lld 路" = "%lld workers";
+"%@ 路" = "%@ workers";
 "默认 4 路，可配置 1–8 路。修改立即生效并保存，正在解码的任务会继续完成。" = "Default: 4 workers; configurable from 1 to 8. Changes apply immediately and are saved. Active decodes finish normally.";
 "恢复默认（前 2 张，后 5 张，4 路）" = "Restore defaults (2 previous, 5 next, 4 workers)";

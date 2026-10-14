@@ -33,6 +33,7 @@ import BrowserCore
         let renamed = L10n.text("分组已重命名为“\(name)”")
         try require(renamed == (chinese ? "分组已重命名为“\(name)”" : "Group renamed to “\(name)”"), "A user's group name was interpreted as a format string")
         let file = "/Volumes/照片库/DSC00001.HIF"
+        try require(L10n.text("\(4) 路") == (chinese ? "4 路" : "4 workers"), "Decode worker count did not translate")
         let failure = BrowserFailure.message(L10n.text("文件不存在：\(file)"))
         try require(failure.localizedDescription == (chinese ? "文件不存在：\(file)" : "File not found: \(file)"), "An error or its path did not translate correctly")
         try require(L10n.lookup(GroupConfidence.candidate.rawValue) == (chinese ? "全景候选" : "Panorama candidate"), "Legacy group state did not translate")
