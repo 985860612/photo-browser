@@ -45,9 +45,16 @@ struct InspectorView: View {
         .task(id: store.focusedFile?.id) {
             metadataFailure = nil
             guard let file = store.focusedFile, let id = store.focusedID else { return }
+            let metadataFile = store.focusedAsset?.metadataFile ?? file
             do {
-                let result = try await ThumbnailCache.shared.image(file, maximum: 520)
+                let result = try await store.thumbnails.image(file, maximum: 520)
                 try Task.checkCancellation(); store.updateMetadata(id, value: result.metadata)
+                if file.kind != .video, store.focusedAsset?.metadata?.lensModel == nil {
+                    let metadata = try await store.thumbnails.sourceMetadata(metadataFile)
+                    try Task.checkCancellation()
+                    guard store.focusedID == id, store.focusedFile?.id == file.id else { return }
+                    store.updateMetadata(id, value: metadata)
+                }
             } catch is CancellationError {}
             catch { metadataFailure = error.localizedDescription }
         }
@@ -72,6 +79,7 @@ struct InspectorView: View {
         VStack(alignment: .leading, spacing: 13) {
             sectionTitle(L10n.text("拍摄参数"), icon: "camera")
             information(L10n.text("相机"), value?.camera ?? "—", icon: "camera")
+            information(L10n.text("镜头型号"), value?.lensModel ?? "—", icon: "camera.aperture")
             information(L10n.text("拍摄时间"), value?.captured?.formatted(date: .numeric, time: .standard) ?? "—", icon: "calendar")
             information(L10n.text("光圈"), value?.aperture.map { String(format: "f/%.1f", $0) } ?? "—", icon: "camera.aperture")
             information(L10n.text("快门"), value?.shutter.map { $0 + " s" } ?? "—", icon: "timer")
@@ -109,7 +117,7 @@ struct InspectorView: View {
                 .frame(width: 16, height: 16).accessibilityHidden(true)
             Text(title).font(.system(size: 12)).foregroundStyle(Color(white: 0.72)).frame(width: 82, alignment: .leading)
             Spacer(minLength: 0)
-            Text(value).font(.system(size: 12)).foregroundStyle(Color(white: 0.94)).multilineTextAlignment(.trailing).lineLimit(2).textSelection(.enabled)
+            Text(value).font(.system(size: 12)).foregroundStyle(Color(white: 0.94)).multilineTextAlignment(.trailing).lineLimit(2).textSelection(.enabled).help(value)
         }.padding(.vertical, 2)
     }
 }

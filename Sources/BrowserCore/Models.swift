@@ -24,6 +24,7 @@ public struct PhotoMetadata: Codable, Sendable {
     public var iso: Int?
     public var shutter: String?
     public var camera: String?
+    public var lensModel: String?
     public var width: Int?
     public var height: Int?
     public var duration: Double?

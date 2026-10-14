@@ -21,11 +21,19 @@ public actor ThumbnailCache {
         var keepInMemory: Bool
     }
     private let memory = NSCache<NSString, Entry>()
+    private struct SourceMetadata: Codable { let metadata: PhotoMetadata? }
+    private final class MetadataEntry: NSObject {
+        let value: SourceMetadata
+        init(_ value: SourceMetadata) { self.value = value }
+    }
+    private let metadataMemory = NSCache<NSString, MetadataEntry>()
+    private var metadataGeneration = UUID()
     private var pending: [String: Pending] = [:]
     private let directory: URL
     private let workers: PreviewWorkQueue
     private let disk: ThumbnailDiskStore
     private let local = PreviewWorkQueue()
+    private let metadataWorkers = PreviewWorkQueue()
     private var maintenance: Task<Void, Never>?
     private var maintenanceNeeded = false
     private var maintenanceFailure: String?
@@ -39,11 +47,51 @@ public actor ThumbnailCache {
         disk = ThumbnailDiskStore(directory: directory, limit: diskLimit)
         self.workers = workers
         memory.countLimit = 160; memory.totalCostLimit = 180 * 1024 * 1024
+        metadataMemory.countLimit = 160
     }
 
     public nonisolated static func digest(_ string: String) -> String { SHA256.hash(data: Data(string.utf8)).map { String(format: "%02x", $0) }.joined() }
     private nonisolated static func key(_ file: PhotoFile, maximum: Int) -> String {
         Self.digest("\(file.kind == .video ? "video-v1" : "v1")|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)|\(maximum)")
+    }
+
+    private nonisolated static func metadataKey(_ file: PhotoFile) -> String {
+        Self.digest("metadata-v1|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)")
+    }
+
+    /// Read the original header independently of old/embedded thumbnail metadata. No pixel decoding.
+    /// Missing lens tags are cached too, so revisiting a photo does not keep reading the source.
+    public func sourceMetadata(_ file: PhotoFile) async throws -> PhotoMetadata? {
+        try Task.checkCancellation()
+        let key = Self.metadataKey(file)
+        knownKeys[file.id, default: []].insert(key)
+        if let cached = metadataMemory.object(forKey: key as NSString) {
+            disk.touch(key); scheduleMaintenance(); return cached.value.metadata
+        }
+        let disk = disk, directory = directory, token = disk.token(key), generation = metadataGeneration
+        let value = try await metadataWorkers.run(background: true) { check in
+            try check()
+            let saved: SourceMetadata? = try disk.read {
+                let url = directory.appendingPathComponent(key + ".json")
+                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+                let bytes = try Data(contentsOf: url)
+                do { return try JSONDecoder().decode(SourceMetadata.self, from: bytes) }
+                catch is DecodingError { return nil } // Damaged local metadata can be reread.
+            }
+            if let saved { try check(); return saved }
+            guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+                throw BrowserFailure.message(L10n.text("无法读取 \(file.url.lastPathComponent)"))
+            }
+            let value = SourceMetadata(metadata: self.nativeMetadata(source))
+            try check()
+            try disk.write(JSONEncoder().encode(value), key: key, suffix: ".json", token: token)
+            try check(); return value
+        }
+        try Task.checkCancellation()
+        guard disk.token(key) == token, metadataGeneration == generation else { throw CancellationError() }
+        metadataMemory.setObject(MetadataEntry(value), forKey: key as NSString)
+        disk.touch(key); scheduleMaintenance()
+        return value.metadata
     }
 
     /// Decode the original at native resolution; never substitute a camera's small embedded JPEG.
@@ -249,20 +297,23 @@ public actor ThumbnailCache {
     public nonisolated func persistAccesses() throws { try disk.persistAccesses() }
     public func setDiskLimit(_ bytes: Int64) async throws { disk.setLimit(bytes); try await trim() }
     public func clear() async throws {
+        metadataGeneration = UUID()
         maintenanceID = UUID()
         maintenance?.cancel(); maintenance = nil; maintenanceNeeded = false
-        let requests = pending.values; pending.removeAll(); memory.removeAllObjects(); knownKeys.removeAll()
+        let requests = pending.values; pending.removeAll(); memory.removeAllObjects(); metadataMemory.removeAllObjects(); knownKeys.removeAll()
         for request in requests { request.task.cancel(); request.waiters.values.forEach { $0.resume(throwing: CancellationError()) } }
         let disk = disk
         try await local.run(background: true) { _ in try disk.clear() }
     }
     public func invalidate(_ files: [PhotoFile]) async throws {
         let keys = files.reduce(into: Set<String>()) { keys, file in
-            keys.formUnion(knownKeys[file.id] ?? []); keys.insert(Self.key(file, maximum: 520))
+            keys.formUnion(knownKeys[file.id] ?? []); keys.insert(Self.key(file, maximum: 520)); keys.insert(Self.metadataKey(file))
         }
         guard !keys.isEmpty else { return }
+        metadataGeneration = UUID()
         for key in keys {
             memory.removeObject(forKey: key as NSString)
+            metadataMemory.removeObject(forKey: key as NSString)
             if let request = pending.removeValue(forKey: key) {
                 request.task.cancel(); request.waiters.values.forEach { $0.resume(throwing: CancellationError()) }
             }
@@ -291,9 +342,15 @@ public actor ThumbnailCache {
     }
 
     nonisolated func nativeMetadata(_ source: CGImageSource) -> PhotoMetadata? {
-        guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
-              let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] else { return nil }
+        guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else { return nil }
+        let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
         var value = PhotoMetadata()
+        let aux = props[kCGImagePropertyExifAuxDictionary as String] as? [String: Any]
+        let canon = props[kCGImagePropertyMakerCanonDictionary as String] as? [String: Any]
+        let ciff = props[kCGImagePropertyCIFFDictionary as String] as? [String: Any]
+        value.lensModel = [exif[kCGImagePropertyExifLensModel as String], aux?[kCGImagePropertyExifAuxLensModel as String],
+                           canon?[kCGImagePropertyMakerCanonLensModel as String], ciff?[kCGImagePropertyCIFFLensModel as String]]
+            .compactMap { ($0 as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
         value.focalLength = (exif[kCGImagePropertyExifFocalLength as String] as? NSNumber)?.doubleValue
         value.aperture = (exif[kCGImagePropertyExifFNumber as String] as? NSNumber)?.doubleValue
         value.iso = (exif[kCGImagePropertyExifISOSpeedRatings as String] as? [NSNumber])?.first?.intValue

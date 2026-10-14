@@ -835,6 +835,7 @@ enum PreviewSortField: String, CaseIterable {
         else {
             // Native previews enrich display fields without changing the original burst sequence/time.
             if assets[index].metadata?.camera == nil { assets[index].metadata?.camera = value.camera }
+            if assets[index].metadata?.lensModel == nil { assets[index].metadata?.lensModel = value.lensModel }
             if assets[index].metadata?.aperture == nil { assets[index].metadata?.aperture = value.aperture }
             if assets[index].metadata?.iso == nil { assets[index].metadata?.iso = value.iso }
             if assets[index].metadata?.shutter == nil { assets[index].metadata?.shutter = value.shutter }

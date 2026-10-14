@@ -236,7 +236,6 @@ struct LargePreviewView: View {
                 Text(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片")).lineLimit(1)
                     .help(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片"))
                 Button { store.step(1) } label: { Image(systemName: "chevron.right") }
-                PreviewSortMenu()
                 Spacer()
                 if store.focusedFile?.kind != .video {
                 if loading { ProgressView().controlSize(.small).help(L10n.text("正在加载高清图")) }
@@ -249,6 +248,7 @@ struct LargePreviewView: View {
                 Slider(value: $zoom, in: 0.1...10).frame(width: 70).help(L10n.text("缩放"))
                 Text("\(Int(zoom * 100))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40)
                 }
+                PreviewSortMenu()
                 Button { store.showGroupOverview = true } label: { Image(systemName: "square.grid.2x2") }.help(L10n.text("网格预览"))
                 Button { store.toggleFullscreenPreview() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
                     .disabled(store.focusedFile == nil).help(L10n.text(store.focusedFile?.kind == .video ? "全屏播放" : "全屏高清预览（空格）"))

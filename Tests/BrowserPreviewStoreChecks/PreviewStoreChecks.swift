@@ -110,6 +110,14 @@ import BrowserCore
         let b = PhotoAsset(id: "shot10", name: "shot10", files: [file("shot10.jpg", .rendered, 100, 100)], metadata: PhotoMetadata(captured: Date(timeIntervalSince1970: 10)))
         let c = PhotoAsset(id: "shot1", name: "shot1", files: [file("shot1.jpg", .rendered, 20, 200), file("shot1.xmp", .sidecar, 10, 999)])
         store.assets = [a, b, c]; store.focusedID = a.id; store.selection = [a.id, b.id]
+        var lensMetadata = PhotoMetadata(captured: Date(timeIntervalSince1970: 999), sequence: 99)
+        lensMetadata.lensModel = "EF-S55-250mm f/4-5.6 IS STM"
+        store.updateMetadata(a.id, value: lensMetadata)
+        try expect(store.assets[0].metadata?.lensModel == lensMetadata.lensModel && store.assets[0].metadata?.captured == a.metadata?.captured && store.assets[0].metadata?.sequence == nil,
+                   "lens enrichment preserves the original capture date and burst information")
+        lensMetadata.lensModel = "Other lens"
+        store.updateMetadata(a.id, value: lensMetadata)
+        try expect(store.assets[0].metadata?.lensModel == "EF-S55-250mm f/4-5.6 IS STM", "later preview metadata does not overwrite an existing original lens model")
         try expect(store.visibleAssets.map(\.id) == [a.id, b.id, c.id], "default sorting preserves existing preview order")
         store.previewSortField = .name
         try expect(store.visibleAssets.map(\.id) == [c.id, a.id, b.id], "name sorting uses natural numeric filename order")
