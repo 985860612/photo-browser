@@ -86,6 +86,8 @@ struct MediaDeleteMenu: View {
 struct PhotoGridView: View {
     @EnvironmentObject private var store: BrowserStore
     var body: some View {
+        VStack(spacing: 0) {
+            HStack { Spacer(); PreviewSortMenu() }.padding(.horizontal, 15).padding(.top, 8)
         ScrollViewReader { proxy in
             ScrollView {
                 if store.visibleAssets.isEmpty {
@@ -122,7 +124,35 @@ struct PhotoGridView: View {
                     }
                 }.padding(15)
             }.onChange(of: store.navigationScrollTarget) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
+                .onChange(of: store.sortingRevision) { _, _ in if let id = store.selectedItemID { proxy.scrollTo(id, anchor: .center) } }
         }
+        }
+    }
+}
+
+struct PreviewSortMenu: View {
+    @EnvironmentObject private var store: BrowserStore
+    var body: some View {
+        HStack(spacing: 4) {
+            if store.isReadingSortDates { ProgressView().controlSize(.mini) }
+            Menu {
+                Picker(L10n.text("排序方式"), selection: $store.previewSortField) {
+                    ForEach(PreviewSortField.allCases, id: \.self) { field in Text(field.title).tag(field) }
+                }.pickerStyle(.inline)
+                Divider()
+                Picker(L10n.text("排列顺序"), selection: $store.previewSortDescending) {
+                    Text(L10n.text("升序")).tag(false)
+                    Text(L10n.text("降序")).tag(true)
+                }.pickerStyle(.inline)
+            } label: { Label(L10n.text("排序"), systemImage: "arrow.up.arrow.down") }
+            .menuStyle(.borderlessButton).fixedSize()
+            .disabled(store.isLoading || store.isMoving || store.visibleAssets.count < 2)
+        }.font(.system(size: 12)).controlSize(.small)
+            .help(L10n.text("排序：\(store.previewSortField.title) · \(store.previewSortDescending ? L10n.text("降序") : L10n.text("升序"))")
+                  + "\n" + L10n.text("拍摄时间缺失时使用修改时间；文件大小为同次拍摄全部配套文件的合计大小。"))
+            .task(id: "\(store.directory?.path ?? "")|\(store.scope)|\(store.search)|\(store.previewContentRevision)|\(store.assets.count)|\(store.previewSortField.rawValue)") {
+                store.ensureCaptureSortDates()
+            }
     }
 }
 
@@ -161,6 +191,7 @@ struct FilmstripView: View {
                 }.padding(10)
             }
             .onChange(of: store.navigationScrollTarget) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
+            .onChange(of: store.sortingRevision) { _, _ in if let id = store.selectedItemID { proxy.scrollTo(id, anchor: .center) } }
             .onAppear {
                 if store.scope == "all", let folder = store.subdirectories.first, store.focusedID == store.visibleAssets.first?.id {
                     proxy.scrollTo("folder:" + folder.path, anchor: .leading)
@@ -205,6 +236,7 @@ struct LargePreviewView: View {
                 Text(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片")).lineLimit(1)
                     .help(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片"))
                 Button { store.step(1) } label: { Image(systemName: "chevron.right") }
+                PreviewSortMenu()
                 Spacer()
                 if store.focusedFile?.kind != .video {
                 if loading { ProgressView().controlSize(.small).help(L10n.text("正在加载高清图")) }

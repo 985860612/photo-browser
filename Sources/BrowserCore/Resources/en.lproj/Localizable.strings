@@ -299,6 +299,15 @@
 "缓存更新失败：%@" = "Cache update failed: %@";
 "同名格式合并计数；大小包含子目录中的全部文件，不跟随符号链接" = "Matching formats count as one photo. Size includes all files in subfolders; symbolic links are not followed.";
 "左右拖动调整面板宽度，重开后保留" = "Drag left or right to resize this panel. Its width is saved between launches.";
+"默认顺序" = "Default order";
+"名称" = "Name";
+"排序方式" = "Sort by";
+"排列顺序" = "Order";
+"升序" = "Ascending";
+"降序" = "Descending";
+"排序" = "Sort";
+"排序：%@ · %@" = "Sort: %@ · %@";
+"拍摄时间缺失时使用修改时间；文件大小为同次拍摄全部配套文件的合计大小。" = "Missing capture times use modification times. File size includes all companion files for each capture.";
 "相邻就绪 %@/%@" = "Neighbors ready %@/%@";
 "实际保留在内存中的相邻大图；内存不足时可能小于预加载数量" = "Neighboring previews currently retained in memory; memory pressure may reduce this count.";
 "磁盘占用" = "Disk usage";

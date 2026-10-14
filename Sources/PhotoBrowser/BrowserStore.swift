@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import BrowserCore
 import CoreImage
+import ImageIO
 
 private struct StoredMetadata: Codable {
     let fingerprint: String
@@ -12,12 +13,35 @@ private struct BrowserSession: Codable {
     let metadata: [String: StoredMetadata]
 }
 
+enum PreviewSortField: String, CaseIterable {
+    case original, name, captured, modified, size
+    var title: String {
+        switch self {
+        case .original: return L10n.text("默认顺序")
+        case .name: return L10n.text("名称")
+        case .captured: return L10n.text("拍摄时间")
+        case .modified: return L10n.text("修改时间")
+        case .size: return L10n.text("文件大小")
+        }
+    }
+}
+
 @MainActor final class BrowserStore: ObservableObject {
     @Published var directory: URL?
-    @Published var assets: [PhotoAsset] = []
-    @Published var groups: [PhotoGroup] = []
-    @Published var scope = "all"
-    @Published var search = ""
+    @Published var assets: [PhotoAsset] = [] { didSet { visibleOrdering = nil } }
+    @Published var groups: [PhotoGroup] = [] { didSet { visibleOrdering = nil } }
+    @Published var scope = "all" { didSet { visibleOrdering = nil } }
+    @Published var search = "" { didSet { visibleOrdering = nil } }
+    private var visibleOrdering: [PhotoAsset]?
+    @Published var previewSortField: PreviewSortField = .original { didSet { if oldValue != previewSortField { sortingChanged() } } }
+    @Published var previewSortDescending = false { didSet { if oldValue != previewSortDescending { sortingChanged() } } }
+    @Published private(set) var sortingRevision = UUID()
+    @Published private(set) var isReadingSortDates = false
+    private var sortDateTask: Task<Void, Never>?
+    private var sortDateTicket = UUID()
+    private var checkedSortDates: [String: String] = [:]
+    private var sortDateScope = ""
+    private let sortHeaderWorkers = PreviewWorkQueue()
     @Published var selection: Set<String> = []
     @Published var selectedFolderID: String?
     @Published private(set) var navigationScrollTarget: String?
@@ -137,6 +161,8 @@ private struct BrowserSession: Codable {
          folderSummaries: FolderSummaryCache = .shared, folderSizes: FolderSizeCache = .shared, monitoringEnabled: Bool = true) {
         self.folderSummaries = folderSummaries; self.folderSizes = folderSizes
         preferencesDefaults = defaults
+        previewSortField = defaults.string(forKey: "previewSortField").flatMap(PreviewSortField.init(rawValue:)) ?? .original
+        previewSortDescending = defaults.bool(forKey: "previewSortDescending")
         self.monitoringEnabled = monitoringEnabled
         video = VideoPlayback(defaults: defaults)
         diskLimitGB = min(20, max(1, defaults.object(forKey: "thumbnailDiskLimitGB") as? Int ?? 2))
@@ -160,7 +186,7 @@ private struct BrowserSession: Codable {
     }
     var previewRequestID: String {
         let file = focusedFile
-        return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")|\(isFullscreenPreview)|\(previewContentRevision)"
+        return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")|\(isFullscreenPreview)|\(previewContentRevision)|\(sortingRevision)"
     }
     var adjacentPreviewFiles: [PhotoFile] {
         guard selectedFolderID == nil, let index = visibleAssets.firstIndex(where: { $0.id == focusedID }) else { return [] }
@@ -208,6 +234,7 @@ private struct BrowserSession: Codable {
         video.cancelPreparation()
     }
     var visibleAssets: [PhotoAsset] {
+        if let visibleOrdering { return visibleOrdering }
         let base: [PhotoAsset]
         if let group = currentGroup {
             let byID = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
@@ -216,7 +243,87 @@ private struct BrowserSession: Codable {
             let assigned = Set(groups.flatMap(\.assetIDs))
             base = assets.filter { !assigned.contains($0.id) }
         } else { base = assets }
-        return search.isEmpty ? base : base.filter { $0.name.localizedCaseInsensitiveContains(search) || $0.formatLabel.localizedCaseInsensitiveContains(search) }
+        let ordered = sortedPreviewAssets(search.isEmpty ? base : base.filter { $0.name.localizedCaseInsensitiveContains(search) || $0.formatLabel.localizedCaseInsensitiveContains(search) })
+        visibleOrdering = ordered; return ordered
+    }
+    private func sortedPreviewAssets(_ input: [PhotoAsset]) -> [PhotoAsset] {
+        guard previewSortField != .original else { return previewSortDescending ? Array(input.reversed()) : input }
+        func modified(_ asset: PhotoAsset) -> Date { asset.mediaFiles.map(\.modified).max() ?? .distantPast }
+        func bytes(_ asset: PhotoAsset) -> Int64 { asset.files.reduce(0) { $0 + max(0, $1.size) } }
+        return input.sorted { a, b in
+            let comparison: ComparisonResult
+            switch previewSortField {
+            case .name: comparison = a.name.localizedStandardCompare(b.name)
+            case .captured: comparison = (a.metadata?.captured ?? modified(a)).compare(b.metadata?.captured ?? modified(b))
+            case .modified: comparison = modified(a).compare(modified(b))
+            case .size:
+                let x = bytes(a), y = bytes(b)
+                comparison = x == y ? .orderedSame : (x < y ? .orderedAscending : .orderedDescending)
+            case .original: comparison = .orderedSame
+            }
+            if comparison != .orderedSame { return comparison == (previewSortDescending ? .orderedDescending : .orderedAscending) }
+            let name = a.name.localizedStandardCompare(b.name)
+            return name == .orderedSame ? a.id < b.id : name == .orderedAscending
+        }
+    }
+    private func sortingChanged() {
+        preferencesDefaults.set(previewSortField.rawValue, forKey: "previewSortField")
+        preferencesDefaults.set(previewSortDescending, forKey: "previewSortDescending")
+        visibleOrdering = nil; sortingRevision = UUID()
+        selectionAnchorID = focusedID; rangeSelectionBase = nil
+        ensureCaptureSortDates()
+    }
+    private func cancelSortDates() {
+        sortDateTicket = UUID(); sortDateTask?.cancel(); sortDateTask = nil; isReadingSortDates = false
+    }
+    func ensureCaptureSortDates() {
+        guard previewSortField == .captured, !isLoading, !isMoving else { cancelSortDates(); return }
+        let scopeKey = "\(scope)|\(search)"
+        if sortDateTask != nil, sortDateScope == scopeKey { return }
+        cancelSortDates(); sortDateScope = scopeKey
+        let snapshot = visibleAssets.filter { !$0.isVideo && $0.metadata?.captured == nil && checkedSortDates[$0.id] != Self.fingerprint($0) }
+        guard !snapshot.isEmpty else { return }
+        let ticket = sortDateTicket, thumbnails = thumbnails, headers = sortHeaderWorkers
+        isReadingSortDates = true
+        sortDateTask = Task { [weak self] in
+            var dates: [String: Date] = [:], checked: [String: String] = [:]
+            for asset in snapshot {
+                do {
+                    let result = try await thumbnails.image(asset.preferred, maximum: 520, background: true)
+                    if let captured = result.metadata?.captured { dates[asset.id] = captured }
+                    else {
+                        let file = asset.metadataFile
+                        dates[asset.id] = try await headers.run(background: true) { check in
+                            try check()
+                            guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+                                  let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+                                  let exif = properties[kCGImagePropertyExifDictionary as String] as? [String: Any],
+                                  let value = exif[kCGImagePropertyExifDateTimeOriginal as String] as? String else { return nil }
+                            let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
+                            formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+                            try check(); return formatter.date(from: value)
+                        }
+                    }
+                } catch is CancellationError { return }
+                catch { /* Missing capture dates use the media modification time; unreadable previews retain their own error indicator. */ }
+                guard !Task.isCancelled, self?.sortDateTicket == ticket else { return }
+                checked[asset.id] = Self.fingerprint(asset)
+            }
+            guard let self, self.sortDateTicket == ticket, !Task.isCancelled else { return }
+            for index in self.assets.indices {
+                let asset = self.assets[index]
+                guard checked[asset.id] == Self.fingerprint(asset) else { continue }
+                self.checkedSortDates[asset.id] = checked[asset.id]
+                if asset.metadata?.captured == nil, let date = dates[asset.id] {
+                    if self.assets[index].metadata == nil { self.assets[index].metadata = PhotoMetadata(captured: date) }
+                    else { self.assets[index].metadata?.captured = date }
+                }
+            }
+            self.sortDateTask = nil; self.isReadingSortDates = false
+            self.visibleOrdering = nil; self.sortingRevision = UUID()
+            if self.directory != nil { do { try self.saveSession() } catch { self.report(error) } }
+            self.ensureCaptureSortDates()
+        }
     }
     var groupAssets: [PhotoAsset] {
         guard let group = currentGroup else { return [] }
@@ -316,6 +423,7 @@ private struct BrowserSession: Codable {
         guard !isMoving else { return }
         stopDirectoryObservation()
         cancelPreviewGeneration()
+        checkedSortDates = [:]
         let url = inputURL.standardizedFileURL
         if isFullscreenPreview { closeFullscreenPreview() }
         metadataJob?.cancel(); metadataJob = nil; isReadingMetadata = false; metadataID = UUID()
@@ -370,7 +478,7 @@ private struct BrowserSession: Codable {
                     var restored = restoredGroup; restored.assetIDs = restored.assetIDs.filter { existing.contains($0) }
                     if !restored.assetIDs.isEmpty { groups.append(restored) }
                 }
-                focusedID = assets.first?.id
+                focusedID = visibleAssets.first?.id
                 if let focusedID { selection = [focusedID] }
                 isLoading = false
                 status = result.2
@@ -378,6 +486,7 @@ private struct BrowserSession: Codable {
                 try saveSession()
                 refreshHistory()
                 startPreviewGeneration()
+                ensureCaptureSortDates()
                 if monitoringEnabled { startDirectoryObservation() }
             } catch {
                 guard loadID == ticket else { return }
@@ -387,6 +496,7 @@ private struct BrowserSession: Codable {
     }
 
     func cancelPreviewGeneration(stopVideo: Bool = true) {
+        cancelSortDates()
         if stopVideo { video.stop() }
         cancelAdjacentPreviews()
         previewID = UUID(); previewTask?.cancel(); previewTask = nil
