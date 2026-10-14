@@ -4,6 +4,8 @@ import Foundation
 public struct PreviewPreferences {
     private let defaults: UserDefaults
     public static let range = 0...20
+    public static let concurrencyRange = 1...8
+    public static let defaultConcurrency = 4
     public init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
     public var before: Int {
@@ -15,6 +17,14 @@ public struct PreviewPreferences {
         nonmutating set { defaults.set(Self.clamp(newValue), forKey: "previewAfter") }
     }
     public static func clamp(_ count: Int) -> Int { min(range.upperBound, max(range.lowerBound, count)) }
+
+    public var decodeConcurrency: Int {
+        get { Self.clampConcurrency(defaults.object(forKey: "previewDecodeConcurrency") as? Int ?? Self.defaultConcurrency) }
+        nonmutating set { defaults.set(Self.clampConcurrency(newValue), forKey: "previewDecodeConcurrency") }
+    }
+    public static func clampConcurrency(_ count: Int) -> Int {
+        min(concurrencyRange.upperBound, max(concurrencyRange.lowerBound, count))
+    }
 
     public static func neighbors<T>(in items: [T], index: Int, before: Int, after: Int) -> [T] {
         guard items.indices.contains(index) else { return [] }

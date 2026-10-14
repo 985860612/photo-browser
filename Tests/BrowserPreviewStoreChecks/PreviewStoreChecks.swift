@@ -178,7 +178,10 @@ import BrowserCore
 
     @MainActor static func adjacentDecodeChecks(root: URL, jpeg: Data) async throws {
         let workers = PreviewWorkQueue(), cache = DisplayPhotoCache(memoryBudget: 16 * 1024 * 1024, workers: workers)
-        let store = BrowserStore(supportDirectory: root.appendingPathComponent("neighbor-support"), displayCache: cache)
+        let suite = "AdjacentDecode-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
+        defaults.set(1, forKey: "previewDecodeConcurrency")
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = BrowserStore(supportDirectory: root.appendingPathComponent("neighbor-support"), defaults: defaults, displayCache: cache)
         let oldRaw = store.preferRawPreview
         defer { store.cancelAdjacentPreviews(); store.preferRawPreview = oldRaw }
         store.preferRawPreview = false

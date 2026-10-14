@@ -14,11 +14,18 @@ struct PreviewSettingsView: View {
                 Stepper(value: $store.previewAfter, in: PreviewPreferences.range) {
                     HStack { Text(L10n.text("向后预加载")); Spacer(); Text(L10n.text("\(store.previewAfter) 张")).monospacedDigit() }
                 }
+                Stepper(value: $store.previewDecodeConcurrency, in: PreviewPreferences.concurrencyRange) {
+                    LabeledContent(L10n.text("后台解码并发"), value: L10n.text("\(store.previewDecodeConcurrency) 路"))
+                }
+                Text(L10n.text("默认 4 路，可配置 1–8 路。修改立即生效并保存，正在解码的任务会继续完成。"))
+                    .font(.caption).foregroundStyle(.secondary)
                 Text(L10n.text("前后指当前浏览顺序；设为 0 可关闭该方向。修改立即生效，重开软件后保留。"))
                     .font(.caption).foregroundStyle(.secondary)
                 Text(L10n.text("主窗口与全屏共用预加载范围，缓存受内存预算限制，当前照片优先。"))
                     .font(.caption).foregroundStyle(.secondary)
-                Button(L10n.text("恢复默认（前 2 张，后 5 张）")) { store.previewBefore = 2; store.previewAfter = 5 }
+                Button(L10n.text("恢复默认（前 2 张，后 5 张，4 路）")) {
+                    store.previewBefore = 2; store.previewAfter = 5; store.previewDecodeConcurrency = PreviewPreferences.defaultConcurrency
+                }
             } header: { Label(L10n.text("预览缓存"), systemImage: "photo.stack") }
             Section {
                 if let usage = store.diskUsage {

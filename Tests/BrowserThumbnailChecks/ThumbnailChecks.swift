@@ -18,6 +18,7 @@ private final class Counts: @unchecked Sendable {
     func enter() { lock.lock(); value += 1; peak = max(peak, value); lock.unlock() }
     func leave() { lock.lock(); value -= 1; lock.unlock() }
     var maximum: Int { lock.lock(); defer { lock.unlock() }; return peak }
+    var current: Int { lock.lock(); defer { lock.unlock() }; return value }
 }
 
 @main struct ThumbnailChecks {
@@ -110,6 +111,39 @@ private final class Counts: @unchecked Sendable {
         gate.signal(); gate.signal()
         for task in first + rest { _ = try await task.value }
         try expect(counts.maximum == 2, "foreground concurrency is bounded to two decoders")
+
+        let parallel = PreviewWorkQueue(backgroundConcurrency: 1), parallelCounts = Counts()
+        let parallelStarted = DispatchSemaphore(value: 0), parallelGate = DispatchSemaphore(value: 0)
+        let jobs = (0..<4).map { _ in Task { try await parallel.run(background: true) { _ in
+            parallelCounts.enter(); defer { parallelCounts.leave() }
+            parallelStarted.signal(); try wait(parallelGate)
+        } } }
+        defer { for _ in 0..<4 { parallelGate.signal() } }
+        try await Task.detached { try wait(parallelStarted) }.value
+        parallel.setBackgroundConcurrency(4)
+        try await Task.detached { for _ in 0..<3 { try wait(parallelStarted) } }.value
+        try expect(parallelCounts.current == 4 && parallelCounts.maximum == 4,
+                   "raising background concurrency starts four queued decodes in parallel")
+        let foreground = try await parallel.run { _ in 9 }
+        try expect(foreground == 9 && parallelCounts.current == 4, "four busy background decoders leave the foreground lane available")
+        parallel.setBackgroundConcurrency(1)
+        try expect(parallelCounts.current == 4, "lowering concurrency leaves already-running decoders intact")
+        let extraStarted = DispatchSemaphore(value: 0), extraGate = DispatchSemaphore(value: 0)
+        let next = Task { try await parallel.run(background: true) { _ in
+            parallelCounts.enter(); defer { parallelCounts.leave() }; extraStarted.signal(); try wait(extraGate)
+        } }
+        defer { extraGate.signal() }
+        for _ in 0..<4 { parallelGate.signal() }
+        for job in jobs { try await job.value }
+        try await Task.detached { try wait(extraStarted) }.value
+        let laterStarted = DispatchSemaphore(value: 0)
+        let later = Task { try await parallel.run(background: true) { _ in laterStarted.signal() } }
+        let unexpected = await Task.detached { laterStarted.wait(timeout: .now() + 0.05) == .success }.value
+        try expect(!unexpected && parallelCounts.current == 1, "new background decodes respect the reduced one-worker limit")
+        later.cancel()
+        do { try await later.value; throw BrowserFailure.message("Cancelled reduced-limit job succeeded") }
+        catch is CancellationError { print("PASS queued background work still cancels with a changed concurrency limit") }
+        extraGate.signal(); try await next.value
     }
 
     static func cacheChecks() async throws {

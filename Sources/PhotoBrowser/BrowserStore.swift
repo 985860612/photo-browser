@@ -123,6 +123,14 @@ enum PreviewSortField: String, CaseIterable {
             previewPreferences.after = previewAfter
         }
     }
+    @Published var previewDecodeConcurrency = PreviewPreferences.defaultConcurrency {
+        didSet {
+            let bounded = PreviewPreferences.clampConcurrency(previewDecodeConcurrency)
+            if previewDecodeConcurrency != bounded { previewDecodeConcurrency = bounded }
+            previewPreferences.decodeConcurrency = previewDecodeConcurrency
+            Task { [weak self] in await self?.applyDecodeConcurrency() }
+        }
+    }
     private let previewPreferences: PreviewPreferences
     let preferencesDefaults: UserDefaults
     @Published var showGroupOverview = false { didSet { if showGroupOverview { video.pause() } } }
@@ -168,11 +176,13 @@ enum PreviewSortField: String, CaseIterable {
         diskLimitGB = min(20, max(1, defaults.object(forKey: "thumbnailDiskLimitGB") as? Int ?? 2))
         previewPreferences = PreviewPreferences(defaults: defaults)
         previewBefore = previewPreferences.before; previewAfter = previewPreferences.after
+        previewDecodeConcurrency = previewPreferences.decodeConcurrency
         thumbnailSize = BrowserPanelLayout.clamp(defaults.object(forKey: "thumbnailSize") as? Double ?? 155, to: 110...360, fallback: 155)
         support = supportDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("PhotoBrowser", isDirectory: true)
         self.thumbnails = thumbnails
         self.displayCache = displayCache
         engine = ArchiveEngine(journalDirectory: support.appendingPathComponent("Moves", isDirectory: true))
+        Task { [weak self] in await self?.applyDecodeConcurrency() }
     }
 
     var selectedItemID: String? { selectedFolderID.map { "folder:" + $0 } ?? focusedID }
@@ -199,6 +209,7 @@ enum PreviewSortField: String, CaseIterable {
         return PreviewPreferences.neighbors(in: visibleAssets, index: index, before: previewBefore, after: previewAfter).filter(\.isVideo).map(\.preferred)
     }
     func preparePreviewCache() async {
+        await applyDecodeConcurrency()
         let requestID = previewRequestID
         let current = selectedFolderID == nil && !isMoving && !isLoading && focusedFile?.kind != .video ? focusedFile : nil
         let neighbors = selectedFolderID == nil && !isMoving && !isLoading && focusedFile != nil ? adjacentPreviewFiles : []
@@ -225,6 +236,13 @@ enum PreviewSortField: String, CaseIterable {
             }
             adjacentJobs[key] = AdjacentJob(ticket: ticket, task: task)
         }
+    }
+    func applyDecodeConcurrency() async {
+        var applied: Int
+        repeat {
+            applied = previewDecodeConcurrency
+            await displayCache.setDecodeConcurrency(applied)
+        } while applied != previewDecodeConcurrency && !Task.isCancelled
     }
     func cancelAdjacentPreviews() {
         for job in adjacentJobs.values { job.task.cancel() }
