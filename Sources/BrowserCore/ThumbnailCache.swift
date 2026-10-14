@@ -78,11 +78,15 @@ public actor ThumbnailCache {
                 do { return try JSONDecoder().decode(SourceMetadata.self, from: bytes) }
                 catch is DecodingError { return nil } // Damaged local metadata can be reread.
             }
-            if let saved { try check(); return saved }
-            guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            if let saved, saved.metadata != nil { try check(); return saved }
+            guard FileManager.default.fileExists(atPath: file.url.path),
+                  let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
                 throw BrowserFailure.message(L10n.text("无法读取 \(file.url.lastPathComponent)"))
             }
-            let value = SourceMetadata(metadata: self.nativeMetadata(source))
+            guard let metadata = self.nativeMetadata(source) else {
+                throw BrowserFailure.message(L10n.text("无法读取 \(file.url.lastPathComponent)"))
+            }
+            let value = SourceMetadata(metadata: metadata)
             try check()
             try disk.write(JSONEncoder().encode(value), key: key, suffix: ".json", token: token)
             try check(); return value

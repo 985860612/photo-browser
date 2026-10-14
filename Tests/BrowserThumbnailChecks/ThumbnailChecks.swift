@@ -195,6 +195,10 @@ private final class Counts: @unchecked Sendable {
         try expect(oldPreview.metadata?.lensModel == nil, "existing thumbnail metadata can lack the new lens field")
         let enriched = try await oldCache.sourceMetadata(file)
         try expect(enriched?.lensModel == preview.metadata?.lensModel, "original source header enriches old thumbnail metadata with the lens model")
+        let headerKey = ThumbnailCache.digest("metadata-v1|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)")
+        try Data("{\"metadata\":null}".utf8).write(to: directory.appendingPathComponent(headerKey + ".json"))
+        let recoveredHeader = try await ThumbnailCache(directory: directory).sourceMetadata(file)
+        try expect(recoveredHeader?.lensModel == preview.metadata?.lensModel, "unreadable header cache entries are retried instead of treated as a missing lens")
         try expect(try directory.appendingPathComponent(key + ".jpg").resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate == jpegDate,
                    "lens enrichment does not regenerate or rewrite the thumbnail")
         if MetadataReader.executable != nil {
