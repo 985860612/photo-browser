@@ -5,6 +5,7 @@ import BrowserCore
 struct PreviewSettingsView: View {
     @EnvironmentObject private var store: BrowserStore
     @State private var confirmClear = false
+    @State private var windowHeight: CGFloat = 660
     var body: some View {
         Form {
             Section {
@@ -63,9 +64,8 @@ struct PreviewSettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Button(L10n.text("重置诊断统计")) { PreviewDiagnostics.shared.reset(); store.diagnostics = PreviewDiagnostics.shared.snapshot() }
             } header: { Label(L10n.text("预览诊断"), systemImage: "chart.bar") }
-        }.formStyle(.grouped).padding(12).frame(width: 430)
-            .frame(minHeight: 660)
-            .background(SettingsWindowMarker())
+        }.formStyle(.grouped).padding(12).frame(width: 430, height: windowHeight)
+            .background(SettingsWindowMarker(contentHeight: $windowHeight))
             .task {
                 while !Task.isCancelled {
                     await store.updateCacheStatus(); await store.updateAdjacentReadiness()
@@ -84,12 +84,59 @@ struct PreviewSettingsView: View {
 }
 
 private struct SettingsWindowMarker: NSViewRepresentable {
-    func makeNSView(context: Context) -> SettingsMarkerView { SettingsMarkerView() }
-    func updateNSView(_ view: SettingsMarkerView, context: Context) {}
+    @Binding var contentHeight: CGFloat
+    func makeNSView(context: Context) -> SettingsMarkerView {
+        let view = SettingsMarkerView()
+        view.contentHeight = $contentHeight
+        return view
+    }
+    func updateNSView(_ view: SettingsMarkerView, context: Context) { view.contentHeight = $contentHeight }
 }
 private final class SettingsMarkerView: NSView {
+    var contentHeight: Binding<CGFloat>?
+    private var needsPlacement = true
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        window?.identifier = NSUserInterfaceItemIdentifier("PhotoBrowser.Settings")
+        NotificationCenter.default.removeObserver(self)
+        guard let window else { return }
+        window.identifier = NSUserInterfaceItemIdentifier("PhotoBrowser.Settings")
+        needsPlacement = true
+        NotificationCenter.default.addObserver(self, selector: #selector(placeOnOpen),
+            name: NSWindow.didBecomeKeyNotification, object: window)
+        NotificationCenter.default.addObserver(self, selector: #selector(prepareForNextOpen),
+            name: NSWindow.willCloseNotification, object: window)
+        placeOnOpen()
     }
+
+    @objc private func prepareForNextOpen() { needsPlacement = true }
+
+    @objc private func placeOnOpen() {
+        // SwiftUI finishes restoring and sizing its Settings window after attachment.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window, window.isVisible, self.needsPlacement else { return }
+            self.needsPlacement = false
+            let browser = NSApp.orderedWindows.first {
+                $0 !== window && $0.isVisible && $0.frameAutosaveName == "PhotoBrowser.MainWindow"
+            }
+            guard let screen = browser?.screen ?? window.screen ?? NSScreen.main else { return }
+            let available = screen.visibleFrame.insetBy(dx: 16, dy: 16)
+            let chromeHeight = window.frame.height - window.contentRect(forFrameRect: window.frame).height
+            let height = min(660, max(1, available.height - chromeHeight))
+            self.contentHeight?.wrappedValue = height
+            let size = NSSize(width: window.frame.width, height: height + chromeHeight)
+            let anchor = browser?.frame ?? available
+            let frame = NSRect(
+                x: min(max(anchor.midX - size.width / 2, available.minX), available.maxX - size.width),
+                y: min(max(anchor.midY - size.height / 2, available.minY), available.maxY - size.height),
+                width: size.width, height: size.height)
+            // Apply after the new SwiftUI content height has reached the hosting view.
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, let window, self.window === window, window.isVisible else { return }
+                window.setFrame(frame, display: true)
+            }
+        }
+    }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
 }
