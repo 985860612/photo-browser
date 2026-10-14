@@ -29,7 +29,7 @@ public final class MetadataReader {
         let p = Process(), output = Pipe()
         p.executableURL = binary
         p.currentDirectoryURL = directory
-        p.arguments = ["-fast", "-j", "-DateTimeOriginal", "-SubSecTimeOriginal", "-SequenceNumber", "-FocalLength#", "-FNumber", "-ISO", "-ExposureTime", "-Model", "-ImageWidth", "-ImageHeight", "--"] + assets.map { $0.metadataFile.url.lastPathComponent }
+        p.arguments = ["-fast", "-j", "-DateTimeOriginal", "-SubSecTimeOriginal", "-SequenceNumber", "-FocalLength#", "-FNumber", "-ISO", "-ExposureTime", "-Model", "-LensModel", "-ImageWidth", "-ImageHeight", "--"] + assets.map { $0.metadataFile.url.lastPathComponent }
         p.standardOutput = output; p.standardError = errorHandle
         lock.lock()
         if cancelled { lock.unlock(); throw CancellationError() }
@@ -65,6 +65,7 @@ public final class MetadataReader {
             value.iso = (object["ISO"] as? NSNumber)?.intValue
             value.shutter = object["ExposureTime"].map { String(describing: $0) }
             value.camera = object["Model"] as? String
+            value.lensModel = object["LensModel"] as? String
             value.width = (object["ImageWidth"] as? NSNumber)?.intValue
             value.height = (object["ImageHeight"] as? NSNumber)?.intValue
             result[id] = value

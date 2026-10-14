@@ -123,7 +123,8 @@ private final class Counts: @unchecked Sendable {
         context.setFillColor(NSColor.red.cgColor); context.fill(CGRect(x: 0, y: 0, width: 400, height: 200))
         let destination = CGImageDestinationCreateWithURL(sourceURL as CFURL, "public.jpeg" as CFString, 1, nil)!
         CGImageDestinationAddImage(destination, context.makeImage()!, [kCGImagePropertyOrientation: 6,
-            kCGImagePropertyExifDictionary: [kCGImagePropertyExifISOSpeedRatings: [400], kCGImagePropertyExifFNumber: 8]] as CFDictionary)
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifISOSpeedRatings: [400], kCGImagePropertyExifFNumber: 8,
+                                             kCGImagePropertyExifLensModel: "EF-S55-250mm f/4-5.6 IS STM"]] as CFDictionary)
         try expect(CGImageDestinationFinalize(destination), "synthetic portrait source created")
         let values = try sourceURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
         let file = PhotoFile(url: sourceURL, kind: .rendered, size: Int64(values.fileSize!), modified: values.contentModificationDate!)
@@ -145,10 +146,37 @@ private final class Counts: @unchecked Sendable {
         try expect(previews.allSatisfy { $0.image === preview.image }, "overlapping requests share one decoded image")
         try expect(preview.image.size.height > preview.image.size.width, "EXIF orientation preserved")
         try expect(preview.metadata?.iso == 400 && preview.metadata?.aperture == 8, "preview metadata preserved")
+        try expect(preview.metadata?.lensModel == "EF-S55-250mm f/4-5.6 IS STM", "native EXIF lens model is preserved without guessing from focal length")
         let files = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
         try expect(files.filter { $0.pathExtension == "jpg" }.count == 1, "duplicate requests write one cache entry")
         let key = ThumbnailCache.digest("v1|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)|520")
         try expect(fm.fileExists(atPath: directory.appendingPathComponent(key + ".jpg").path), "existing v1 cache filenames remain compatible")
+
+        let legacy = try JSONDecoder().decode(PhotoMetadata.self, from: Data("{\"iso\":400,\"aperture\":8}".utf8))
+        try expect(legacy.lensModel == nil && legacy.iso == 400, "old metadata without a lens model remains decodable")
+        try JSONEncoder().encode(legacy).write(to: directory.appendingPathComponent(key + ".json"))
+        let oldCache = ThumbnailCache(directory: directory)
+        let jpegDate = try directory.appendingPathComponent(key + ".jpg").resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        let oldPreview = try await oldCache.image(file, maximum: 520)
+        try expect(oldPreview.metadata?.lensModel == nil, "existing thumbnail metadata can lack the new lens field")
+        let enriched = try await oldCache.sourceMetadata(file)
+        try expect(enriched?.lensModel == preview.metadata?.lensModel, "original source header enriches old thumbnail metadata with the lens model")
+        try expect(try directory.appendingPathComponent(key + ".jpg").resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate == jpegDate,
+                   "lens enrichment does not regenerate or rewrite the thumbnail")
+        if MetadataReader.executable != nil {
+            let values = try MetadataReader().read(directory: root, assets: [PhotoAsset(id: "portrait", name: "portrait", files: [file])])
+            try expect(values["portrait"]?.lensModel == preview.metadata?.lensModel, "ExifTool metadata imports preserve the same lens model")
+        }
+        let noLensURL = root.appendingPathComponent("no-lens.jpg")
+        let noLensDestination = CGImageDestinationCreateWithURL(noLensURL as CFURL, "public.jpeg" as CFString, 1, nil)!
+        CGImageDestinationAddImage(noLensDestination, context.makeImage()!, nil)
+        try expect(CGImageDestinationFinalize(noLensDestination), "synthetic source without lens metadata created")
+        let noLensFile = PhotoFile(url: noLensURL, kind: .rendered)
+        let noLens = try await cache.sourceMetadata(noLensFile)
+        try expect(noLens?.lensModel == nil, "photos without lens tags keep an unknown lens")
+        try fm.removeItem(at: noLensURL)
+        let noLensReloaded = try await ThumbnailCache(directory: directory).sourceMetadata(noLensFile)
+        try expect(noLensReloaded?.lensModel == nil, "missing lens results persist without repeatedly accessing the source")
 
         let warmingStarted = DispatchSemaphore(value: 0), warmingGate = DispatchSemaphore(value: 0)
         let hold = Task { try await workers.run(background: true) { _ in warmingStarted.signal(); try wait(warmingGate) } }
@@ -181,11 +209,21 @@ private final class Counts: @unchecked Sendable {
 
         try fm.removeItem(at: sourceURL)
         let coldCache = ThumbnailCache(directory: directory)
+        let cachedHeader = try await coldCache.sourceMetadata(file)
+        try expect(cachedHeader?.lensModel == preview.metadata?.lensModel, "lens metadata survives restarting the cache with the source offline")
         let disk = try await coldCache.image(file, maximum: 520)
         try expect(disk.image.size == preview.image.size && disk.metadata?.iso == 400, "new cache instance reads disk preview without accessing source")
         try fm.removeItem(at: directory)
         let hot = try await coldCache.image(file, maximum: 520)
         try expect(hot.image === disk.image && hot.metadata?.iso == 400, "RAM hit reads neither JPEG nor metadata files")
+        let hotHeader = try await coldCache.sourceMetadata(file)
+        try expect(hotHeader?.lensModel == preview.metadata?.lensModel, "lens metadata in RAM needs neither the original nor the disk cache")
+        let changedHeaderFile = PhotoFile(url: file.url, kind: file.kind, size: file.size + 1, modified: file.modified)
+        do { _ = try await coldCache.sourceMetadata(changedHeaderFile); throw BrowserFailure.message("Changed source reused stale lens metadata") }
+        catch let failure as BrowserFailure { try expect(failure.localizedDescription.contains("portrait.jpg"), "a changed source fingerprint cannot reuse stale lens metadata") }
+        try await coldCache.clear()
+        do { _ = try await coldCache.sourceMetadata(file); throw BrowserFailure.message("Cleared metadata remained in RAM") }
+        catch let failure as BrowserFailure { try expect(failure.localizedDescription.contains("portrait.jpg"), "clearing preview caches also clears cached lens metadata") }
 
         let bad = PhotoFile(url: root.appendingPathComponent("missing.hif"), kind: .rendered)
         do { _ = try await cache.image(bad, maximum: 520); throw BrowserFailure.message("Missing image succeeded") }

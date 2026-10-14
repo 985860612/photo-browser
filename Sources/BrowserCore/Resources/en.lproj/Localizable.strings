@@ -336,3 +336,4 @@
 "清理后按需重新生成缩略图，当前画面和视频播放不受影响。" = "Thumbnails regenerate on demand after clearing. The current image and video playback are retained.";
 "目录变化检测失败：%@" = "Directory monitoring failed: %@";
 "已更新外部文件变化" = "Updated external file changes";
+"镜头型号" = "Lens model";
