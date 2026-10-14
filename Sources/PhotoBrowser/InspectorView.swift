@@ -15,7 +15,6 @@ struct InspectorView: View {
                     GlassDivider(inset: 0)
                     VStack(alignment: .leading, spacing: 13) {
                         sectionTitle(L10n.text("文件信息"), icon: "doc.text")
-                        Text(asset.name).font(.title3).textSelection(.enabled)
                         if let file = store.focusedFile {
                             information(L10n.text("文件名"), file.url.lastPathComponent, icon: "photo")
                             information(L10n.text("文件大小"), ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file), icon: "internaldrive")
