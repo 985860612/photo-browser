@@ -34,6 +34,11 @@ import BrowserCore
         try require(renamed == (chinese ? "分组已重命名为“\(name)”" : "Group renamed to “\(name)”"), "A user's group name was interpreted as a format string")
         let file = "/Volumes/照片库/DSC00001.HIF"
         try require(L10n.text("\(4) 路") == (chinese ? "4 路" : "4 workers"), "Decode worker count did not translate")
+        try require(L10n.text("永久删除 \(2) 个项目？") == (chinese ? "永久删除 2 个项目？" : "Permanently delete 2 items?"), "Permanent deletion count did not translate")
+        let deletion = L10n.text("将永久删除 \(3) 个文件，包括对应照片、视频及配套文件，无法撤销。\n目录：\(file)")
+        try require(deletion == (chinese ? "将永久删除 3 个文件，包括对应照片、视频及配套文件，无法撤销。\n目录：\(file)"
+                                 : "Permanently delete 3 files, including paired photo/video formats and companion files? This cannot be undone.\nFolder: \(file)"),
+                    "Permanent deletion confirmation count and path did not translate")
         let failure = BrowserFailure.message(L10n.text("文件不存在：\(file)"))
         try require(failure.localizedDescription == (chinese ? "文件不存在：\(file)" : "File not found: \(file)"), "An error or its path did not translate correctly")
         try require(L10n.lookup(GroupConfidence.candidate.rawValue) == (chinese ? "全景候选" : "Panorama candidate"), "Legacy group state did not translate")

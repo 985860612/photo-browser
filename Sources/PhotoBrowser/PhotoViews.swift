@@ -80,6 +80,9 @@ struct MediaDeleteMenu: View {
             if !store.selection.contains(asset.id) { store.select(asset, modifiers: []) }
             store.deleteSelection()
         }.disabled(!store.canArchive || store.isLoading)
+        Button(role: .destructive) { store.confirmMediaDeletion(asset) } label: {
+            Label(L10n.text("删除…"), systemImage: "trash")
+        }.disabled(!store.canArchive || store.isLoading || store.editingPath)
     }
 }
 
