@@ -122,6 +122,29 @@ For a read-only check against your own photos:
 swift run BrowserSmokeChecks '/path/to/photos' PHOTO_BASENAME ANOTHER_BASENAME
 ```
 
+## Code organization
+
+`BrowserCore` owns media data and reusable services; `PhotoBrowser` owns application state and views.
+
+| Directory | Responsibility |
+| --- | --- |
+| `Sources/BrowserCore/Library` | Media pairing, grouping, ordering, source fingerprints, and saved sessions |
+| `Sources/BrowserCore/Media` | Image decoding, native metadata, and video cover generation |
+| `Sources/BrowserCore/Caching` | Memory/disk caches, access policy, and invalidation |
+| `Sources/BrowserCore/FileOperations` | Recoverable moves and validated permanent deletion |
+| `Sources/BrowserCore/Support` | Localization, preferences, layout calculations, queues, and diagnostics |
+| `Sources/PhotoBrowser/Browsing` | One browser state owner, directory observation, selection, and sorting integration |
+| `Sources/PhotoBrowser/Previews` | Warming task ownership, progressive presentation, and Metal rendering |
+| `Sources/PhotoBrowser/Actions` | Group, clipboard, Camera Raw, and file-operation commands |
+| `Sources/PhotoBrowser/Playback` | Video player state and playback commands |
+| `Sources/PhotoBrowser/Views` | Layout, reusable view components, inspector, and sheets |
+
+`BrowserStore` remains the source of truth for the current library, groups, selection, and focus. Its action extensions coordinate that state; they do not own a second copy. `PreviewCoordinator` and `CaptureDateLoader` own their tasks, cancellation, and progress. Their change notifications reach the browser through subscriptions, with progress read directly from each owner.
+
+Keep filesystem work in services and pixel work on bounded worker queues. The core module never imports the application. Saved session paths and JSON fields remain compatible with previous builds; clearing image caches does not clear manual groups or move records. Integration checks compile the controller folders and use separate files for sorting, navigation, prefetch, deletion, and task ownership.
+
+New features should have a clear state owner and dedicated views/tests. Review files around 500 lines for mixed responsibilities; split by responsibility rather than creating arbitrary line-count fragments. Future photo analysis should use a separate target and feature store, feeding explicit preview/move commands into the existing browser instead of expanding `BrowserStore` with detector state.
+
 ## License
 
 [MIT](LICENSE). Copyright © 2026 wangxiaojie.

@@ -47,6 +47,7 @@ struct FolderCard: View {
     @State private var coverFile: PhotoFile?
     @State private var summaryComputedAt: Date?
     @State private var sizeComputedAt: Date?
+    @State private var confirmDelete = false
     var body: some View {
         card
             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -61,6 +62,17 @@ struct FolderCard: View {
             .contextMenu {
                 Button(L10n.text("打开目录")) { open() }
                 Button(L10n.text("在 Finder 显示")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                Divider()
+                Button(role: .destructive) { confirmDelete = true } label: {
+                    Label(L10n.text("删除文件夹…"), systemImage: "trash")
+                }.disabled(!store.canDeleteFolder(url))
+            }
+            .alert(L10n.text("删除文件夹“\(url.lastPathComponent)”？"), isPresented: $confirmDelete) {
+                Button(L10n.text("取消"), role: .cancel) {}
+                Button(L10n.text("删除"), role: .destructive) { store.deleteFolder(url, confirmed: true) }
+                    .disabled(!store.canDeleteFolder(url))
+            } message: {
+                Text(L10n.text("将永久删除此文件夹及全部内容，无法撤销。\n路径：\(url.path)"))
             }
             .task(id: "\(url.path)|\(store.isLoading)|\(store.folderCacheRevision)") {
                 if !store.isLoading { await loadCover() }

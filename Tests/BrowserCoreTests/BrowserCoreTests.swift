@@ -260,6 +260,7 @@ private func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: St
     static func main() {
         let suite = BrowserCoreTests()
         let checks: [(String, () throws -> Void)] = [
+            ("session repository compatibility and failure checks", SessionRepositoryChecks.run),
             ("testPairsFormatsAndSidecarsWithoutReadingSubfolders", suite.testPairsFormatsAndSidecarsWithoutReadingSubfolders),
             ("testImportsCSVWithBOMQuotesNewlinesAndDeduplicatesPairs", suite.testImportsCSVWithBOMQuotesNewlinesAndDeduplicatesPairs),
             ("testBurstResetFocalChangeAndTimeGapBreakGroups", suite.testBurstResetFocalChangeAndTimeGapBreakGroups),

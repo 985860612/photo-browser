@@ -2,45 +2,6 @@ import AppKit
 import BrowserCore
 
 extension BrowserStore {
-    func updateAdjacentReadiness() async {
-        let request = previewRequestID
-        let files = selectedFolderID == nil && !isLoading && !isMoving && focusedFile != nil ? adjacentPreviewFiles : []
-        let count = await displayCache.readyCount(files, hdr: hdrPreview, maximum: isFullscreenPreview ? nil : 2800)
-        guard request == previewRequestID else { return }
-        adjacentTotal = files.count; adjacentReady = count
-        adjacentVideoTotal = selectedFolderID == nil && !isLoading && !isMoving ? min(8, adjacentVideoFiles.count) : 0
-        adjacentVideoReady = min(adjacentVideoTotal, video.preparedCount)
-    }
-    func updateCacheStatus() async {
-        diagnostics = PreviewDiagnostics.shared.snapshot()
-        previewStatistics = await displayCache.statistics()
-        do { diskUsage = try await thumbnails.diskUsage(); cacheFailure = await thumbnails.diskMaintenanceError() }
-        catch is CancellationError {}
-        catch { cacheFailure = error.localizedDescription }
-    }
-    func applyDiskLimit() async {
-        guard !cacheBusy else { return }
-        cacheBusy = true; defer { cacheBusy = false }
-        do {
-            var applied: Int
-            repeat {
-                applied = diskLimitGB
-                try await thumbnails.setDiskLimit(Int64(applied) * 1_000_000_000)
-            } while applied != diskLimitGB && !Task.isCancelled
-            await updateCacheStatus()
-        }
-        catch is CancellationError {}
-        catch { cacheFailure = error.localizedDescription }
-    }
-    func clearPreviewCaches() async {
-        guard !cacheBusy else { return }
-        cacheBusy = true; defer { cacheBusy = false }
-        // Retain the displayed image/player; stop warming so clear does not immediately refill the cache.
-        cancelPreviewGeneration(stopVideo: false)
-        await displayCache.removeAll()
-        do { try await thumbnails.clear(); await updateCacheStatus() }
-        catch { cacheFailure = error.localizedDescription }
-    }
     func observeFocusedFiles() { directoryObserver?.watchFiles(focusedAsset?.files ?? []) }
     func startDirectoryObservation() {
         guard let directory else { return }
@@ -111,13 +72,13 @@ extension BrowserStore {
     }
     private func applyDirectorySnapshot(_ snapshot: DirectorySnapshot, directory: URL, revision: UUID) async {
         let oldByID = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
-        let changed = snapshot.assets.count != assets.count || snapshot.assets.contains { Self.fingerprint($0) != oldByID[$0.id].map(Self.fingerprint) }
+        let changed = snapshot.assets.count != assets.count || snapshot.assets.contains { $0.fingerprint != oldByID[$0.id]?.fingerprint }
         let previousDates = observedFolderDates
         let foldersChanged = !previousDates.isEmpty && previousDates != snapshot.dates
         observedFolderDates = snapshot.dates
         guard changed || foldersChanged else { return }
         let snapshotIDs = Set(snapshot.assets.map(\.id))
-        let changedFiles = snapshot.assets.filter { Self.fingerprint($0) != oldByID[$0.id].map(Self.fingerprint) }
+        let changedFiles = snapshot.assets.filter { $0.fingerprint != oldByID[$0.id]?.fingerprint }
             .flatMap { ($0.mediaFiles + (oldByID[$0.id]?.mediaFiles ?? [])) }
             + assets.filter { !snapshotIDs.contains($0.id) }.flatMap(\.mediaFiles)
         await displayCache.invalidate(changedFiles)
@@ -135,7 +96,7 @@ extension BrowserStore {
         let newIDs = Set(snapshot.assets.map(\.id))
         assets = snapshot.assets.map { asset in
             var value = asset
-            if let old = oldByID[asset.id], Self.fingerprint(old) == Self.fingerprint(asset) { value.metadata = old.metadata }
+            if let old = oldByID[asset.id], old.fingerprint == asset.fingerprint { value.metadata = old.metadata }
             return value
         }
         subdirectories = snapshot.folders
