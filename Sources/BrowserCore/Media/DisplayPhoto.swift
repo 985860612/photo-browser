@@ -51,7 +51,7 @@ enum OriginalPhotoDecoder {
         var headroom: Float = cg.colorSpace?.isHDR() == true ? 4 : 1
         if #available(macOS 15, *) { headroom = max(1, cg.contentHeadroom, sourceImage.contentHeadroom) }
         try check()
-        return DisplayPhoto(image: image, metadata: ThumbnailCache.shared.nativeMetadata(source), headroom: headroom,
+        return DisplayPhoto(image: image, metadata: ImageMetadataReader.read(source), headroom: headroom,
                             bitsPerComponent: cg.bitsPerComponent, colorSpaceName: cg.colorSpace?.name.map { $0 as String } ?? L10n.text("系统色彩配置"),
                             memoryCost: cg.bytesPerRow * cg.height,
                             timing: DecodeTiming(queue: (started - queuedAt) * 1000, source: (opened - started) * 1000,

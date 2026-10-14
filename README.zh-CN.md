@@ -90,6 +90,29 @@ swift run BrowserSmokeChecks '/path/to/photos' DSC00648 DSC00672
 
 构建 Apple Silicon 与 Intel 通用版：`PHOTO_BROWSER_UNIVERSAL=1 bash scripts/build-app.sh`。中英文验证覆盖语言资源、动态数量、Unicode 名称、错误提示、旧分组读取及应用包内资源加载。
 
+## 代码模块划分
+
+`BrowserCore` 管理媒体数据与可复用服务，`PhotoBrowser` 管理应用状态与界面。
+
+| 目录 | 职责 |
+| --- | --- |
+| `Sources/BrowserCore/Library` | 格式配对、分组、排序、源文件指纹和会话存储 |
+| `Sources/BrowserCore/Media` | 图片解码、原生元数据与视频封面生成 |
+| `Sources/BrowserCore/Caching` | 内存／磁盘缓存、访问策略与失效处理 |
+| `Sources/BrowserCore/FileOperations` | 可恢复的移动与校验后的永久删除 |
+| `Sources/BrowserCore/Support` | 本地化、设置、布局计算、工作队列和诊断 |
+| `Sources/PhotoBrowser/Browsing` | 浏览状态、目录监测、选择和排序接入 |
+| `Sources/PhotoBrowser/Previews` | 预加载任务、渐进预览和 Metal 绘制 |
+| `Sources/PhotoBrowser/Actions` | 分组、剪贴板、Camera Raw 和文件操作命令 |
+| `Sources/PhotoBrowser/Playback` | 视频播放状态与播放命令 |
+| `Sources/PhotoBrowser/Views` | 主布局、视图组件、信息面板与弹窗 |
+
+当前图库、分组、选择和焦点只由 `BrowserStore` 持有；按领域拆开的 action extension 负责协调这份状态，不复制数据。`PreviewCoordinator`、`CaptureDateLoader` 分别持有任务、取消标识和进度；浏览器订阅变化通知，直接读取它们的进度，不再维护第二份计数。
+
+文件系统操作放在服务中，像素处理通过有并发上限的队列执行；基础模块不能反向依赖应用。已有会话路径与 JSON 字段保持兼容，清理图片缓存不会清除人工分组或移动记录。集成检查按控制器目录编译，排序、导航、预加载、删除和任务状态检查分别放在独立文件。
+
+新增功能先明确状态所有者，并建立独立视图和测试；单文件接近 500 行时检查是否混合了多种职责，按职责拆分。后续照片分析使用独立 target 和功能 Store，通过明确的预览／移动请求接入浏览器，避免把检测状态继续堆进 `BrowserStore`。
+
 ## 开源协议
 
 [MIT](LICENSE)，Copyright © 2026 wangxiaojie。

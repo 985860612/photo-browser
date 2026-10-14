@@ -6,14 +6,11 @@ if [ -n "${PHOTO_BROWSER_BUILD_PATH:-}" ]; then PREVIEW_BUILD_ARGS+=(--scratch-p
 swift build "${PREVIEW_BUILD_ARGS[@]}" --product PhotoBrowser
 PREVIEW_BUILD_PATH="$(swift build "${PREVIEW_BUILD_ARGS[@]}" --show-bin-path)"
 swiftc -parse-as-library -I "$PREVIEW_BUILD_PATH/Modules" \
-  Sources/PhotoBrowser/BrowserStore.swift Sources/PhotoBrowser/CameraRawLauncher.swift \
-  Sources/PhotoBrowser/BrowserContinuity.swift Sources/PhotoBrowser/DirectoryObserver.swift \
-  Sources/PhotoBrowser/VideoPlayback.swift Sources/PhotoBrowser/VideoMemory.swift \
-  Sources/PhotoBrowser/PreviewPresentation.swift Sources/PhotoBrowser/PhotoCanvas.swift \
-  Tests/BrowserPreviewStoreChecks/PreviewStoreChecks.swift \
-  Tests/BrowserPreviewStoreChecks/CanvasRenderChecks.swift \
-  Tests/BrowserPreviewStoreChecks/VideoPlaybackChecks.swift Tests/BrowserThumbnailChecks/VideoFixture.swift \
-  Tests/BrowserPreviewStoreChecks/ContinuityChecks.swift \
+  Sources/PhotoBrowser/Browsing/*.swift Sources/PhotoBrowser/Previews/*.swift \
+  Sources/PhotoBrowser/Actions/Browser*.swift Sources/PhotoBrowser/Actions/CameraRawLauncher.swift \
+  Sources/PhotoBrowser/Playback/BrowserPlayback.swift Sources/PhotoBrowser/Playback/VideoPlayback.swift \
+  Sources/PhotoBrowser/Playback/VideoMemory.swift \
+  Tests/BrowserPreviewStoreChecks/*.swift Tests/BrowserThumbnailChecks/VideoFixture.swift \
   "$PREVIEW_BUILD_PATH"/BrowserCore.build/*.swift.o \
   -o "$PREVIEW_BUILD_PATH/PreviewStoreChecks"
 "$PREVIEW_BUILD_PATH/PreviewStoreChecks"
