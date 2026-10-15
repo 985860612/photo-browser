@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import BrowserCore
+import CullingCore
 
 struct PhotoThumbnail: View {
     @EnvironmentObject private var store: BrowserStore
@@ -21,6 +22,18 @@ struct PhotoThumbnail: View {
                     Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure)
                 } else { ProgressView().controlSize(.small) }
             }.frame(maxWidth: .infinity).frame(height: height)
+                .opacity(store.culling.mark(for: asset) == .reject ? 0.55 : 1)
+                .overlay(alignment: .topLeading) {
+                    if store.culling.mark(for: asset) != .unreviewed {
+                        CullingMarkBadge(mark: store.culling.mark(for: asset)).padding(5)
+                    }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if store.culling.active, let group = store.culling.group(for: asset.id) {
+                        Label("\(group.assetIDs.count)", systemImage: "square.stack")
+                            .font(.system(size: 10)).padding(4).background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 4)).padding(5)
+                    }
+                }
                 .overlay(alignment: .bottomTrailing) {
                     if asset.isLivePhoto {
                         Image(systemName: "livephoto").font(.system(size: 12)).padding(4)

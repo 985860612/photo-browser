@@ -67,6 +67,20 @@ brew install exiftool
 
 Burst frames join a candidate when sequence numbers increase, focal length matches, and the gap is at most 8 seconds. Non-burst shots can join within 5 seconds at the same focal length. Candidates need at least 3 captures. The algorithm does not match image features or validate stitching; repeated compositions may be grouped. The first metadata read from a NAS can take several minutes and can be canceled while browsing.
 
+## Culling assistant
+
+Switch the toolbar to **Cull**, then choose **Start Analysis** to analyze the current folder, filter/group, or selected photos. Apple Vision runs locally for image similarity, face capture quality, and content labels. macOS 15+ also provides overall aesthetics scores and utility-image detection. Apple Intelligence does not need to be enabled, and photos are not uploaded. Videos are skipped; Live Photos use their still image. Analysis uses a consistent preview size independently of the viewer's RAW preference.
+
+- The sidebar filters unreviewed, kept, undecided, rejected, similar, suggested, and review-needed photos. Individual similarity groups and recognized content labels are also available. Existing panorama/manual groups are excluded from automatic similarity grouping but can still be marked individually.
+- Use single-image, grid, or side-by-side views. **Set as Reference** pins the left photo while selection changes the right. Zoom and pan can be synchronized. **100% Pixels** loads originals and calculates each pane's pixel scale independently; **Inspect Subject** locates a face or salient region. Both commands disable synchronization for independent inspection. Narrow windows hide the inspector while keeping marking controls available below the images.
+- `P` keeps, `M` marks undecided, `X` rejects, `U` clears, and `⌘Z` undoes a decision or similarity-group edit. Multiple selection supports batch marking. Single-photo marking advances by default; disable this in the inspector. Text editing keeps these keys. The existing Delete shortcut still moves files to `_del`.
+- The inspector switches between culling and existing photo information. Overall scores are presented as relative group rankings, and face capture scores are intended for consecutive photos of the same person. A low overall score is not presented as a separate diagnosis of blur, bad exposure, or closed eyes. Content labels retain Vision's identifiers.
+- Remove photos from a similarity group, split at the current photo, or form a manual similarity group from a selection. Human grouping edits and decisions survive reanalysis. Adjust similarity strictness in the analysis sheet. Automatic grouping compares each candidate against group anchors within a bounded 32-photo neighborhood and, where known, a 90-second capture window. It is not whole-library deduplication or panorama validation.
+- Pause analysis and start again to reuse results with matching file fingerprints and settings, continue unfinished work, and retry failures. Changing folders or source files stops obsolete tasks. Read errors remain visible rather than becoming low scores.
+- **Review Results…** lists manually rejected photos across the current folder, including all paired formats and XMP files. Files move to `_del` only after confirmation, with undo available in Move History. Changes to source files preserve decisions but require reconfirmation before using this cleanup list.
+
+Human decisions live in `~/Library/Application Support/PhotoBrowser/Culling/<folder-id>/decisions.json`; replaceable per-photo analysis lives in its sibling `Analysis/` directory. Identical names in different folders do not share decisions. Clearing preview caches preserves culling records. A failure to restore or save human records is reported and never replaces them with empty records; damaged machine caches can be regenerated. Natural-language culling is outside this version's scope.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |
@@ -116,6 +130,7 @@ PHOTO_BROWSER_UNIVERSAL=1 bash scripts/build-app.sh
 
 ```bash
 swift run BrowserCoreChecks
+swift run BrowserCullingChecks
 swift run BrowserHDRChecks
 swift run BrowserThumbnailChecks
 bash scripts/check-preview-store.sh
@@ -130,6 +145,8 @@ For a read-only check against your own photos:
 swift run BrowserSmokeChecks '/path/to/photos' PHOTO_BASENAME ANOTHER_BASENAME
 ```
 
+Optional culling UI renders: `bash scripts/check-culling-ui.sh -AppleLanguages '(en)'`. This uses temporary generated photos and isolated settings, runs real Vision analysis, then renders comparison, grid, narrow-window, and two sheet layouts to `dist/culling-preview/`. It is not run in headless CI. Default snapshots read only this application's own views and may omit system materials and Metal layers; the actual comparison panes receive separate Metal pixel checks. Optional `--window-capture` captures the complete window and requires Screen Recording permission. Permission failures stop the check with an error.
+
 ## Code organization
 
 `BrowserCore` owns media data and reusable services; `PhotoBrowser` owns application state and views.
@@ -137,6 +154,8 @@ swift run BrowserSmokeChecks '/path/to/photos' PHOTO_BASENAME ANOTHER_BASENAME
 | Directory | Responsibility |
 | --- | --- |
 | `Sources/BrowserCore/Library` | Media pairing, grouping, ordering, source fingerprints, and saved sessions |
+| `Sources/CullingCore` | Vision photo analysis, similarity grouping, and independent culling persistence |
+| `Sources/PhotoBrowser/Culling` | Culling state, analysis tasks, comparison UI, and human decisions |
 | `Sources/BrowserCore/Media` | Image decoding, native metadata, and video cover generation |
 | `Sources/BrowserCore/Caching` | Memory/disk caches, access policy, and invalidation |
 | `Sources/BrowserCore/FileOperations` | Recoverable moves and validated permanent deletion |

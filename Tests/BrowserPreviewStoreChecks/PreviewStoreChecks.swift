@@ -27,6 +27,7 @@ import BrowserCore
     }
 
     @MainActor static func run() async throws {
+        try await cullingChecks()
         try await directoryObserverChecks()
         try mapChecks()
         try await coordinatorChecks()

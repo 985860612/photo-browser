@@ -48,7 +48,7 @@ extension BrowserStore {
             selectionAnchorID = asset.id; rangeSelectionBase = nil
         }
         focusedID = asset.id; preferredFileID = nil
-        if singleSelection, selection == [asset.id] {
+        if singleSelection, selection == [asset.id], !culling.active {
             startLivePhotoPlayback(asset)
         }
     }
@@ -57,7 +57,7 @@ extension BrowserStore {
         guard !isMoving, !isLoading else { return }
         let list = visibleAssets
         // Fullscreen and range selection operate on photos; normal browsing follows every displayed item.
-        let folders = scope == "all" && !isFullscreenPreview && !extendingSelection ? subdirectories : []
+        let folders = scope == "all" && !culling.active && !isFullscreenPreview && !extendingSelection ? subdirectories : []
         let total = folders.count + list.count
         guard total > 0 else { return }
         let index: Int?

@@ -44,6 +44,7 @@ extension BrowserStore {
               restoringDeletedGroups: [PhotoGroup]? = nil, recordNavigation: Bool = true) {
         guard !isMoving else { return }
         stopDirectoryObservation()
+        culling.close()
         cancelPreviewGeneration()
         captureDates.cancel(reset: true)
         let url = inputURL.standardizedFileURL
@@ -86,6 +87,8 @@ extension BrowserStore {
                 status = result.2
                 preferencesDefaults.set(url.path, forKey: "lastDirectory")
                 try saveSession()
+                await culling.open(url, assets: assets, protectedIDs: Set(groups.flatMap(\.assetIDs)))
+                guard loadID == ticket else { return }
                 refreshHistory()
                 startPreviewGeneration()
                 ensureCaptureSortDates()
