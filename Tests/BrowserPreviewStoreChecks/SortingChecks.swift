@@ -26,8 +26,11 @@ extension PreviewStoreChecks {
         store.updateMetadata(a.id, value: lensMetadata)
         try expect(store.assets[0].metadata?.lensModel == "EF-S55-250mm f/4-5.6 IS STM", "later preview metadata does not overwrite an existing original lens model")
         try expect(store.visibleAssets.map(\.id) == [a.id, b.id, c.id], "default sorting preserves existing preview order")
+        try expect(store.visibleIndex(of: a.id) == 0 && store.visibleIndex(of: b.id) == 1 && store.visibleIndex(of: nil) == nil,
+                   "cached photo positions agree with the initial visible order")
         store.previewSortField = .name
         try expect(store.visibleAssets.map(\.id) == [c.id, a.id, b.id], "name sorting uses natural numeric filename order")
+        try expect(store.visibleIndex(of: c.id) == 0 && store.visibleIndex(of: a.id) == 1, "position index refreshes with sort order")
         let request = store.previewRequestID
         store.previewSortDescending = true
         try expect(store.visibleAssets.map(\.id) == [b.id, a.id, c.id] && store.focusedID == a.id && store.selection == [a.id, b.id], "descending sort preserves focus and multi-selection")
@@ -51,8 +54,12 @@ extension PreviewStoreChecks {
         try expect(store.visibleAssets.map(\.id) == [a.id, b.id] && store.groups[0].assetIDs == group.assetIDs, "preview sorting leaves saved group membership and order intact")
         store.search = "10"
         try expect(store.visibleAssets.map(\.id) == [b.id], "sort cache invalidates when search changes")
+        try expect(store.visibleIndex(of: b.id) == 0 && store.visibleIndex(of: a.id) == nil,
+                   "position index excludes filtered photos and honors the new group scope")
         store.search = ""; store.scope = "all"; store.assets = [a, b]
         try expect(store.visibleAssets.map(\.id) == [a.id, b.id], "sort cache invalidates when external assets change")
+        try expect(store.visibleIndex(of: a.id) == 0 && store.visibleIndex(of: c.id) == nil,
+                   "external removal invalidates cached positions")
 
         let photos = root.appendingPathComponent("exif")
         try fm.createDirectory(at: photos, withIntermediateDirectories: true)

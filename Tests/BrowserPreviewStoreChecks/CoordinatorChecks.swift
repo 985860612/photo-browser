@@ -32,6 +32,24 @@ extension PreviewStoreChecks {
         store.previewCoordinator.cancel()
         try expect(store.previewTotal == 0 && store.previewFailures == 0 && store.adjacentTotal == 0,
                    "cancelling the coordinator clears progress without duplicate store state")
+        await store.previewCoordinator.prepare(request: "empty", current: nil, neighbors: [], videos: [], hdr: false, maximum: 520)
+        let unchanged = changes
+        for _ in 0..<10 {
+            await store.previewCoordinator.updateReadiness(request: "empty", neighbors: [], videos: [], hdr: false, maximum: 520)
+        }
+        try expect(changes == unchanged, "unchanged readiness does not redraw the browser repeatedly")
+        let missing = (0..<25).map { PhotoFile(url: root.appendingPathComponent("missing-\($0).jpg"), kind: .rendered) }
+        store.previewCoordinator.start(files: missing, priority: Array(missing.suffix(3)))
+        store.previewCoordinator.cancel()
+        store.previewCoordinator.start(files: [file], priority: [])
+        try await until { !store.isGeneratingPreviews }
+        try expect(store.previewTotal == 1 && store.previewCompleted == 1 && store.previewFailures == 1,
+                   "cancelled parallel warming cannot publish progress into the next directory")
+        store.previewCoordinator.start(files: missing, priority: Array(missing.suffix(3)))
+        try await until { !store.isGeneratingPreviews }
+        try expect(store.previewCompleted == missing.count && store.previewFailures == missing.count &&
+                   store.previewFailureDetails.split(separator: "\n").count == 20,
+                   "parallel warming completes every request and keeps bounded failure details")
         var completed = false
         store.captureDates.load([asset], scope: "first") { _ in completed = true }
         try expect(store.isReadingSortDates, "capture-time loader exposes its own task state")

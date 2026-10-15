@@ -31,6 +31,7 @@ private final class Counts: @unchecked Sendable {
             try await persistentFolderChecks()
             try await videoChecks()
             try await diskPolicyChecks()
+            try await maintenanceChecks()
             print("PASS all thumbnail checks")
         } catch { print("FAIL: \(error.localizedDescription)"); exit(1) }
     }
@@ -220,6 +221,12 @@ private final class Counts: @unchecked Sendable {
         let hold = Task { try await workers.run(background: true) { _ in warmingStarted.signal(); try wait(warmingGate) } }
         defer { warmingGate.signal() }
         try wait(warmingStarted)
+        let visibleStarted = DispatchSemaphore(value: 0), visibleGate = DispatchSemaphore(value: 0)
+        let visibleHolds = (0..<2).map { _ in Task {
+            try await workers.run { _ in visibleStarted.signal(); try wait(visibleGate) }
+        } }
+        defer { visibleGate.signal(); visibleGate.signal() }
+        try wait(visibleStarted); try wait(visibleStarted)
         let warming = Task { try await cache.image(file, maximum: 519, background: true) }
         try await Task.sleep(for: .milliseconds(30))
         let watching = Task { try await cache.image(file, maximum: 519) }
@@ -227,6 +234,8 @@ private final class Counts: @unchecked Sendable {
         warming.cancel()
         do { _ = try await warming.value; throw BrowserFailure.message("Cancelled waiter succeeded") }
         catch is CancellationError { print("PASS cancelling prefetch releases its waiter immediately") }
+        visibleGate.signal(); visibleGate.signal()
+        for holding in visibleHolds { try await holding.value }
         warmingGate.signal(); try await hold.value
         let shared = try await watching.value
         try expect(shared.image.size == preview.image.size && shared.metadata?.iso == 400,

@@ -5,7 +5,7 @@ import BrowserCore
 @main struct PreviewStoreChecks {
     @MainActor static func main() async {
         _ = NSApplication.shared
-        do { try await run() }
+        do { try await warmQueueChecks(); try await run() }
         catch { print("FAIL: \(error.localizedDescription)"); exit(1) }
     }
 
