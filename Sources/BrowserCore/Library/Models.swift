@@ -25,6 +25,13 @@ public struct PhotoMetadata: Codable, Sendable {
     public var shutter: String?
     public var camera: String?
     public var lensModel: String?
+    public var gpsLatitude: Double?
+    public var gpsLongitude: Double?
+    public var gpsAltitude: Double?
+    public var location: PhotoLocation? {
+        guard let gpsLatitude, let gpsLongitude else { return nil }
+        return PhotoLocation(latitude: gpsLatitude, longitude: gpsLongitude, altitude: gpsAltitude)
+    }
     public var width: Int?
     public var height: Int?
     public var duration: Double?

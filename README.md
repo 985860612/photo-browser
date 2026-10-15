@@ -43,6 +43,8 @@ Examples from the Simplified Chinese interface. English is also supported.
 - **Clipboard:** Command-C copies selected files and their paired formats/sidecars for pasting in Finder. Command-Shift-C copies a full-resolution still image for pasting into messages or documents. Right-click menus provide both actions; video copying uses the file action.
 - **English and Simplified Chinese:** menus, buttons, tooltips, status text, dialogs, capture settings, and application error messages are localized.
 
+- **Photo location:** GPS-enabled photos show latitude, longitude, and available altitude in the inspector. Open in Maps locates the photo in Apple Maps using the embedded coordinates. Missing or invalid GPS hides the location section; the app does not infer positions from filenames or camera models. Old source-header caches are enriched once without regenerating thumbnail JPEGs, and missing GPS results are cached too. Browsing does not launch Maps; the button uses Apple's [MapKit Maps launcher](https://developer.apple.com/documentation/mapkit/mkmapitem/openinmaps%28launchoptions%3A%29).
+
 ## Getting started
 
 1. Open a photo folder with **⌘O**. The app scans only the current folder. Matching filenames are paired without reading every original image.

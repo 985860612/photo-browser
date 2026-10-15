@@ -26,6 +26,8 @@ import BrowserCore
         }
         try require(L10n.text("照片浏览器") == (chinese ? "照片浏览器" : "Photo Browser"), "App title did not translate")
         try require(L10n.text("打开照片目录…") == (chinese ? "打开照片目录…" : "Open Photo Folder…"), "Menu did not translate")
+        try require(L10n.text("在地图中打开") == (chinese ? "在地图中打开" : "Open in Maps") &&
+                    L10n.text("纬度") == (chinese ? "纬度" : "Latitude"), "GPS fields and map action did not translate")
         try require(L10n.text("100% 像素") == (chinese ? "100% 像素" : "100% Pixels"), "A literal percent sign was changed")
         try require(L10n.text("\(1) 张已选") == (chinese ? "1 张已选" : "Selected: 1"), "Single selection count did not translate")
         try require(L10n.text("\(1259) 张照片 · \(2518) 个图像文件 · \(14) 个分组") == (chinese ? "1259 张照片 · 2518 个图像文件 · 14 个分组" : "Photos: 1259 · Image files: 2518 · Groups: 14"), "Status counts did not translate")

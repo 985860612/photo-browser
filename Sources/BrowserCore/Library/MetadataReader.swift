@@ -29,7 +29,8 @@ public final class MetadataReader {
         let p = Process(), output = Pipe()
         p.executableURL = binary
         p.currentDirectoryURL = directory
-        p.arguments = ["-fast", "-j", "-DateTimeOriginal", "-SubSecTimeOriginal", "-SequenceNumber", "-FocalLength#", "-FNumber", "-ISO", "-ExposureTime", "-Model", "-LensModel", "-ImageWidth", "-ImageHeight", "--"] + assets.map { $0.metadataFile.url.lastPathComponent }
+        p.arguments = ["-fast", "-j", "-DateTimeOriginal", "-SubSecTimeOriginal", "-SequenceNumber", "-FocalLength#", "-FNumber", "-ISO", "-ExposureTime", "-Model", "-LensModel", "-ImageWidth", "-ImageHeight",
+                       "-GPSLatitude#", "-GPSLatitudeRef#", "-GPSLongitude#", "-GPSLongitudeRef#", "-GPSAltitude#", "-GPSAltitudeRef#", "--"] + assets.map { $0.metadataFile.url.lastPathComponent }
         p.standardOutput = output; p.standardError = errorHandle
         lock.lock()
         if cancelled { lock.unlock(); throw CancellationError() }
@@ -68,6 +69,14 @@ public final class MetadataReader {
             value.lensModel = object["LensModel"] as? String
             value.width = (object["ImageWidth"] as? NSNumber)?.intValue
             value.height = (object["ImageHeight"] as? NSNumber)?.intValue
+            if let location = PhotoLocation(exifLatitude: (object["GPSLatitude"] as? NSNumber)?.doubleValue,
+                                            latitudeRef: object["GPSLatitudeRef"] as? String,
+                                            exifLongitude: (object["GPSLongitude"] as? NSNumber)?.doubleValue,
+                                            longitudeRef: object["GPSLongitudeRef"] as? String,
+                                            altitude: (object["GPSAltitude"] as? NSNumber)?.doubleValue,
+                                            belowSeaLevel: (object["GPSAltitudeRef"] as? NSNumber)?.intValue == 1) {
+                value.gpsLatitude = location.latitude; value.gpsLongitude = location.longitude; value.gpsAltitude = location.altitude
+            }
             result[id] = value
         }
         return result

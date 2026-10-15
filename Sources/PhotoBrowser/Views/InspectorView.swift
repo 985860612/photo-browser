@@ -12,6 +12,10 @@ struct InspectorView: View {
                 if let asset = store.focusedAsset {
                     if asset.isVideo { videoFields(asset.metadata) } else { metadataFields(asset.metadata) }
                     if let metadataFailure { Text(metadataFailure).font(.caption2).foregroundStyle(.orange) }
+                    if let location = asset.metadata?.location {
+                        GlassDivider(inset: 0)
+                        locationFields(location)
+                    }
                     GlassDivider(inset: 0)
                     VStack(alignment: .leading, spacing: 13) {
                         sectionTitle(L10n.text("文件信息"), icon: "doc.text")
@@ -41,21 +45,50 @@ struct InspectorView: View {
                 } else { Text(L10n.text("选择照片查看信息")).foregroundStyle(.secondary) }
             }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: store.focusedFile?.id) {
+        .task(id: metadataRequest) {
             metadataFailure = nil
-            guard let file = store.focusedFile, let id = store.focusedID else { return }
-            let metadataFile = store.focusedAsset?.metadataFile ?? file
+            guard let file = store.focusedFile, let id = store.focusedID, let asset = store.focusedAsset else { return }
+            let request = metadataRequest
             do {
                 let result = try await store.thumbnails.image(file, maximum: 520)
-                try Task.checkCancellation(); store.updateMetadata(id, value: result.metadata)
-                if file.kind != .video, store.focusedAsset?.metadata?.lensModel == nil {
-                    let metadata = try await store.thumbnails.sourceMetadata(metadataFile)
-                    try Task.checkCancellation()
-                    guard store.focusedID == id, store.focusedFile?.id == file.id else { return }
-                    store.updateMetadata(id, value: metadata)
+                try Task.checkCancellation()
+                guard request == metadataRequest else { return }
+                store.updateMetadata(id, value: result.metadata)
+                if file.kind != .video {
+                    var seen: Set<String> = [], readHeader = false
+                    var headerFailure: Error?
+                    for source in [asset.metadataFile, file, asset.preferred] where seen.insert(source.id).inserted {
+                        if store.focusedAsset?.metadata?.lensModel != nil, store.focusedAsset?.metadata?.location != nil { break }
+                        do {
+                            let metadata = try await store.thumbnails.sourceMetadata(source)
+                            try Task.checkCancellation()
+                            guard request == metadataRequest else { return }
+                            store.updateMetadata(id, value: metadata); readHeader = true
+                        } catch is CancellationError { throw CancellationError() }
+                        catch { headerFailure = error }
+                    }
+                    if !readHeader, let headerFailure { throw headerFailure }
                 }
             } catch is CancellationError {}
-            catch { metadataFailure = error.localizedDescription }
+            catch { if request == metadataRequest { metadataFailure = error.localizedDescription } }
+        }
+    }
+
+    private var metadataRequest: String {
+        "\(store.focusedID ?? "")|\(store.focusedFile?.id ?? "")|\(store.focusedAsset?.fingerprint ?? "")"
+    }
+
+    private func locationFields(_ location: PhotoLocation) -> some View {
+        VStack(alignment: .leading, spacing: 13) {
+            sectionTitle(L10n.text("拍摄位置"), icon: "mappin.and.ellipse")
+            information(L10n.text("纬度"), location.latitudeLabel, icon: "globe")
+            information(L10n.text("经度"), location.longitudeLabel, icon: "globe")
+            if let altitude = location.altitude {
+                information(L10n.text("海拔"), String(format: "%.1f m", altitude), icon: "mountain.2")
+            }
+            Button { store.openFocusedLocation() } label: {
+                Label(L10n.text("在地图中打开"), systemImage: "map")
+            }.font(.caption)
         }
     }
 

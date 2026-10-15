@@ -15,7 +15,10 @@ public actor ThumbnailCache {
         var keepInMemory: Bool
     }
     private let memory = NSCache<NSString, Entry>()
-    private struct SourceMetadata: Codable { let metadata: PhotoMetadata? }
+    private struct SourceMetadata: Codable {
+        let metadata: PhotoMetadata?
+        var version: Int? = 2
+    }
     private final class MetadataEntry: NSObject {
         let value: SourceMetadata
         init(_ value: SourceMetadata) { self.value = value }
@@ -54,7 +57,7 @@ public actor ThumbnailCache {
     }
 
     /// Read the original header independently of old/embedded thumbnail metadata. No pixel decoding.
-    /// Missing lens tags are cached too, so revisiting a photo does not keep reading the source.
+    /// Missing lens/GPS tags are cached too. Old headers are enriched once without regenerating JPEGs.
     public func sourceMetadata(_ file: PhotoFile) async throws -> PhotoMetadata? {
         try Task.checkCancellation()
         let key = Self.metadataKey(file)
@@ -72,7 +75,7 @@ public actor ThumbnailCache {
                 do { return try JSONDecoder().decode(SourceMetadata.self, from: bytes) }
                 catch is DecodingError { return nil } // Damaged local metadata can be reread.
             }
-            if let saved, saved.metadata != nil { try check(); return saved }
+            if let saved, saved.version == 2, saved.metadata != nil { try check(); return saved }
             guard FileManager.default.fileExists(atPath: file.url.path),
                   let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
                 throw BrowserFailure.message(L10n.text("无法读取 \(file.url.lastPathComponent)"))

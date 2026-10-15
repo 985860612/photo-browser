@@ -229,6 +229,17 @@ import Combine
             if assets[index].metadata?.aperture == nil { assets[index].metadata?.aperture = value.aperture }
             if assets[index].metadata?.iso == nil { assets[index].metadata?.iso = value.iso }
             if assets[index].metadata?.shutter == nil { assets[index].metadata?.shutter = value.shutter }
+            if let location = value.location {
+                if assets[index].metadata?.location == nil {
+                    assets[index].metadata?.gpsLatitude = location.latitude
+                    assets[index].metadata?.gpsLongitude = location.longitude
+                }
+                if assets[index].metadata?.gpsAltitude == nil,
+                   assets[index].metadata?.gpsLatitude == location.latitude, assets[index].metadata?.gpsLongitude == location.longitude,
+                   let altitude = location.altitude {
+                    assets[index].metadata?.gpsAltitude = altitude
+                }
+            }
         }
     }
 
