@@ -43,6 +43,36 @@ extension PreviewStoreChecks {
         try expect(reopened.previewSortField == .name && reopened.previewSortDescending, "sort field and direction survive reopening")
         store.previewSortDescending = false; store.previewSortField = .captured
         try expect(store.visibleAssets.map(\.id) == [b.id, a.id, c.id], "capture sorting uses metadata with modification time as the missing-date fallback")
+        store.cancelSortDates()
+        for fullscreen in [false, true] {
+            for descending in [false, true] {
+                store.previewSortField = .name; store.assets = [a, b, c]
+                store.previewSortDescending = descending; store.previewSortField = .captured
+                store.cancelSortDates(); store.isFullscreenPreview = fullscreen
+                let order = store.visibleAssets.map(\.id)
+                store.select(c, modifiers: [])
+                _ = store.visibleIndex(of: c.id)
+                // A preview discovers a date earlier than the modification-time fallback.
+                let captured = PhotoMetadata(captured: Date(timeIntervalSince1970: 15))
+                store.updateMetadata(c.id, value: captured)
+                store.updateMetadata(a.id, value: lensMetadata)
+                try expect(store.visibleAssets.map(\.id) == order,
+                           "preview and inspector enrichment keep capture-sort navigation stable (descending=\(descending), fullscreen=\(fullscreen))")
+                try expect(store.visibleAssets.first(where: { $0.id == c.id })?.metadata?.captured == captured.captured,
+                           "stable ordering still exposes newly loaded photo metadata")
+                store.step(descending ? 1 : -1)
+                try expect(store.focusedID == a.id, "capture-sort navigation does not skip the adjacent photo after metadata arrives")
+                store.step(descending ? -1 : 1)
+                try expect(store.focusedID == c.id, "reversing direction returns to the same photo after metadata arrives")
+                store.step(descending ? 1 : -1, extendingSelection: true)
+                try expect(store.selection == [a.id, c.id], "capture-sort range selection uses the stable visible sequence")
+                store.previewSortDescending.toggle()
+                let refreshed = AssetOrdering.sorted(store.assets, by: .captured, descending: !descending).map(\.id)
+                try expect(store.visibleAssets.map(\.id) == refreshed && store.focusedID == a.id,
+                           "an explicit sort change applies the new dates while preserving focus")
+            }
+        }
+        store.isFullscreenPreview = false; store.assets = [a, b, c]; store.previewSortDescending = false
         store.previewSortField = .modified
         try expect(store.visibleAssets.map(\.id) == [b.id, c.id, a.id], "modification sort takes the newest paired media file and ignores sidecar timestamps")
         store.previewSortField = .size
@@ -71,7 +101,12 @@ extension PreviewStoreChecks {
             try expect(CGImageDestinationFinalize(output), "capture sort EXIF fixture created")
         }
         store.groups = []; store.assets = try DirectoryScanner.scan(photos); store.directory = photos
+        let z = store.assets.first { $0.id == "z" }!
+        let zMetadata = try await store.thumbnails.sourceMetadata(z.preferred)
         store.previewSortField = .captured
+        let pendingOrder = store.visibleAssets.map(\.id)
+        store.updateMetadata(z.id, value: zMetadata)
+        try expect(store.visibleAssets.map(\.id) == pendingOrder, "individual metadata reads preserve the pending capture-sort order")
         try await until { !store.isReadingSortDates }
         try expect(store.visibleAssets.map(\.id) == ["z", "a"] && store.assets.allSatisfy { $0.metadata?.captured != nil },
                    "capture sort reads actual cached/native EXIF dates in the background")

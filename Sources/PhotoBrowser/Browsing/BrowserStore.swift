@@ -242,6 +242,10 @@ import Combine
 
     func updateMetadata(_ id: String, value: PhotoMetadata?) {
         guard let value, let index = assets.firstIndex(where: { $0.id == id }) else { return }
+        // Per-photo preview/inspector reads must not move the photo between arrow presses.
+        // Capture dates are reordered together by the batch loader or an explicit sort change.
+        var ordering = previewSortField == .captured ? visibleAssets : nil
+        let position = ordering?.firstIndex { $0.id == id }
         if assets[index].metadata == nil { assets[index].metadata = value }
         else {
             // Native previews enrich display fields without changing the original burst sequence/time.
@@ -262,6 +266,8 @@ import Combine
                 }
             }
         }
+        if let position { ordering?[position] = assets[index] }
+        if let ordering { visibleOrdering = ordering }
     }
 
     func revealFocused() {
