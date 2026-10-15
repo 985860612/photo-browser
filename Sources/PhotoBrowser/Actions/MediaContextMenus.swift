@@ -29,6 +29,12 @@ struct CameraRawMenu: View {
         } else {
             Button(L10n.text("播放视频")) { store.playVideo(asset) }.disabled(store.isMoving || store.isLoading)
         }
+        let exports = store.livePhotoExportTargets(asset)
+        if !exports.isEmpty {
+            Button { store.exportLivePhotoVideo(asset) } label: {
+                Label(exports.count > 1 ? L10n.text("导出 \(exports.count) 个视频…") : L10n.text("导出视频…"), systemImage: "square.and.arrow.up")
+            }.disabled(store.isMoving || store.isLoading || store.isExportingLivePhotoVideo)
+        }
     }
 }
 
