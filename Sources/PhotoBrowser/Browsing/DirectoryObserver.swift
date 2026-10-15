@@ -10,14 +10,12 @@ import BrowserCore
     private let queue = DispatchQueue(label: "PhotoBrowser.directoryObservation", qos: .utility)
     private let changed: (Bool) -> Void
     private let failure: (Error) -> Void
-    private var lastFull = ProcessInfo.processInfo.systemUptime
     private var fileWatchTask: Task<Void, Never>?
     private var fileWatchID = UUID()
     private static let workers = PreviewWorkQueue()
-    private let fullInterval: TimeInterval
-    init(directory: URL, pollInterval: TimeInterval = 3, fullInterval: TimeInterval = 30,
+    init(directory: URL, pollInterval: TimeInterval = 3,
          changed: @escaping (Bool) -> Void, failure: @escaping (Error) -> Void) async throws {
-        self.changed = changed; self.failure = failure; self.fullInterval = fullInterval
+        self.changed = changed; self.failure = failure
         let descriptor = try await Self.workers.run(background: true) { _ in try WatchedDescriptor(directory) }
         sources = [source(descriptor)]
         let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -25,9 +23,7 @@ import BrowserCore
         timer.setEventHandler { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, self.timer != nil else { return }
-                let now = ProcessInfo.processInfo.systemUptime, full = now - self.lastFull >= self.fullInterval
-                if full { self.lastFull = now }
-                self.changed(full)
+                self.changed(false)
             }
         }
         self.timer = timer; timer.resume()

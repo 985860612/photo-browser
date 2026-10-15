@@ -85,11 +85,12 @@ extension PreviewStoreChecks {
         let previous = store.assets.first { $0.id == "new" }!.preferred
         try fm.setAttributes([.modificationDate: previous.modified.addingTimeInterval(5)], ofItemAtPath: newURL.path)
         store.directoryObserver?.stop()
-        store.directoryObserver = try await DirectoryObserver(directory: directory, pollInterval: 0.05, fullInterval: 0.15,
+        store.directoryObserver = try await DirectoryObserver(directory: directory, pollInterval: 0.05,
             changed: { full in store.scheduleAutomaticRefresh(full: full) }, failure: { error in store.reportObservationFailure(error) })
         store.observeFocusedFiles()
+        store.scheduleAutomaticRefresh(full: true)
         try await until { store.assets.first { $0.id == "new" }!.preferred.modified != previous.modified }
-        try expect(true, "periodic reconciliation detects edits to non-focused files without relying on directory events or modification time")
+        try expect(true, "explicit reconciliation detects edits to non-focused files without periodic full scans")
         await store.clearPreviewCaches()
         let usage = try await thumbs.diskUsage()
         try expect(usage.entries == 0 && !store.isGeneratingPreviews && store.groups.first?.id == group.id && fm.fileExists(atPath: original.url.path),
