@@ -74,20 +74,5 @@ extension PreviewStoreChecks {
             }
         }
         try expect(true, "switching preview resolutions, zoom, HDR mode and view size fully rewrites reused pixels; empty selections clear the surface")
-        for offset in [CGPoint.zero, CGPoint(x: 1, y: 0), CGPoint.zero] {
-            canvas.configure(photo: photo, identity: "synced-pan", hdr: false, zoom: 1, normalizedPan: offset)
-            let next = canvas.makeFrameCommandBuffer()!
-            try canvas.encodeFrame(to: texture, command: next)
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                next.addCompletedHandler { _ in continuation.resume() }; next.commit()
-            }
-            var pixel = [UInt16](repeating: 0, count: 4)
-            pixel.withUnsafeMutableBytes {
-                texture.getBytes($0.baseAddress!, bytesPerRow: 8, from: MTLRegionMake2D(768, 512, 1, 1), mipmapLevel: 0)
-            }
-            let red = Float(Float16(bitPattern: pixel[0]))
-            try expect(offset == .zero ? red > 0.1 : red < 0.001,
-                       "normalized comparison pan updates Metal pixels and resets to the centered photo")
-        }
     }
 }

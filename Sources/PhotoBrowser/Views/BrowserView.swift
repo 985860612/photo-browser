@@ -26,16 +26,13 @@ struct BrowserView: View {
                 }.padding(10).background(.orange.opacity(0.1))
             }
             GeometryReader { geometry in
-                let inspectorVisible = showInspectorPanel && !store.assets.isEmpty && (!store.culling.active || geometry.size.width >= 1280)
+                let inspectorVisible = showInspectorPanel && !store.assets.isEmpty
                 let layout = BrowserPanelLayout(available: geometry.size.width, directoryWidth: directoryPanelWidth,
                                                 inspectorWidth: inspectorPanelWidth, showDirectory: showDirectoryPanel,
                                                 showInspector: inspectorVisible)
                 HStack(spacing: 0) {
                     if showDirectoryPanel {
-                        Group {
-                            if store.culling.active { CullingSidebar(culling: store.culling) }
-                            else { SidebarView() }
-                        }.frame(width: layout.directory)
+                        SidebarView().frame(width: layout.directory)
                         panelDivider(width: $directoryPanelWidth, actualWidth: layout.directory,
                                      range: BrowserPanelLayout.directoryRange, direction: 1,
                                      maximum: geometry.size.width - 550 - layout.inspector - (inspectorVisible ? 12 : 6))
@@ -45,10 +42,7 @@ struct BrowserView: View {
                         panelDivider(width: $inspectorPanelWidth, actualWidth: layout.inspector,
                                      range: BrowserPanelLayout.inspectorRange, direction: -1,
                                      maximum: geometry.size.width - 550 - layout.directory - (showDirectoryPanel ? 12 : 6))
-                        Group {
-                            if store.culling.active { CullingInspector(culling: store.culling) }
-                            else { InspectorView() }
-                        }.frame(width: layout.inspector)
+                        InspectorView().frame(width: layout.inspector)
                     }
                 }
             }
@@ -102,12 +96,6 @@ struct BrowserView: View {
         .sheet(item: $store.renameGroup) { group in RenameGroupSheet(group: group).environmentObject(store) }
         .sheet(isPresented: $store.showHistory) { HistorySheet().environmentObject(store) }
         .sheet(isPresented: $store.showMerge) { MergeSheet().environmentObject(store) }
-        .sheet(isPresented: Binding(get: { store.culling.showAnalysisSheet }, set: { store.culling.showAnalysisSheet = $0 })) {
-            CullingAnalysisSheet(culling: store.culling).environmentObject(store)
-        }
-        .sheet(isPresented: Binding(get: { store.culling.showResultsSheet }, set: { store.culling.showResultsSheet = $0 })) {
-            CullingResultsSheet(chosen: store.culling.rejectedAssets).environmentObject(store)
-        }
         .alert(L10n.text("操作未完成"), isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button(L10n.text("知道了")) { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
@@ -149,8 +137,6 @@ struct BrowserView: View {
             VStack(spacing: 14) { ProgressView(); Text(L10n.text("正在扫描照片目录…")).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if store.assets.isEmpty {
             FolderGallery()
-        } else if store.culling.active {
-            CullingWorkspace(culling: store.culling)
         } else {
             VStack(spacing: 0) {
                 if store.showGroupOverview { PhotoGridView(); GlassDivider(); overviewControls }
@@ -209,23 +195,11 @@ struct BrowserView: View {
                 .disabled(store.directory == nil || store.isLoading || store.isMoving).help(L10n.text("刷新目录 ⌘R"))
         }
         ToolbarItemGroup {
-            Picker(L10n.text("工作模式"), selection: Binding(get: { store.culling.active }, set: { store.setCullingActive($0) })) {
-                Text(L10n.text("浏览")).tag(false)
-                Text(L10n.text("选片")).tag(true)
-            }.pickerStyle(.segmented).frame(width: 125).disabled(store.isLoading || store.assets.isEmpty)
-            if store.culling.active {
-                Button { store.culling.showAnalysisSheet = true } label: { Label(L10n.text("开始分析"), systemImage: "sparkles") }
-                    .disabled(store.culling.running || !store.culling.available || store.isLoading)
-                Button { store.culling.showResultsSheet = true } label: { Label(L10n.text("整理结果…"), systemImage: "checklist") }
-                    .disabled(store.isLoading || !store.culling.available)
-            }
-            if !store.culling.active {
             Button { if store.groups.isEmpty { store.autoGroup() } else { confirmRegroup = true } } label: {
                 Label(L10n.text("自动分组"), systemImage: "wand.and.stars")
             }.disabled(store.assets.isEmpty || store.isReadingMetadata || store.isLoading)
             Button { store.createGroup() } label: { Label(L10n.text("选中成组"), systemImage: "rectangle.stack.badge.plus") }
                 .disabled(store.selection.count < 2 || store.isReadingMetadata).help(L10n.text("⌘ / ⇧ 点击多选，再按 ⌘G 成组"))
-            }
             Button { store.refreshHistory(); store.showHistory = true } label: { Label(L10n.text("移动记录"), systemImage: "clock.arrow.circlepath") }
             Button { showInspectorPanel.toggle() } label: { Label(L10n.text("照片信息面板"), systemImage: "sidebar.right") }
                 .help(showInspectorPanel ? L10n.text("收起照片信息面板") : L10n.text("展开照片信息面板"))
