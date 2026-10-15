@@ -10,6 +10,7 @@ struct PhotoCanvas: NSViewRepresentable {
     let hdr: Bool
     @Binding var zoom: Double
     @Binding var fitScale: Double
+    var normalizedPan: Binding<CGPoint>? = nil
     var report: (String) -> Void
 
     func makeNSView(context: Context) -> CanvasView {
@@ -22,7 +23,8 @@ struct PhotoCanvas: NSViewRepresentable {
         view.onZoom = { zoom = $0 }
         view.onFitScale = { fitScale = $0 }
         view.onFailure = report
-        view.configure(photo: photo, identity: identity, hdr: hdr, zoom: zoom)
+        view.onPan = { normalizedPan?.wrappedValue = $0 }
+        view.configure(photo: photo, identity: identity, hdr: hdr, zoom: zoom, normalizedPan: normalizedPan?.wrappedValue)
     }
 }
 
@@ -43,6 +45,7 @@ struct PhotoCanvas: NSViewRepresentable {
     var onZoom: ((Double) -> Void)?
     var onFitScale: ((Double) -> Void)?
     var onFailure: ((String) -> Void)?
+    var onPan: ((CGPoint) -> Void)?
 
     init() {
         super.init(frame: .zero, device: MTLCreateSystemDefaultDevice())
@@ -67,13 +70,16 @@ struct PhotoCanvas: NSViewRepresentable {
         super.viewDidChangeBackingProperties(); reportFit(); needsDisplay = true
     }
 
-    func configure(photo: DisplayPhoto?, identity: String, hdr: Bool, zoom: Double) {
-        guard self.photo?.image !== photo?.image || self.identity != identity || self.hdr != hdr || self.zoom != zoom else { return }
+    func configure(photo: DisplayPhoto?, identity: String, hdr: Bool, zoom: Double, normalizedPan: CGPoint? = nil) {
+        let panChanged = normalizedPan.map { abs($0.x - normalizedOffset.x) > 0.000001 || abs($0.y - normalizedOffset.y) > 0.000001 } ?? false
+        guard self.photo?.image !== photo?.image || self.identity != identity || self.hdr != hdr || self.zoom != zoom || panChanged else { return }
         if self.identity != identity { pan = .zero; self.identity = identity }
         self.photo = photo; self.hdr = hdr; self.zoom = zoom
         frameRevision &+= 1; retriedFrame = false
         reportFit()
-        if zoom == 1 { pan = .zero }
+        if let normalizedPan, let photo {
+            pan = CGPoint(x: normalizedPan.x * photo.size.width * fit * zoom, y: normalizedPan.y * photo.size.height * fit * zoom)
+        } else if zoom == 1 { pan = .zero }
         (layer as? CAMetalLayer)?.wantsExtendedDynamicRangeContent = hdr && photo?.isHDR == true
         if ciContext == nil, photo != nil { DispatchQueue.main.async { [weak self] in self?.onFailure?(L10n.text("当前 Mac 无法建立 Metal 预览，请检查图形设备。")) } }
         needsDisplay = true
@@ -81,6 +87,10 @@ struct PhotoCanvas: NSViewRepresentable {
     private var fit: Double {
         guard let photo, photo.size.width > 0, photo.size.height > 0 else { return 1 }
         return max(0.0001, min(bounds.width / photo.size.width, bounds.height / photo.size.height))
+    }
+    private var normalizedOffset: CGPoint {
+        guard let photo else { return .zero }
+        return CGPoint(x: pan.x / max(1, photo.size.width * fit * zoom), y: pan.y / max(1, photo.size.height * fit * zoom))
     }
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         reportFit(); needsDisplay = true
@@ -152,7 +162,7 @@ struct PhotoCanvas: NSViewRepresentable {
         let new = min(10, max(0.1, value)), ratio = new / zoom
         let centered = CGPoint(x: anchor.x - bounds.midX, y: anchor.y - bounds.midY)
         pan = CGPoint(x: centered.x - (centered.x - pan.x) * ratio, y: centered.y - (centered.y - pan.y) * ratio)
-        zoom = new; onZoom?(new); needsDisplay = true
+        zoom = new; onZoom?(new); onPan?(normalizedOffset); needsDisplay = true
     }
     override func magnify(with event: NSEvent) { changeZoom(zoom * max(0.1, 1 + event.magnification), at: convert(event.locationInWindow, from: nil)) }
     override func scrollWheel(with event: NSEvent) {
@@ -165,6 +175,7 @@ struct PhotoCanvas: NSViewRepresentable {
             pan.x += event.scrollingDeltaX * multiplier * direction
             // AppKit's vertical scroll axis is opposite to the Core Image canvas Y axis.
             pan.y -= event.scrollingDeltaY * multiplier * direction
+            onPan?(normalizedOffset)
             needsDisplay = true
         }
     }
@@ -173,13 +184,13 @@ struct PhotoCanvas: NSViewRepresentable {
         if event.clickCount == 2 {
             let pixelZoom = min(10, max(0.1, 1 / (fit * (window?.backingScaleFactor ?? 2))))
             changeZoom(abs(zoom - 1) < 0.001 ? pixelZoom : 1, at: convert(event.locationInWindow, from: nil))
-            if zoom == 1 { pan = .zero }; return
+            if zoom == 1 { pan = .zero; onPan?(.zero) }; return
         }
         dragPoint = convert(event.locationInWindow, from: nil); NSCursor.closedHand.push()
     }
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if let previous = dragPoint { pan.x += point.x - previous.x; pan.y += point.y - previous.y; needsDisplay = true }
+        if let previous = dragPoint { pan.x += point.x - previous.x; pan.y += point.y - previous.y; onPan?(normalizedOffset); needsDisplay = true }
         dragPoint = point
     }
     override func mouseUp(with event: NSEvent) { if dragPoint != nil { NSCursor.pop() }; dragPoint = nil }

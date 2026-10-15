@@ -5,8 +5,8 @@ import Combine
 
 @MainActor final class BrowserStore: ObservableObject {
     @Published var directory: URL?
-    @Published var assets: [PhotoAsset] = [] { didSet { visibleOrdering = nil } }
-    @Published var groups: [PhotoGroup] = [] { didSet { visibleOrdering = nil } }
+    @Published var assets: [PhotoAsset] = [] { didSet { visibleOrdering = nil; reconcileCulling() } }
+    @Published var groups: [PhotoGroup] = [] { didSet { visibleOrdering = nil; reconcileCulling() } }
     @Published var scope = "all" { didSet { visibleOrdering = nil } }
     @Published var search = "" { didSet { visibleOrdering = nil } }
     var visibleOrdering: [PhotoAsset]? { didSet { visiblePositions = nil } }
@@ -129,6 +129,7 @@ import Combine
     let sessions: BrowserSessionRepository
     let thumbnails: ThumbnailCache
     let engine: ArchiveEngine
+    let culling: CullingStore
     private var observations: Set<AnyCancellable> = []
 
     init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared, defaults: UserDefaults = .standard, displayCache: DisplayPhotoCache = .shared,
@@ -152,6 +153,14 @@ import Combine
         self.thumbnails = thumbnails
         self.displayCache = displayCache
         engine = ArchiveEngine(journalDirectory: support.appendingPathComponent("Moves", isDirectory: true))
+        culling = CullingStore(directory: support.appendingPathComponent("Culling", isDirectory: true), thumbnails: thumbnails)
+        culling.objectWillChange.sink { [weak self] in
+            self?.visibleOrdering = nil
+            self?.objectWillChange.send()
+        }.store(in: &observations)
+        culling.$errorMessage.compactMap { $0 }.sink { [weak self] message in
+            self?.errorMessage = message
+        }.store(in: &observations)
         previewCoordinator.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &observations)
         captureDates.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &observations)
         playback.livePhotoEnded = { [weak self] fileID in
@@ -210,7 +219,8 @@ import Combine
         if let visibleOrdering { return visibleOrdering }
         let ordered = AssetOrdering.visible(assets, groups: groups, scope: scope, search: search,
                                             field: previewSortField, descending: previewSortDescending)
-        visibleOrdering = ordered; return ordered
+        let result = culling.active ? culling.filtered(ordered) : ordered
+        visibleOrdering = result; return result
     }
     func visibleIndex(of id: String?) -> Int? {
         guard let id else { return nil }
