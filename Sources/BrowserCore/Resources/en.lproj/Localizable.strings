@@ -401,3 +401,5 @@
 "正在导出视频：%@/%@" = "Exporting videos: %@/%@";
 "已导出 %@ 个视频，%@ 个失败" = "Exported %@ videos; %@ failed";
 "导出" = "Export";
+"文件操作正在进行，请等待完成" = "File operations are in progress. Please wait.";
+"文件操作完成后即可退出。" = "You can quit after file operations finish.";

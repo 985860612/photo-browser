@@ -25,7 +25,8 @@ import Sparkle
             let updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: driver)
             driver.updater = updater
             try updater.start()
-            updater.checkForUpdates()
+            if args.contains("automatic") { updater.checkForUpdatesInBackground() }
+            else { updater.checkForUpdates() }
             // The driver exits with the result; keep the app event loop alive for Sparkle's helpers.
             NSApp.run()
             print("Probe event loop ended without a result")

@@ -16,7 +16,7 @@ PHOTO_PROBE_PID=''
 cleanup() {
   if [ -n "$PHOTO_PROBE_PID" ] && kill -0 "$PHOTO_PROBE_PID" 2>/dev/null; then kill "$PHOTO_PROBE_PID"; wait "$PHOTO_PROBE_PID" || true; fi
   if [ -n "$PHOTO_SERVER_PID" ]; then kill "$PHOTO_SERVER_PID"; wait "$PHOTO_SERVER_PID" || true; fi
-  for PHOTO_CASE in found current bad-feed bad-archive install; do
+  for PHOTO_CASE in found current bad-feed bad-archive install automatic; do
     defaults delete "$PHOTO_TEST_PREFIX.$PHOTO_CASE" 2>/dev/null || true
     rm -rf "$HOME/Library/Caches/$PHOTO_TEST_PREFIX.$PHOTO_CASE"
   done
@@ -45,6 +45,10 @@ PHOTO_INFO="$PHOTO_OLD_APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 1' "$PHOTO_INFO"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 1.0' "$PHOTO_INFO"
 /usr/libexec/PlistBuddy -c 'Set :SUEnableAutomaticChecks false' "$PHOTO_INFO"
+if [ "$1" = automatic ]; then
+  /usr/libexec/PlistBuddy -c 'Set :SUEnableAutomaticChecks true' "$PHOTO_INFO"
+  /usr/libexec/PlistBuddy -c 'Set :SUAutomaticallyUpdate true' "$PHOTO_INFO"
+fi
 /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey $PHOTO_PUBLIC_KEY" "$PHOTO_INFO"
 /usr/libexec/PlistBuddy -c "Set :SUFeedURL $PHOTO_BASE_URL/$1/feed/appcast.xml" "$PHOTO_INFO"
 # HTTP is allowed only in these isolated localhost fixtures.
@@ -105,4 +109,12 @@ done
 test -s "$PHOTO_CASE_ROOT/relaunched"
 case "$(cat "$PHOTO_CASE_ROOT/relaunched")" in */install/installed/UpdaterChecks.app) ;; *) echo 'Relaunched the wrong app' >&2; exit 1 ;; esac
 test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PHOTO_OLD_APP/Contents/Info.plist")" = 2
-echo 'PASS: signed feed, tampered feed/archive rejection, download, installation, and relaunch'
+prepare_case automatic
+run_probe automatic
+for ((i=0; i<300; i++)); do
+  if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PHOTO_INFO")" = 2 ]; then break; fi
+  sleep 0.1
+done
+test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PHOTO_INFO")" = 2
+test ! -e "$PHOTO_CASE_ROOT/relaunched"
+echo 'PASS: signed feed, tampering rejection, manual installation/relaunch, automatic download/install on quit'

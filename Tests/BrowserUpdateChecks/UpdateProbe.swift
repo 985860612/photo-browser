@@ -9,10 +9,13 @@ import Sparkle
         guard let index = args.firstIndex(of: "--expect") else { return "found" }
         return args[index + 1]
     }
-    private func finish(_ result: String) {
+    private func record(_ result: String) {
         if let index = CommandLine.arguments.firstIndex(of: "--result") {
             try! Data(result.utf8).write(to: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
         }
+    }
+    private func finish(_ result: String) {
+        record(result)
         print("\(result == expected ? "PASS" : "FAIL"): update probe: \(result), expected \(expected)")
         fflush(stdout)
         exit(result == expected ? 0 : 1)
@@ -46,9 +49,18 @@ import Sparkle
         acknowledgement(); finish(relaunched ? "installed" : "not-relaunched")
     }
     func dismissUpdateInstallation() {}
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
+                 immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
+        guard expected == "automatic" else { return false }
+        record("automatic")
+        print("PASS: automatically downloaded update is ready to install on quit")
+        fflush(stdout)
+        DispatchQueue.main.async { NSApp.terminate(nil) }
+        return false
+    }
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
         // Automatic feed signature errors may never reach the user driver.
-        if expected == "signature-error" { finishError(error) }
+        if expected == "signature-error" || expected == "automatic" { finishError(error) }
     }
     private func finishError(_ error: Error) {
         var details = "", current: NSError? = error as NSError, signatureFailure = false
