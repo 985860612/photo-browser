@@ -24,13 +24,19 @@ cleanup() {
 }
 trap cleanup EXIT
 PHOTO_PUBLIC_KEY=$("$PHOTO_BIN/UpdaterChecks" --generate-test-key "$PHOTO_TEST_ROOT/test-key")
-uv run --no-project python -u Tests/BrowserUpdateChecks/serve-fixtures.py "$PHOTO_TEST_ROOT" "$PHOTO_TEST_ROOT/port" > "$PHOTO_TEST_ROOT/server.log" 2>&1 &
+uv run --no-project --no-python-downloads --python "$(command -v python3)" python -u \
+  Tests/BrowserUpdateChecks/serve-fixtures.py "$PHOTO_TEST_ROOT" "$PHOTO_TEST_ROOT/port" > "$PHOTO_TEST_ROOT/server.log" 2>&1 &
 PHOTO_SERVER_PID=$!
-for ((i=0; i<100; i++)); do
+for ((i=0; i<300; i++)); do
   if [ -s "$PHOTO_TEST_ROOT/port" ]; then break; fi
   if ! kill -0 "$PHOTO_SERVER_PID" 2>/dev/null; then cat "$PHOTO_TEST_ROOT/server.log"; exit 1; fi
   sleep 0.1
 done
+if [ ! -s "$PHOTO_TEST_ROOT/port" ]; then
+  cat "$PHOTO_TEST_ROOT/server.log"
+  echo 'Local update test server did not become ready within 30 seconds.' >&2
+  exit 1
+fi
 PHOTO_PORT=$(cat "$PHOTO_TEST_ROOT/port")
 PHOTO_BASE_URL="http://127.0.0.1:$PHOTO_PORT"
 prepare_case() {
