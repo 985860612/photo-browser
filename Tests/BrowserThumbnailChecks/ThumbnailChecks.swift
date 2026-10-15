@@ -27,6 +27,7 @@ private final class Counts: @unchecked Sendable {
             try await workerChecks()
             try await gpsChecks()
             try networkReaderChecks()
+            try await livePhotoChecks()
             try await cacheChecks()
             try await displayCacheChecks()
             try await folderSizeChecks()

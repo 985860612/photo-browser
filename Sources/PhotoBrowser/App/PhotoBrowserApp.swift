@@ -39,7 +39,7 @@ import AppKit
                 Button(L10n.text("移到 _del 待删除目录")) { store.deleteSelection() }
                     .disabled(!store.canDeleteSelection).help(L10n.text("⌫ / Delete：将所选照片及配套文件移到 _del，可撤销"))
                 Divider()
-                if store.focusedFile?.kind == .video {
+                if store.playbackFile != nil {
                     Button(L10n.text("播放 / 暂停")) { store.toggleVideoPlayback() }.keyboardShortcut(.space, modifiers: [])
                         .disabled(store.selectedFolderID != nil || store.isMoving || store.isLoading)
                     Button(L10n.text("全屏播放")) { store.toggleFullscreenPreview() }.keyboardShortcut("f", modifiers: [.command, .control])
@@ -49,7 +49,7 @@ import AppKit
                 }
                 Button(L10n.text("切换网格 / 大图")) { store.showGroupOverview.toggle() }.keyboardShortcut("j")
                 Button(L10n.text("在 Camera Raw 中打开")) { if let asset = store.focusedAsset { store.openInCameraRaw(asset) } }
-                    .disabled(store.focusedAsset == nil || store.focusedAsset?.isVideo == true || store.isMoving)
+                    .disabled(store.focusedAsset == nil || store.focusedAsset?.isVideo == true || store.focusedAsset?.isLivePhoto == true || store.isMoving)
                 Button(L10n.text("将所选照片组成一组")) { store.createGroup() }.keyboardShortcut("g")
                     .disabled(store.selection.count < 2 || store.isMoving || store.isReadingMetadata)
                 Button(L10n.text("在 Finder 显示")) { store.revealFocused() }.keyboardShortcut("f", modifiers: [.command, .shift])

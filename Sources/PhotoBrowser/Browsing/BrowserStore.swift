@@ -19,9 +19,10 @@ import Combine
     @Published var selection: Set<String> = []
     @Published var selectedFolderID: String?
     @Published var navigationScrollTarget: String?
-    @Published var focusedID: String? { didSet { if focusedID != oldValue { video.stop(); observeFocusedFiles() } } }
-    @Published var preferredFileID: String? { didSet { if preferredFileID != oldValue, video.fileID != focusedFile?.id { video.stop() } } }
+    @Published var focusedID: String? { didSet { if focusedID != oldValue { video.stop(); livePhotoMotionID = nil; observeFocusedFiles() } } }
+    @Published var preferredFileID: String? { didSet { if preferredFileID != oldValue { if livePhotoMotionID != nil || video.fileID != focusedFile?.id { video.stop() }; livePhotoMotionID = nil } } }
     @Published var isLoading = false
+    @Published var livePhotoMotionID: String?
     @Published var isReadingMetadata = false
     @Published var isMoving = false
     let previewCoordinator: PreviewCoordinator
@@ -41,6 +42,7 @@ import Combine
         didSet { preferencesDefaults.set(diskLimitGB, forKey: "thumbnailDiskLimitGB") }
     }
     @Published var diskUsage: ThumbnailDiskUsage?
+    @Published var livePhotoDiskUsage: LivePhotoCache.Usage?
     @Published var previewStatistics: DisplayPhotoCache.Statistics?
     @Published var diagnostics = PreviewDiagnostics.shared.snapshot()
     @Published var cacheBusy = false
@@ -151,6 +153,10 @@ import Combine
         engine = ArchiveEngine(journalDirectory: support.appendingPathComponent("Moves", isDirectory: true))
         previewCoordinator.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &observations)
         captureDates.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &observations)
+        playback.livePhotoEnded = { [weak self] fileID in
+            guard let self, self.playbackFile?.id == fileID else { return }
+            self.livePhotoMotionID = nil
+        }
         Task { [weak self] in await self?.applyDecodeConcurrency() }
     }
 
@@ -163,9 +169,15 @@ import Combine
             ?? asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) }
             ?? asset.preferred
     }
+    var playbackFile: PhotoFile? {
+        guard selectedFolderID == nil else { return nil }
+        if let file = focusedFile, file.kind == .video { return file }
+        guard let asset = focusedAsset, livePhotoMotionID == asset.id else { return nil }
+        return asset.mediaFiles.first(where: \.isLivePhoto)
+    }
     var previewRequestID: String {
         let file = focusedFile
-        return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")|\(isFullscreenPreview)|\(previewContentRevision)|\(sortingRevision)"
+        return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")|\(isFullscreenPreview)|\(previewContentRevision)|\(sortingRevision)|\(livePhotoMotionID ?? "")"
     }
     var adjacentPreviewFiles: [PhotoFile] {
         guard selectedFolderID == nil, let index = visibleIndex(of: focusedID) else { return [] }
@@ -179,8 +191,8 @@ import Combine
     }
     func preparePreviewCache() async {
         await applyDecodeConcurrency()
-        let current = selectedFolderID == nil && !isMoving && !isLoading && focusedFile?.kind != .video ? focusedFile : nil
-        let neighbors = selectedFolderID == nil && !isMoving && !isLoading && focusedFile != nil ? adjacentPreviewFiles : []
+        let current = selectedFolderID == nil && !isMoving && !isLoading && playbackFile == nil ? focusedFile : nil
+        let neighbors = selectedFolderID == nil && !isMoving && !isLoading && playbackFile == nil && focusedFile != nil ? adjacentPreviewFiles : []
         let videos = selectedFolderID == nil && !isMoving && !isLoading ? adjacentVideoFiles : []
         await previewCoordinator.prepare(request: previewRequestID, current: current, neighbors: neighbors, videos: videos,
                                          hdr: hdrPreview, maximum: isFullscreenPreview ? nil : 2800)

@@ -2,6 +2,23 @@ import AppKit
 import BrowserCore
 
 extension BrowserStore {
+    func toggleLivePhotoPlayback(_ asset: PhotoAsset? = nil) {
+        guard !isMoving, !isLoading, let target = asset ?? focusedAsset, target.isLivePhoto else { return }
+        if livePhotoMotionID == target.id { video.stop(); livePhotoMotionID = nil; return }
+        select(target, modifiers: [])
+        startLivePhotoPlayback(target)
+    }
+    func startLivePhotoPlayback(_ asset: PhotoAsset) {
+        guard !isMoving, !isLoading, focusedID == asset.id, selectedFolderID == nil,
+              let file = asset.mediaFiles.first(where: \.isLivePhoto) else { return }
+        showGroupOverview = false
+        if livePhotoMotionID == asset.id {
+            if video.fileID == file.id, !video.loading, !video.isPlaying { video.toggle() }
+            return
+        }
+        livePhotoMotionID = asset.id
+        video.playWhenReady(file)
+    }
     func toggleFullscreenPreview() {
         guard !isMoving, selectedFolderID == nil, focusedFile != nil else { return }
         if isFullscreenPreview { closeFullscreenPreview(); return }
@@ -12,7 +29,7 @@ extension BrowserStore {
     }
 
     func toggleVideoPlayback() {
-        guard !isMoving, !isLoading, selectedFolderID == nil, let file = focusedFile, file.kind == .video else { return }
+        guard !isMoving, !isLoading, selectedFolderID == nil, let file = playbackFile else { return }
         if showGroupOverview { showGroupOverview = false; video.playWhenReady(file) }
         else if video.fileID == file.id { video.toggle() }
         else { video.playWhenReady(file) }

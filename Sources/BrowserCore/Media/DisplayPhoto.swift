@@ -27,7 +27,7 @@ enum OriginalPhotoDecoder {
                        check: () throws -> Void) throws -> DisplayPhoto {
         try check()
         let started = ProcessInfo.processInfo.systemUptime
-        guard let source = try NetworkPhotoReader.open(file, check: check) else {
+        guard let source = try PhotoMediaSource.open(file, check: check) else {
             throw BrowserFailure.message(L10n.text("无法读取原图：\(file.url.lastPathComponent)"))
         }
         var options: [CFString: Any] = [kCGImageSourceShouldCacheImmediately: true,

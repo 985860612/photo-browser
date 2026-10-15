@@ -57,7 +57,7 @@ struct InspectorView: View {
                 if file.kind != .video {
                     var seen: Set<String> = [], readHeader = false
                     var headerFailure: Error?
-                    for source in [asset.metadataFile, file, asset.preferred] where seen.insert(source.id).inserted {
+                    for source in [asset.metadataFile, file, asset.preferred] + asset.imageFiles.filter(\.isLivePhoto) where seen.insert(source.id).inserted {
                         if store.focusedAsset?.metadata?.lensModel != nil, store.focusedAsset?.metadata?.location != nil { break }
                         do {
                             let metadata = try await store.thumbnails.sourceMetadata(source)

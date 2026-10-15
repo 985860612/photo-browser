@@ -27,14 +27,15 @@ import BrowserCore
     }
 
     @MainActor static func run() async throws {
-        try mapChecks()
         try await directoryObserverChecks()
+        try mapChecks()
         try await coordinatorChecks()
         try await folderDeletionChecks()
         try await permanentMediaDeletionChecks()
         try await previewSortingChecks()
         try await continuityChecks()
         try await videoPlaybackChecks()
+        try await livePhotoPlaybackChecks()
         let fm = FileManager.default, defaults = UserDefaults.standard
         let lastDirectory = defaults.object(forKey: "lastDirectory")
         defer {

@@ -11,7 +11,10 @@ extension BrowserStore {
     func updateCacheStatus() async {
         diagnostics = PreviewDiagnostics.shared.snapshot()
         previewStatistics = await displayCache.statistics()
-        do { diskUsage = try await thumbnails.diskUsage(); cacheFailure = await thumbnails.diskMaintenanceError() }
+        do {
+            diskUsage = try await thumbnails.diskUsage(); cacheFailure = await thumbnails.diskMaintenanceError()
+            livePhotoDiskUsage = try await clipboardWorkers.run(background: true) { _ in try LivePhotoCache.shared.usage() }
+        }
         catch is CancellationError {}
         catch { cacheFailure = error.localizedDescription }
     }
@@ -35,7 +38,11 @@ extension BrowserStore {
         // Retain the displayed image/player; stop warming so clear does not immediately refill the cache.
         cancelPreviewGeneration(stopVideo: false)
         await displayCache.removeAll()
-        do { try await thumbnails.clear(); await updateCacheStatus() }
+        do {
+            try await thumbnails.clear()
+            try await clipboardWorkers.run(background: true) { _ in try LivePhotoCache.shared.clear() }
+            await updateCacheStatus()
+        }
         catch { cacheFailure = error.localizedDescription }
     }
 }

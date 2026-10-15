@@ -32,6 +32,7 @@ extension BrowserStore {
         }
         if event.keyCode == 49, focusedFile != nil, selectedFolderID == nil {
             if focusedFile?.kind == .video { if !event.isARepeat { toggleVideoPlayback() }; return nil }
+            if playbackFile?.isLivePhoto == true { if !event.isARepeat { video.toggle() }; return nil }
             toggleFullscreenPreview(); return nil
         }
         return event

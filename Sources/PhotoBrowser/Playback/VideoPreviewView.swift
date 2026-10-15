@@ -8,7 +8,7 @@ struct VideoPreviewView: View {
     var body: some View {
         ZStack {
             Color.black
-            NativeVideoPlayer(player: playback.player)
+            NativeVideoPlayer(player: playback.player, showsControls: !file.isLivePhoto)
             if playback.fileID == file.id {
                 if let failure = playback.failure {
                     ContentUnavailableView(L10n.text("视频播放失败"), systemImage: "film", description: Text(failure))
@@ -20,13 +20,18 @@ struct VideoPreviewView: View {
 
 private struct NativeVideoPlayer: NSViewRepresentable {
     let player: AVPlayer
+    let showsControls: Bool
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
-        view.controlsStyle = .floating; view.videoGravity = .resizeAspect; view.player = player
+        view.controlsStyle = showsControls ? .floating : .none; view.videoGravity = .resizeAspect; view.player = player
         view.showsFullScreenToggleButton = false
         view.showsSharingServiceButton = false
         return view
     }
-    func updateNSView(_ view: AVPlayerView, context: Context) { if view.player !== player { view.player = player } }
+    func updateNSView(_ view: AVPlayerView, context: Context) {
+        let style: AVPlayerViewControlsStyle = showsControls ? .floating : .none
+        if view.controlsStyle != style { view.controlsStyle = style }
+        if view.player !== player { view.player = player }
+    }
     static func dismantleNSView(_ view: AVPlayerView, coordinator: ()) { view.player = nil }
 }
