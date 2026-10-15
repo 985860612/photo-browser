@@ -74,7 +74,6 @@ enum ThumbnailImageDecoder {
     static func readOrGenerate(_ file: PhotoFile, maximum: Int, key: String,
                                                    directory: URL, disk: ThumbnailDiskStore, token: UUID, check: () throws -> Void) throws -> LoadedPreview {
         if let saved = try disk.read({ try readCached(key: key, directory: directory, check: check) }) { return saved }
-        let context = CIContext(options: [.cacheIntermediates: false])
         var source: CGImageSource?
         var orientation: Int32 = 1
         var embedded = false
@@ -94,7 +93,7 @@ enum ThumbnailImageDecoder {
                 embedded = true
             }
         }
-        if source == nil { source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) }
+        if source == nil { source = try NetworkPhotoReader.open(file, check: check) }
         guard let source else { throw BrowserFailure.message(L10n.text("无法读取 \(file.url.lastPathComponent)")) }
         let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
                                       kCGImageSourceThumbnailMaxPixelSize: maximum,
@@ -104,6 +103,7 @@ enum ThumbnailImageDecoder {
             throw BrowserFailure.message(L10n.text("系统无法生成 \(file.format) 预览：\(file.url.lastPathComponent)。可切换同名其他格式或在 Finder 打开原文件。"))
         }
         if embedded, orientation != 1 {
+            let context = CIContext(options: [.cacheIntermediates: false])
             let ci = CIImage(cgImage: cg).oriented(forExifOrientation: orientation)
             guard let rotated = context.createCGImage(ci, from: ci.extent) else { throw BrowserFailure.message(L10n.text("无法校正照片方向。")) }
             cg = rotated

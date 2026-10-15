@@ -25,6 +25,7 @@ private final class Counts: @unchecked Sendable {
     static func main() async {
         do {
             try await workerChecks()
+            try networkReaderChecks()
             try await cacheChecks()
             try await displayCacheChecks()
             try await folderSizeChecks()

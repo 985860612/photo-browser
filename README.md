@@ -39,7 +39,7 @@ Examples from the Simplified Chinese interface. English is also supported.
 - **Browsing diagnostics:** the status bar shows how many neighboring photo previews are actually resident. Settings shows memory use, foreground cache hits, and queue/source-open/decode/GPU-completion durations, with the latest 100 requests retained for this session. Decoding can include file I/O; the figures do not claim to separate all disk reads from decoder work.
 - **Cache management:** Settings shows local thumbnail/video-cover storage and a configurable 1–20 GB quota (default 2 GB). Eviction follows recent access, including across launches. Clear Preview Cache releases decoded RAM and removes local thumbnails/covers; the displayed image/player, original files, groups, move history, folder indexes, and playback positions are retained. Background warming stops after clearing; thumbnails regenerate on demand.
 - **Video continuity:** playback position, volume, and mute survive switching and reopening. Restoring a video leaves it paused unless explicitly played; completed or replaced videos start at the beginning. Neighbor preparation loads bounded video information without starting a second player.
-- **External edits:** directory/file events update the current view without resetting selection, search, or existing groups. Fast checks every three seconds and a full reconciliation every 30 seconds cover missed network-volume events; reactivating the app also checks for changes. Changed image/XMP families invalidate previews. Native RAW decoding still does not apply Camera Raw's XMP development instructions.
+- **External edits:** directory/file events update the current view without resetting selection, search, or existing groups. Every three seconds, lightweight checks inspect the directory timestamp and focused files; there are no periodic full scans. Events, detected changes, reactivating the app, and ⌘R can request a full scan. Changed image/XMP families invalidate previews. Native RAW decoding still does not apply Camera Raw's XMP development instructions.
 - **Clipboard:** Command-C copies selected files and their paired formats/sidecars for pasting in Finder. Command-Shift-C copies a full-resolution still image for pasting into messages or documents. Right-click menus provide both actions; video copying uses the file action.
 - **English and Simplified Chinese:** menus, buttons, tooltips, status text, dialogs, capture settings, and application error messages are localized.
 
@@ -148,3 +148,7 @@ New features should have a clear state owner and dedicated views/tests. Review f
 ## License
 
 [MIT](LICENSE). Copyright © 2026 wangxiaojie.
+
+## Network photo reads
+
+Network JPEGs up to 32 MiB are read sequentially into a bounded buffer before ImageIO decoding; larger files and other codecs retain native URL decoding. Thumbnail resolution and original metadata are preserved. The decoder creates a Core Image context only when a RAW embedded preview needs rotation. Directory monitoring no longer performs a full scan on a 30-second timer: lightweight checks detect directory/current-file changes, while filesystem events, activation, and manual refresh reconcile the contents. Initial generation still needs to read each uncached original over the network.
