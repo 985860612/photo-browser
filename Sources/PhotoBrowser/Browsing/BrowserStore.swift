@@ -25,6 +25,7 @@ import Combine
     @Published var livePhotoMotionID: String?
     @Published var isReadingMetadata = false
     @Published var isMoving = false
+    @Published var isExportingLivePhotoVideo = false
     let previewCoordinator: PreviewCoordinator
     var isGeneratingPreviews: Bool { previewCoordinator.thumbnailsProgress.running }
     var previewCompleted: Int { previewCoordinator.thumbnailsProgress.completed }

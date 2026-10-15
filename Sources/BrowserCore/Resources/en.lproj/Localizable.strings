@@ -390,3 +390,14 @@
 "当前已是最新版本。" = "You’re up to date.";
 "检查更新失败：%@" = "Unable to check for updates: %@";
 "文件操作完成后将安装更新并重新启动。" = "The update will install and relaunch after file operations finish.";
+"导出视频…" = "Export Video…";
+"导出实况视频" = "Export Live Photo Video";
+"正在导出实况视频…" = "Exporting Live Photo video…";
+"已导出视频：%@" = "Exported video: %@";
+"请选择 LIVP 实况照片。" = "Select a LIVP Live Photo.";
+"无法覆盖原始 LIVP 或缓存视频。" = "Cannot overwrite the original LIVP or cached movie.";
+"导出 %@ 个实况视频" = "Export %@ Live Photo Videos";
+"导出 %@ 个视频…" = "Export %@ Videos…";
+"正在导出视频：%@/%@" = "Exporting videos: %@/%@";
+"已导出 %@ 个视频，%@ 个失败" = "Exported %@ videos; %@ failed";
+"导出" = "Export";
