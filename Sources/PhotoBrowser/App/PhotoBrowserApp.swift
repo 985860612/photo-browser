@@ -4,6 +4,7 @@ import AppKit
 
 @main struct PhotoBrowserApp: App {
     @StateObject private var store = BrowserStore()
+    @StateObject private var updater = AppUpdater()
     @NSApplicationDelegateAdaptor(BrowserDelegate.self) private var delegate
 
     var body: some Scene {
@@ -14,10 +15,17 @@ import AppKit
             }.environmentObject(store)
                 .frame(minWidth: 1080, minHeight: 700)
                 .preferredColorScheme(.dark)
-                .task { store.start(); delegate.store = store }
+                .task {
+                    store.start(); delegate.store = store
+                    updater.start { [weak store] in store?.isMoving == true }
+                }
         }
         .defaultSize(width: 1440, height: 940)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button(L10n.text("检查更新…")) { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+            }
             CommandGroup(replacing: .newItem) {
                 Button(L10n.text("打开照片目录…")) { store.chooseDirectory() }.keyboardShortcut("o")
                 Button(L10n.text("刷新目录")) { store.refreshDirectory() }.keyboardShortcut("r")
@@ -56,7 +64,7 @@ import AppKit
             }
         }
         Settings {
-            PreviewSettingsView().environmentObject(store)
+            PreviewSettingsView().environmentObject(store).environmentObject(updater)
         }
     }
 }

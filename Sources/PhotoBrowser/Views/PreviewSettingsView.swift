@@ -8,6 +8,7 @@ struct PreviewSettingsView: View {
     @State private var windowHeight: CGFloat = 660
     var body: some View {
         Form {
+            UpdateSettingsView()
             Section {
                 Stepper(value: $store.previewBefore, in: PreviewPreferences.range) {
                     HStack { Text(L10n.text("向前预加载")); Spacer(); Text(L10n.text("\(store.previewBefore) 张")).monospacedDigit() }
