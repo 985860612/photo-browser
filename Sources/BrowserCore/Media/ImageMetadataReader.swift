@@ -22,6 +22,15 @@ public enum ImageMetadataReader {
         value.height = (props[kCGImagePropertyPixelHeight as String] as? NSNumber)?.intValue
         let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any]
         value.camera = tiff?[kCGImagePropertyTIFFModel as String] as? String
+        let gps = props[kCGImagePropertyGPSDictionary as String] as? [String: Any] ?? [:]
+        if let location = PhotoLocation(exifLatitude: (gps[kCGImagePropertyGPSLatitude as String] as? NSNumber)?.doubleValue,
+                                        latitudeRef: gps[kCGImagePropertyGPSLatitudeRef as String] as? String,
+                                        exifLongitude: (gps[kCGImagePropertyGPSLongitude as String] as? NSNumber)?.doubleValue,
+                                        longitudeRef: gps[kCGImagePropertyGPSLongitudeRef as String] as? String,
+                                        altitude: (gps[kCGImagePropertyGPSAltitude as String] as? NSNumber)?.doubleValue,
+                                        belowSeaLevel: (gps[kCGImagePropertyGPSAltitudeRef as String] as? NSNumber)?.intValue == 1) {
+            value.gpsLatitude = location.latitude; value.gpsLongitude = location.longitude; value.gpsAltitude = location.altitude
+        }
         if let captured = exif[kCGImagePropertyExifDateTimeOriginal as String] as? String {
             let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
             value.captured = formatter.date(from: captured)

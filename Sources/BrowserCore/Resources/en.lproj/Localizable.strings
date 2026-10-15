@@ -360,3 +360,10 @@
 "已永久删除 %@ 个项目、%@ 个文件" = "Permanently deleted %@ items and %@ files";
 "删除列表为空或包含重复文件。" = "The deletion list is empty or contains duplicate files.";
 "只能删除当前目录中的文件。" = "Only files in the current folder can be deleted.";
+"拍摄位置" = "Capture Location";
+"纬度" = "Latitude";
+"经度" = "Longitude";
+"海拔" = "Altitude";
+"在地图中打开" = "Open in Maps";
+"此照片没有有效的 GPS 坐标。" = "This photo has no valid GPS coordinates.";
+"无法打开地图，请确认已安装苹果地图。" = "Unable to open Maps. Make sure Apple Maps is installed.";
