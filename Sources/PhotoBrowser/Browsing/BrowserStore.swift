@@ -9,7 +9,8 @@ import Combine
     @Published var groups: [PhotoGroup] = [] { didSet { visibleOrdering = nil } }
     @Published var scope = "all" { didSet { visibleOrdering = nil } }
     @Published var search = "" { didSet { visibleOrdering = nil } }
-    var visibleOrdering: [PhotoAsset]?
+    var visibleOrdering: [PhotoAsset]? { didSet { visiblePositions = nil } }
+    private var visiblePositions: [String: Int]?
     @Published var previewSortField: PreviewSortField = .original { didSet { if oldValue != previewSortField { sortingChanged() } } }
     @Published var previewSortDescending = false { didSet { if oldValue != previewSortDescending { sortingChanged() } } }
     @Published var sortingRevision = UUID()
@@ -167,13 +168,13 @@ import Combine
         return "\(file?.id ?? "")|\(file?.size ?? 0)|\(file?.modified.timeIntervalSince1970 ?? 0)|\(hdrPreview)|\(preferRawPreview)|\(previewBefore)|\(previewAfter)|\(scope)|\(search)|\(selectedFolderID ?? "")|\(isFullscreenPreview)|\(previewContentRevision)|\(sortingRevision)"
     }
     var adjacentPreviewFiles: [PhotoFile] {
-        guard selectedFolderID == nil, let index = visibleAssets.firstIndex(where: { $0.id == focusedID }) else { return [] }
+        guard selectedFolderID == nil, let index = visibleIndex(of: focusedID) else { return [] }
         return PreviewPreferences.neighbors(in: visibleAssets, index: index, before: previewBefore, after: previewAfter).filter { !$0.isVideo }.map { asset in
             asset.imageFiles.first { $0.kind == (preferRawPreview ? .raw : .rendered) } ?? asset.preferred
         }
     }
     var adjacentVideoFiles: [PhotoFile] {
-        guard selectedFolderID == nil, let index = visibleAssets.firstIndex(where: { $0.id == focusedID }) else { return [] }
+        guard selectedFolderID == nil, let index = visibleIndex(of: focusedID) else { return [] }
         return PreviewPreferences.neighbors(in: visibleAssets, index: index, before: previewBefore, after: previewAfter).filter(\.isVideo).map(\.preferred)
     }
     func preparePreviewCache() async {
@@ -197,6 +198,13 @@ import Combine
         let ordered = AssetOrdering.visible(assets, groups: groups, scope: scope, search: search,
                                             field: previewSortField, descending: previewSortDescending)
         visibleOrdering = ordered; return ordered
+    }
+    func visibleIndex(of id: String?) -> Int? {
+        guard let id else { return nil }
+        if let visiblePositions { return visiblePositions[id] }
+        let positions = Dictionary(visibleAssets.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: min)
+        visiblePositions = positions
+        return positions[id]
     }
     var groupAssets: [PhotoAsset] {
         guard let group = currentGroup else { return [] }

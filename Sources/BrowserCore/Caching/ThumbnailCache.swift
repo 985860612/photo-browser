@@ -13,6 +13,7 @@ public actor ThumbnailCache {
         let task: Task<Void, Never>
         var waiters: [UUID: CheckedContinuation<LoadedPreview, Error>]
         var keepInMemory: Bool
+        let priority: PreviewWorkPriority
     }
     private let memory = NSCache<NSString, Entry>()
     private struct SourceMetadata: Codable { let metadata: PhotoMetadata? }
@@ -34,7 +35,7 @@ public actor ThumbnailCache {
     private var maintenanceID = UUID()
     private var knownKeys: [String: Set<String>] = [:]
 
-    public init(directory: URL? = nil, workers: PreviewWorkQueue = .shared, diskLimit: Int64 = 2_000_000_000) {
+    public init(directory: URL? = nil, workers: PreviewWorkQueue = PreviewWorkQueue(backgroundConcurrency: 2), diskLimit: Int64 = 2_000_000_000) {
         let directory = directory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("PhotoBrowser/Thumbnails", isDirectory: true)
         self.directory = directory
@@ -111,26 +112,28 @@ public actor ThumbnailCache {
                     current.waiters[waiter] = continuation
                     current.keepInMemory = current.keepInMemory || !background
                     pending[key] = current
+                    if !background { current.priority.promote() }
                     return
                 }
                 let ticket = UUID(), directory = directory, workers = workers, disk = disk, diskToken = disk.token(key)
+                let priority = PreviewWorkPriority()
                 let task = Task {
                     let result: Result<LoadedPreview, Error>
                     do {
                         let preview: LoadedPreview
                         if file.kind == .video {
-                            let saved = try await workers.run(background: background) { check in
+                            let saved = try await workers.run(background: background, priority: priority) { check in
                                 try disk.read { try ThumbnailImageDecoder.readCached(key: key, directory: directory, check: check) }
                             }
                             if let saved { preview = saved }
                             else {
                                 let generated = try await VideoMedia.preview(file, maximum: maximum, background: background)
-                                preview = try await workers.run(background: background) { check in
+                                preview = try await workers.run(background: background, priority: priority) { check in
                                     try ThumbnailImageDecoder.saveVideo(generated, key: key, disk: disk, token: diskToken, check: check)
                                 }
                             }
                         } else {
-                            preview = try await workers.run(background: background) { check in
+                            preview = try await workers.run(background: background, priority: priority) { check in
                                 try ThumbnailImageDecoder.readOrGenerate(file, maximum: maximum, key: key, directory: directory, disk: disk, token: diskToken, check: check)
                             }
                         }
@@ -138,7 +141,7 @@ public actor ThumbnailCache {
                     } catch { result = .failure(error) }
                     finish(key, ticket: ticket, result: result)
                 }
-                pending[key] = Pending(ticket: ticket, task: task, waiters: [waiter: continuation], keepInMemory: !background)
+                pending[key] = Pending(ticket: ticket, task: task, waiters: [waiter: continuation], keepInMemory: !background, priority: priority)
             }
         } onCancel: {
             Task { await self.cancel(key, waiter: waiter) }
@@ -211,13 +214,14 @@ public actor ThumbnailCache {
         guard maintenance == nil else { return }
         let ticket = UUID(); maintenanceID = ticket
         maintenance = Task { [weak self] in
-            // Coalesce rapid hits; do not enumerate local cache files for every thumbnail.
-            try? await Task.sleep(for: .seconds(2))
             await self?.performMaintenance(ticket)
         }
     }
     private func performMaintenance(_ ticket: UUID) async {
         while !Task.isCancelled, maintenanceID == ticket, maintenanceNeeded {
+            // Even continuous writes get at most one maintenance pass per interval.
+            do { try await Task.sleep(for: .seconds(2)) } catch { break }
+            guard !Task.isCancelled, maintenanceID == ticket else { break }
             maintenanceNeeded = false
             do { try await trim(); maintenanceFailure = nil }
             catch is CancellationError { break }

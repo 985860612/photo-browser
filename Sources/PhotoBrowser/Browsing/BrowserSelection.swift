@@ -25,9 +25,9 @@ extension BrowserStore {
         navigationScrollTarget = nil
         selectedFolderID = nil
         let list = visibleAssets
-        if modifiers.contains(.shift), let b = list.firstIndex(where: { $0.id == asset.id }) {
+        if modifiers.contains(.shift), let b = visibleIndex(of: asset.id) {
             let anchor = selectionAnchorID ?? focusedID ?? asset.id
-            let a = list.firstIndex(where: { $0.id == anchor }) ?? list.firstIndex(where: { $0.id == focusedID }) ?? b
+            let a = visibleIndex(of: anchor) ?? visibleIndex(of: focusedID) ?? b
             selectionAnchorID = list[a].id
             let visibleIDs = Set(list.map(\.id))
             let base = (rangeSelectionBase ?? selection).intersection(visibleIDs)
@@ -53,7 +53,7 @@ extension BrowserStore {
         let index: Int?
         if let folder = selectedFolderID, let position = folders.firstIndex(where: { $0.path == folder }) {
             index = position
-        } else if selectedFolderID == nil, let position = list.firstIndex(where: { $0.id == focusedID }) {
+        } else if selectedFolderID == nil, let position = visibleIndex(of: focusedID) {
             index = folders.count + position
         } else { index = nil }
         let next = index.map { max(0, min(total - 1, $0 + offset)) } ?? 0

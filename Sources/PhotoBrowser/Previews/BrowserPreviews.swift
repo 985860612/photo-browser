@@ -17,11 +17,8 @@ extension BrowserStore {
     func prioritizePreviews(_ files: [PhotoFile]) { previewCoordinator.prioritize(files) }
 
     func previewAppeared(_ asset: PhotoAsset) {
-        guard isGeneratingPreviews else { return }
-        let list = visibleAssets
-        guard let index = list.firstIndex(where: { $0.id == asset.id }) else { return }
-        // Warm the following screenful before the user scrolls into it.
-        prioritizePreviews(list[max(0, index - 4)..<min(list.count, index + 25)].map(\.preferred))
+        guard isGeneratingPreviews, let index = visibleIndex(of: asset.id) else { return }
+        previewCoordinator.prioritize(around: index, in: visibleAssets)
     }
 
 }

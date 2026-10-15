@@ -39,7 +39,10 @@ struct ThumbnailProgress {
     private var context: Context?
     private var thumbnailTask: Task<Void, Never>?
     private var thumbnailTicket = UUID()
-    private var thumbnailQueue: [PhotoFile] = []
+    private var thumbnailQueue: ThumbnailWarmQueue?
+    private var priorityTask: Task<Void, Never>?
+    private var priorityAnchor: (index: Int, assets: [PhotoAsset], revision: Int)?
+    private var priorityRevision = 0
     private let thumbnails: ThumbnailCache
     private let cache: DisplayPhotoCache
     private let video: VideoPlayback
@@ -57,7 +60,8 @@ struct ThumbnailProgress {
         guard self.request == request, !Task.isCancelled else { return }
         let ready = await cache.readyCount(neighbors, hdr: hdr, maximum: maximum)
         guard self.request == request, !Task.isCancelled else { return }
-        adjacentTotal = neighbors.count; adjacentReady = ready
+        if adjacentTotal != neighbors.count { adjacentTotal = neighbors.count }
+        if adjacentReady != ready { adjacentReady = ready }
         let keys = neighbors.map { Key(file: $0, hdr: hdr, maximum: maximum) }
         var retained = Set(keys)
         // A neighbor becoming visible keeps its decode; the foreground promotes shared work.
@@ -86,67 +90,115 @@ struct ThumbnailProgress {
     func updateReadiness(request: String, neighbors: [PhotoFile], videos: [PhotoFile], hdr: Bool, maximum: Int?) async {
         let ready = await cache.readyCount(neighbors, hdr: hdr, maximum: maximum)
         guard self.request == request, !Task.isCancelled else { return }
-        adjacentTotal = neighbors.count; adjacentReady = ready
-        adjacentVideoTotal = min(8, videos.count)
-        adjacentVideoReady = min(adjacentVideoTotal, video.preparedCount)
+        if adjacentTotal != neighbors.count { adjacentTotal = neighbors.count }
+        if adjacentReady != ready { adjacentReady = ready }
+        let videoTotal = min(8, videos.count), videoReady = min(videoTotal, video.preparedCount)
+        if adjacentVideoTotal != videoTotal { adjacentVideoTotal = videoTotal }
+        if adjacentVideoReady != videoReady { adjacentVideoReady = videoReady }
     }
 
     func cancelAdjacent() {
         request = nil; context = nil
         for job in jobs.values { job.task.cancel() }
         jobs.removeAll()
-        adjacentReady = 0; adjacentTotal = 0
-        adjacentVideoReady = 0; adjacentVideoTotal = 0
+        if adjacentReady != 0 { adjacentReady = 0 }
+        if adjacentTotal != 0 { adjacentTotal = 0 }
+        if adjacentVideoReady != 0 { adjacentVideoReady = 0 }
+        if adjacentVideoTotal != 0 { adjacentVideoTotal = 0 }
         video.cancelPreparation()
     }
 
     func cancel() {
         cancelAdjacent()
         thumbnailTicket = UUID(); thumbnailTask?.cancel(); thumbnailTask = nil
-        thumbnailQueue = []; thumbnailsProgress = ThumbnailProgress()
+        priorityTask?.cancel(); priorityTask = nil; priorityAnchor = nil
+        thumbnailQueue = nil; thumbnailsProgress = ThumbnailProgress()
     }
 
     func start(files: [PhotoFile], priority: [PhotoFile]) {
         cancel()
         guard !files.isEmpty else { return }
-        thumbnailQueue = files
+        let queue = ThumbnailWarmQueue(files: files, priority: priority)
+        thumbnailQueue = queue
         thumbnailsProgress = ThumbnailProgress(running: true, total: files.count)
-        prioritize(priority)
         let ticket = thumbnailTicket
         thumbnailTask = Task { [weak self] in
             guard let self else { return }
             var completed = 0, failures = 0, details: [String] = []
             var lastUpdate = Date.distantPast
-            while thumbnailTicket == ticket, !Task.isCancelled, !thumbnailQueue.isEmpty {
-                let file = thumbnailQueue.removeFirst()
-                do { _ = try await thumbnails.image(file, maximum: 520, background: true) }
-                catch is CancellationError { return }
-                catch {
-                    failures += 1
-                    if details.count < 20 { details.append("\(file.url.lastPathComponent)：\(error.localizedDescription)") }
+            let finished = await withTaskGroup(of: ThumbnailCompletion.self, returning: Bool.self) { group in
+                @MainActor func enqueue() async {
+                    guard self.thumbnailTicket == ticket, !Task.isCancelled, let file = await queue.next() else { return }
+                    guard self.thumbnailTicket == ticket, !Task.isCancelled else { return }
+                    let cache = self.thumbnails
+                    group.addTask {
+                        do { _ = try await cache.image(file, maximum: 520, background: true); return ThumbnailCompletion() }
+                        catch is CancellationError { return ThumbnailCompletion(cancelled: true) }
+                        catch { return ThumbnailCompletion(failure: "\(file.url.lastPathComponent)：\(error.localizedDescription)") }
+                    }
                 }
-                guard thumbnailTicket == ticket, !Task.isCancelled else { return }
-                completed += 1
-                // Batch cache-hit updates instead of redrawing the gallery for each file.
-                if Date().timeIntervalSince(lastUpdate) >= 0.25 || thumbnailQueue.isEmpty {
-                    thumbnailsProgress = ThumbnailProgress(running: true, completed: completed, total: files.count,
-                                                           failures: failures, details: details.joined(separator: "\n"))
-                    lastUpdate = Date()
+                // Bound the producer as well as the decoding queue; never enqueue the whole library.
+                await enqueue(); await enqueue()
+                while let result = await group.next() {
+                    guard self.thumbnailTicket == ticket, !Task.isCancelled, !result.cancelled else { group.cancelAll(); return false }
+                    completed += 1
+                    if let failure = result.failure {
+                        failures += 1
+                        if details.count < 20 { details.append(failure) }
+                    }
+                    await enqueue()
+                    if Date().timeIntervalSince(lastUpdate) >= 0.5 || completed == files.count {
+                        self.thumbnailsProgress = ThumbnailProgress(running: true, completed: completed, total: files.count,
+                                                               failures: failures, details: details.joined(separator: "\n"))
+                        lastUpdate = Date()
+                    }
                 }
+                return true
             }
             guard thumbnailTicket == ticket, !Task.isCancelled else { return }
+            guard finished else { finishThumbnails(); return }
             do { try await thumbnails.trim() }
             catch is CancellationError { return }
             catch { thumbnailsProgress.details += L10n.text("\n缓存清理失败：\(error.localizedDescription)") }
             guard thumbnailTicket == ticket, !Task.isCancelled else { return }
-            thumbnailsProgress.running = false; thumbnailTask = nil
+            finishThumbnails()
         }
     }
 
-    func prioritize(_ files: [PhotoFile]) {
-        guard thumbnailsProgress.running else { return }
-        let rank = Dictionary(files.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: min)
-        let priority = thumbnailQueue.filter { rank[$0.id] != nil }.sorted { rank[$0.id]! < rank[$1.id]! }
-        thumbnailQueue = priority + thumbnailQueue.filter { rank[$0.id] == nil }
+    private func finishThumbnails() {
+        priorityTask?.cancel(); priorityTask = nil; priorityAnchor = nil; thumbnailQueue = nil
+        thumbnailsProgress.running = false; thumbnailTask = nil
     }
+
+    func prioritize(_ files: [PhotoFile]) {
+        guard thumbnailsProgress.running, let queue = thumbnailQueue else { return }
+        priorityTask?.cancel(); priorityTask = nil; priorityAnchor = nil
+        priorityRevision += 1
+        let revision = priorityRevision
+        Task { await queue.prioritize(files, revision: revision) }
+    }
+
+    func prioritize(around index: Int, in assets: [PhotoAsset]) {
+        guard thumbnailsProgress.running, let queue = thumbnailQueue else { return }
+        priorityRevision += 1
+        priorityAnchor = (index, assets, priorityRevision)
+        guard priorityTask == nil else { return }
+        let ticket = thumbnailTicket
+        priorityTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            guard let self, self.thumbnailTicket == ticket, !Task.isCancelled else { return }
+            let anchor = self.priorityAnchor
+            self.priorityAnchor = nil
+            if let anchor { await queue.prioritize(around: anchor.index, in: anchor.assets, revision: anchor.revision) }
+            guard self.thumbnailTicket == ticket, !Task.isCancelled else { return }
+            self.priorityTask = nil
+            // Card appearances while the actor was working belong to the next bounded batch.
+            if let anchor = self.priorityAnchor { self.prioritize(around: anchor.index, in: anchor.assets) }
+        }
+    }
+}
+
+private struct ThumbnailCompletion: Sendable {
+    var failure: String?
+    var cancelled = false
 }
