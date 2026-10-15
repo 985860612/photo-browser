@@ -16,6 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - name: Build and sign check executables
+        run: |
+          for PHOTO_CHECK_PRODUCT in BrowserCoreChecks BrowserThumbnailChecks BrowserHDRChecks BrowserLocalizationChecks; do
+            swift build --product "$PHOTO_CHECK_PRODUCT"
+            PHOTO_CHECK_BINARY="$(swift build --show-bin-path)/$PHOTO_CHECK_PRODUCT"
+            codesign --force --sign - "$PHOTO_CHECK_BINARY"
+            codesign --verify --strict "$PHOTO_CHECK_BINARY"
+          done
       - name: Check pairing, grouping, move safety, and recovery
         run: swift run BrowserCoreChecks
       - name: Check preview selection and folder navigation
