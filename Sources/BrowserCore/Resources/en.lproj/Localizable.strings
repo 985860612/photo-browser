@@ -377,6 +377,19 @@
 "此 LIVP 没有可播放的实况视频。" = "This LIVP contains no playable Live Photo video.";
 "无法创建 LIVP 本地缓存。" = "Unable to create the local LIVP cache.";
 "LIVP 缓存已满，请停止其他实况播放后重试。" = "LIVP cache is full. Stop other Live Photo playback and try again.";
+"检查更新…" = "Check for Updates…";
+"软件更新" = "Software Update";
+"当前版本" = "Current Version";
+"自动检查更新" = "Automatically check for updates";
+"自动下载并安装更新" = "Automatically download and install updates";
+"启动时及每隔 24 小时检查新版。开启自动更新后，在后台下载并在退出时安装；也可立即安装并重新启动。" = "Check at launch and every 24 hours. Automatic updates download in the background and install on quit; you can also install and relaunch immediately.";
+"上次检查" = "Last Checked";
+"请使用打包后的应用检查更新。" = "Use the packaged app to check for updates.";
+"更新启动失败：%@" = "Unable to start updates: %@";
+"发现新版本：%@" = "New version available: %@";
+"当前已是最新版本。" = "You’re up to date.";
+"检查更新失败：%@" = "Unable to check for updates: %@";
+"文件操作完成后将安装更新并重新启动。" = "The update will install and relaunch after file operations finish.";
 "导出视频…" = "Export Video…";
 "导出实况视频" = "Export Live Photo Video";
 "正在导出实况视频…" = "Exporting Live Photo video…";
@@ -388,3 +401,5 @@
 "正在导出视频：%@/%@" = "Exporting videos: %@/%@";
 "已导出 %@ 个视频，%@ 个失败" = "Exported %@ videos; %@ failed";
 "导出" = "Export";
+"文件操作正在进行，请等待完成" = "File operations are in progress. Please wait.";
+"文件操作完成后即可退出。" = "You can quit after file operations finish.";

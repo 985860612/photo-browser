@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Version</key><string>0.4.12</string>
+<key>Build</key><string>17</string>
+<key>FeedURL</key><string>https://github.com/985860612/photo-browser/releases/latest/download/appcast.xml</string>
+<key>PublicEDKey</key><string>3JJr3XAkuwDaAZTUnr53WPFFZLdaA0ukEj7CY704jns=</string>
+<key>SigningAccount</key><string>local.wxj.PhotoBrowser</string>
+</dict></plist>

@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       - name: Check pairing, grouping, move safety, and recovery
         run: swift run BrowserCoreChecks
       - name: Check preview selection and folder navigation
@@ -27,6 +28,8 @@ jobs:
         run: PHOTO_BROWSER_UNIVERSAL=1 bash scripts/build-app.sh
       - name: Check both languages and packaged resources
         run: bash scripts/check-localization.sh 'dist/照片浏览器.app'
+      - name: Check signed updates, tampering rejection, installation and relaunch
+        run: bash scripts/check-update-installation.sh 'dist/照片浏览器.app'
       - name: Verify app signature and architectures
         run: |
           codesign --verify --deep --strict 'dist/照片浏览器.app'

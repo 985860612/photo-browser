@@ -4,6 +4,7 @@ import AppKit
 
 @main struct PhotoBrowserApp: App {
     @StateObject private var store = BrowserStore()
+    @StateObject private var updater = AppUpdater()
     @NSApplicationDelegateAdaptor(BrowserDelegate.self) private var delegate
 
     var body: some Scene {
@@ -14,10 +15,17 @@ import AppKit
             }.environmentObject(store)
                 .frame(minWidth: 1080, minHeight: 700)
                 .preferredColorScheme(.dark)
-                .task { store.start(); delegate.store = store }
+                .task {
+                    store.start(); delegate.store = store
+                    updater.start { [weak store] in store?.isMoving == true || store?.isExportingLivePhotoVideo == true }
+                }
         }
         .defaultSize(width: 1440, height: 940)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button(L10n.text("检查更新…")) { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+            }
             CommandGroup(replacing: .newItem) {
                 Button(L10n.text("打开照片目录…")) { store.chooseDirectory() }.keyboardShortcut("o")
                 Button(L10n.text("刷新目录")) { store.refreshDirectory() }.keyboardShortcut("r")
@@ -56,7 +64,7 @@ import AppKit
             }
         }
         Settings {
-            PreviewSettingsView().environmentObject(store)
+            PreviewSettingsView().environmentObject(store).environmentObject(updater)
         }
     }
 }
@@ -75,10 +83,10 @@ import AppKit
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationDidBecomeActive(_ notification: Notification) { store?.scheduleAutomaticRefresh(full: true) }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if store?.isMoving == true {
+        if store?.isMoving == true || store?.isExportingLivePhotoVideo == true {
             let alert = NSAlert()
-            alert.messageText = L10n.text("文件正在移动，请等待完成")
-            alert.informativeText = L10n.text("移动完成后即可退出。"); alert.addButton(withTitle: L10n.text("继续等待")); alert.runModal()
+            alert.messageText = L10n.text("文件操作正在进行，请等待完成")
+            alert.informativeText = L10n.text("文件操作完成后即可退出。"); alert.addButton(withTitle: L10n.text("继续等待")); alert.runModal()
             return .terminateCancel
         }
         store?.cancelMetadata()

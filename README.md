@@ -12,6 +12,8 @@ The app is called **Photo Browser** in English and **照片浏览器** in Simpli
 
 Release builds are ad-hoc signed, without Apple notarization. If macOS blocks the downloaded app, use System Settings → Privacy & Security → Open Anyway after verifying that you downloaded it from this repository. You can also build it from source.
 
+Starting with v0.4.12, the app checks for updates at launch and every 24 hours. Use **Photo Browser → Check for Updates…** to check manually. In Settings → Software Update you can disable checks or opt into automatic downloads and installation on quit. Update prompts support installing and relaunching immediately, skipping a version, or being reminded later. Restart waits for ongoing file moves, deletions and video exports. Updates and their feed are verified with Ed25519 signatures. Versions through v0.4.11 need one manual upgrade to gain the updater; `swift run` does not enable updates. See [release instructions](docs/updates.md).
+
 ## Screenshots
 
 Examples from the Simplified Chinese interface. English is also supported.
