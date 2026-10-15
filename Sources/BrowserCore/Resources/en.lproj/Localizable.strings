@@ -403,3 +403,9 @@
 "导出" = "Export";
 "文件操作正在进行，请等待完成" = "File operations are in progress. Please wait.";
 "文件操作完成后即可退出。" = "You can quit after file operations finish.";
+
+"%@ 个视频" = "Videos: %@";
+"%@ 张照片 · %@ 个视频 · %@ 个媒体文件 · %@ 个分组" = "Photos: %@ · Videos: %@ · Media files: %@ · Groups: %@";
+"已复制 %@ 个文件到剪贴板" = "Copied %@ files to the clipboard";
+"已将 %@ 个项目、%@ 个文件移到 _del，可在移动记录中撤销" = "Moved %@ items and %@ files to _del; undo in Move History";
+"已移动 %@ 个项目、%@ 个文件，可在移动记录中撤销" = "Moved %@ items and %@ files; undo in Move History";
