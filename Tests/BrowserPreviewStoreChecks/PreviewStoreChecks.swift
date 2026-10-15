@@ -33,6 +33,7 @@ import BrowserCore
         try await previewSortingChecks()
         try await continuityChecks()
         try await videoPlaybackChecks()
+        try await livePhotoPlaybackChecks()
         let fm = FileManager.default, defaults = UserDefaults.standard
         let lastDirectory = defaults.object(forKey: "lastDirectory")
         defer {

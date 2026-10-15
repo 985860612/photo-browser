@@ -36,6 +36,11 @@ struct PreviewSettingsView: View {
                 Stepper(value: $store.diskLimitGB, in: 1...20) {
                     LabeledContent(L10n.text("容量上限"), value: "\(store.diskLimitGB) GB")
                 }.disabled(store.cacheBusy)
+                if let usage = store.livePhotoDiskUsage {
+                    LabeledContent(L10n.text("实况原图与视频缓存"), value: ByteCountFormatter.string(fromByteCount: usage.bytes, countStyle: .file))
+                    Text(L10n.text("实况缓存上限 1 GB，视频仅在播放时解包。清理时保留正在使用的视频。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Text(L10n.text("缩略图与视频封面按最近访问清理。不会清理原文件、分组、移动记录或播放位置。"))
                     .font(.caption).foregroundStyle(.secondary)
                 Button(L10n.text("清理预览缓存…")) { confirmClear = true }.disabled(store.cacheBusy)

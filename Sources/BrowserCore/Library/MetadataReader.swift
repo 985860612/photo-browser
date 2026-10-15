@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 
 public final class MetadataReader {
     private let lock = NSLock()
@@ -19,6 +20,17 @@ public final class MetadataReader {
     }
 
     public func read(directory: URL, assets: [PhotoAsset]) throws -> [String: PhotoMetadata] {
+        var liveMetadata: [String: PhotoMetadata] = [:]
+        for asset in assets where asset.metadataFile.isLivePhoto {
+            lock.lock(); let stop = cancelled; lock.unlock()
+            if stop { throw CancellationError() }
+            if let source = try PhotoMediaSource.open(asset.metadataFile, check: {
+                self.lock.lock(); let cancelled = self.cancelled; self.lock.unlock()
+                if cancelled { throw CancellationError() }
+            }), let metadata = ImageMetadataReader.read(source) { liveMetadata[asset.id] = metadata }
+        }
+        let assets = assets.filter { !$0.metadataFile.isLivePhoto }
+        if assets.isEmpty { return liveMetadata }
         guard let binary = Self.executable else {
             throw BrowserFailure.message(L10n.text("自动分组需要 ExifTool。请安装后重试：brew install exiftool。照片浏览和手动分组仍可使用。"))
         }
@@ -49,7 +61,7 @@ public final class MetadataReader {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
-        var result: [String: PhotoMetadata] = [:]
+        var result: [String: PhotoMetadata] = liveMetadata
         for object in objects {
             guard let source = object["SourceFile"] as? String else { continue }
             let id = URL(fileURLWithPath: source).deletingPathExtension().lastPathComponent.lowercased()

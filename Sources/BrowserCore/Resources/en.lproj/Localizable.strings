@@ -360,3 +360,13 @@
 "已永久删除 %@ 个项目、%@ 个文件" = "Permanently deleted %@ items and %@ files";
 "删除列表为空或包含重复文件。" = "The deletion list is empty or contains duplicate files.";
 "只能删除当前目录中的文件。" = "Only files in the current folder can be deleted.";
+"播放实况" = "Play Live Photo";
+"返回照片" = "Back to Photo";
+"实况原图与视频缓存" = "Live Photo originals and videos";
+"实况缓存上限 1 GB，视频仅在播放时解包。清理时保留正在使用的视频。" = "Live Photo cache is limited to 1 GB. Videos extract only for playback. Clearing retains videos in use.";
+"LIVP 内容超过缓存容量限制。" = "LIVP contents exceed the cache size limit.";
+"无法读取 LIVP 文件，文件可能损坏或格式不受支持。" = "Unable to read LIVP. The file may be damaged or unsupported.";
+"LIVP 中没有唯一可用的照片：%@" = "LIVP contains no unambiguous supported photo: %@";
+"此 LIVP 没有可播放的实况视频。" = "This LIVP contains no playable Live Photo video.";
+"无法创建 LIVP 本地缓存。" = "Unable to create the local LIVP cache.";
+"LIVP 缓存已满，请停止其他实况播放后重试。" = "LIVP cache is full. Stop other Live Photo playback and try again.";

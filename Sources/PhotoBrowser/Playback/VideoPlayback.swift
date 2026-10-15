@@ -8,6 +8,7 @@ import SwiftUI
     @Published private(set) var loading = false
     @Published private(set) var failure: String?
     @Published private(set) var isPlaying = false
+    var livePhotoEnded: ((String) -> Void)?
     private var file: PhotoFile?
     private var asset: AVURLAsset?
     private var ticket = UUID()
@@ -25,6 +26,8 @@ import SwiftUI
     private var preparation: Task<Void, Never>?
     private var preparationID = UUID()
     private var preparingAsset: AVURLAsset?
+    private var livePhotoMovie: LivePhotoMovie?
+    private let livePhotoWorkers = PreviewWorkQueue()
 
     init(defaults: UserDefaults = .standard) {
         memory = VideoMemory(defaults: defaults)
@@ -76,6 +79,7 @@ import SwiftUI
         player.pause(); statusObserver = nil; playbackObserver = nil
         if let endedObserver { NotificationCenter.default.removeObserver(endedObserver) }
         endedObserver = nil; player.replaceCurrentItem(with: nil)
+        livePhotoMovie = nil
         file = nil; fileID = nil; loading = false; failure = nil; isPlaying = false; autoplayID = nil
         restoring = false; restoreStarted = false
     }
@@ -101,9 +105,17 @@ import SwiftUI
         let autoplay = autoplayID == file.id
         stop(); self.file = file; fileID = file.id; loading = true
         autoplayID = autoplay ? file.id : nil
-        let request = ticket, asset = prepared.removeValue(forKey: file) ?? AVURLAsset(url: file.url)
-        self.asset = asset
+        let request = ticket
         do {
+            let url: URL
+            if file.isLivePhoto {
+                let movie = try await livePhotoWorkers.run { check in try LivePhotoCache.shared.movie(file, check: check) }
+                try Task.checkCancellation()
+                guard request == ticket else { return }
+                livePhotoMovie = movie; url = movie.url
+            } else { url = file.url }
+            let asset = prepared.removeValue(forKey: file) ?? AVURLAsset(url: url)
+            self.asset = asset
             guard try await asset.load(.isPlayable), !(try await asset.loadTracks(withMediaType: .video)).isEmpty else {
                 throw BrowserFailure.message(L10n.text("系统无法播放此视频：\(file.url.lastPathComponent)"))
             }
@@ -132,7 +144,11 @@ import SwiftUI
                 }
             }
             endedObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-                Task { @MainActor in if self?.ticket == request { self?.pause() } }
+                Task { @MainActor in
+                    guard let self, self.ticket == request else { return }
+                    self.pause()
+                    if file.isLivePhoto { self.stop(); self.livePhotoEnded?(file.id) }
+                }
             }
             player.replaceCurrentItem(with: item)
             timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 5, preferredTimescale: 600), queue: .main) { [weak self] _ in

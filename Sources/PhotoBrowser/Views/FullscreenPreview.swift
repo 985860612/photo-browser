@@ -40,7 +40,7 @@ struct FullscreenPreview: View {
                 if preview.fileID != store.focusedFile?.id { zoom = 1 }
                 await store.preparePreviewCache()
                 let assetID = store.focusedID
-                await preview.load(store.focusedFile?.kind == .video ? nil : store.focusedFile, hdr: store.hdrPreview, maximum: nil) { metadata in
+                await preview.load(store.playbackFile != nil ? nil : store.focusedFile, hdr: store.hdrPreview, maximum: nil) { metadata in
                     if let assetID { store.updateMetadata(assetID, value: metadata) }
                 }
             }
@@ -49,7 +49,7 @@ struct FullscreenPreview: View {
     private var canvas: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if let file = store.focusedFile, file.kind == .video, !store.isMoving, !store.isLoading {
+            if let file = store.playbackFile, !store.isMoving, !store.isLoading {
                 VideoPreviewView(file: file, playback: store.video).ignoresSafeArea()
             } else {
             PhotoCanvas(photo: preview.fileID == store.focusedFile?.id ? photo : nil,
@@ -89,7 +89,7 @@ struct FullscreenPreview: View {
             Button { store.closeFullscreenPreview() } label: { Label(L10n.text("退出全屏"), systemImage: "arrow.down.right.and.arrow.up.left") }
             Text(store.focusedFile?.url.lastPathComponent ?? "").lineLimit(1)
             Spacer()
-            if store.focusedFile?.kind != .video {
+            if store.playbackFile == nil {
             Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).help(L10n.text("启用原图 HDR / EDR 显示；普通照片保持 SDR"))
             Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch)
                 .help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG"))
@@ -115,6 +115,9 @@ struct FullscreenPreview: View {
             Button { store.step(1) } label: { Image(systemName: "chevron.right") }
                 .help(L10n.text("下一张（→）"))
             Spacer()
+            if store.focusedAsset?.isLivePhoto == true {
+                Button(L10n.text(store.livePhotoMotionID == store.focusedID ? "返回照片" : "播放实况")) { store.toggleLivePhotoPlayback() }
+            }
             Button(L10n.text("适应屏幕")) { zoom = 1 }
             Button(L10n.text("100% 像素")) { setPixelZoom(scale: fitScale, toggle: false) }.disabled(loading || photo == nil)
             Slider(value: $zoom, in: 0.1...10).frame(width: 100)

@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import BrowserCore
 
 @main struct SmokeChecks {
@@ -35,6 +36,14 @@ import BrowserCore
                     if let width = full.metadata?.width, let height = full.metadata?.height,
                        max(full.image.size.width, full.image.size.height) < Double(max(width, height)) {
                         throw BrowserFailure.message("高清解码返回了缩小预览：\(file.url.lastPathComponent)")
+                    }
+                    if file.isLivePhoto {
+                        let motion = try LivePhotoCache.shared.movie(file)
+                        let movie = AVURLAsset(url: motion.url)
+                        guard try await movie.load(.isPlayable), !(try await movie.loadTracks(withMediaType: .video)).isEmpty else {
+                            throw BrowserFailure.message("LIVP motion is not playable")
+                        }
+                        print("PASS real LIVP motion preflight")
                     }
                     previews.append(["file": file.url.lastPathComponent, "thumbnail": "\(Int(result.image.size.width))×\(Int(result.image.size.height))", "large": "\(Int(large.image.size.width))×\(Int(large.image.size.height))", "full": "\(Int(full.image.size.width))×\(Int(full.image.size.height))", "hdr": display.isHDR, "headroom": display.headroom, "decodeBits": display.bitsPerComponent, "colorSpace": display.colorSpaceName])
                 }

@@ -73,8 +73,7 @@ public actor ThumbnailCache {
                 catch is DecodingError { return nil } // Damaged local metadata can be reread.
             }
             if let saved, saved.metadata != nil { try check(); return saved }
-            guard FileManager.default.fileExists(atPath: file.url.path),
-                  let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            guard let source = try PhotoMediaSource.open(file, check: check) else {
                 throw BrowserFailure.message(L10n.text("无法读取 \(file.url.lastPathComponent)"))
             }
             guard let metadata = ImageMetadataReader.read(source) else {

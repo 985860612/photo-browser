@@ -22,7 +22,10 @@ struct PhotoThumbnail: View {
                 } else { ProgressView().controlSize(.small) }
             }.frame(maxWidth: .infinity).frame(height: height)
                 .overlay(alignment: .bottomTrailing) {
-                    if asset.isVideo {
+                    if asset.isLivePhoto {
+                        Image(systemName: "livephoto").font(.system(size: 12)).padding(4)
+                            .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 4)).padding(5)
+                    } else if asset.isVideo {
                         Label(VideoMedia.durationLabel(duration), systemImage: "play.fill")
                             .font(.system(size: 10, weight: .medium)).padding(4).background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 4)).padding(5)
                     }

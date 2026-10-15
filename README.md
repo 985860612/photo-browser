@@ -148,3 +148,7 @@ New features should have a clear state owner and dedicated views/tests. Review f
 ## License
 
 [MIT](LICENSE). Copyright © 2026 wangxiaojie.
+
+## Live Photos
+
+LIVP archives appear as one photo with a Live Photo badge. Browsing extracts only the original still image, preserving orientation, HDR data, and available GPS metadata. Selecting a single LIVP opens its preview and automatically plays the motion video; arrow-key navigation does the same. Multi-selection does not start playback. Motion completion automatically returns to the still photo, including in fullscreen. Return to Photo stops playback, and Play Live Photo in the toolbar or context menu starts it again. Copy, move, and delete act on the original archive. Original members are cached locally with a 1 GB budget; videos load on demand and active playback is protected during cache clearing. Invalid or ambiguous archives and files exceeding the member/cache limits report an error. Playback depends on macOS codec support.

@@ -14,6 +14,7 @@ extension BrowserStore {
     }
 
     func selectFolder(_ url: URL) {
+        livePhotoMotionID = nil
         video.stop()
         guard !isMoving, !isLoading else { return }
         navigationScrollTarget = nil
@@ -22,6 +23,12 @@ extension BrowserStore {
     }
 
     func select(_ asset: PhotoAsset, modifiers: NSEvent.ModifierFlags = NSEvent.modifierFlags) {
+        let singleSelection = modifiers.intersection([.command, .shift]).isEmpty
+        let keepMotion = singleSelection && livePhotoMotionID == asset.id
+        if !keepMotion {
+            if livePhotoMotionID != nil { video.stop() }
+            livePhotoMotionID = nil
+        }
         navigationScrollTarget = nil
         selectedFolderID = nil
         let list = visibleAssets
@@ -41,6 +48,9 @@ extension BrowserStore {
             selectionAnchorID = asset.id; rangeSelectionBase = nil
         }
         focusedID = asset.id; preferredFileID = nil
+        if singleSelection, selection == [asset.id] {
+            startLivePhotoPlayback(asset)
+        }
     }
 
     func step(_ offset: Int, extendingSelection: Bool = false) {

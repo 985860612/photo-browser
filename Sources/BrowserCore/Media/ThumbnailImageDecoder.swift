@@ -12,7 +12,7 @@ enum ThumbnailImageDecoder {
     static func fullResolution(_ file: PhotoFile, check: () throws -> Void) throws -> LoadedPreview {
         let context = CIContext(options: [.cacheIntermediates: false])
         try check()
-        guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+        guard let source = try PhotoMediaSource.open(file, check: check),
               var cg = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {
             throw BrowserFailure.message(L10n.text("系统无法解码 \(file.format) 高清原图。请切换同名 HIF/JPG，或在 Camera Raw 中打开。"))
         }
@@ -94,7 +94,7 @@ enum ThumbnailImageDecoder {
                 embedded = true
             }
         }
-        if source == nil { source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) }
+        if source == nil { source = try PhotoMediaSource.open(file, check: check) }
         guard let source else { throw BrowserFailure.message(L10n.text("无法读取 \(file.url.lastPathComponent)")) }
         let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
                                       kCGImageSourceThumbnailMaxPixelSize: maximum,

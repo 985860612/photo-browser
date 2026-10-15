@@ -11,6 +11,7 @@ public struct PhotoFile: Codable, Hashable, Sendable, Identifiable {
     public let size: Int64
     public let modified: Date
     public var format: String { url.pathExtension.uppercased() }
+    public var isLivePhoto: Bool { url.pathExtension.lowercased() == "livp" }
     public init(url: URL, kind: PhotoKind, size: Int64 = 0, modified: Date = .distantPast) {
         self.url = url; self.kind = kind; self.size = size; self.modified = modified
     }
@@ -42,6 +43,7 @@ public struct PhotoAsset: Codable, Sendable, Identifiable {
     public var imageFiles: [PhotoFile] { files.filter { $0.kind == .raw || $0.kind == .rendered } }
     public var mediaFiles: [PhotoFile] { files.filter { $0.kind != .sidecar } }
     public var isVideo: Bool { mediaFiles.contains { $0.kind == .video } }
+    public var isLivePhoto: Bool { mediaFiles.contains( where: \.isLivePhoto) }
     public var preferred: PhotoFile { mediaFiles.first { $0.kind == .rendered } ?? mediaFiles[0] }
     public var metadataFile: PhotoFile { imageFiles.first { $0.kind == .raw } ?? preferred }
     public var formatLabel: String { mediaFiles.map(\.format).joined(separator: " + ") }

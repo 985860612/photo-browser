@@ -17,7 +17,7 @@ struct LargePreviewView: View {
             GeometryReader { geometry in
                 ZStack {
                     Color.black
-                    if let file = store.focusedFile, file.kind == .video, store.selectedFolderID == nil, !store.isMoving, !store.isLoading {
+                    if let file = store.playbackFile, !store.isMoving, !store.isLoading {
                         VideoPreviewView(file: file, playback: store.video)
                     } else {
                     PhotoCanvas(photo: preview.fileID == store.focusedFile?.id ? photo : nil,
@@ -38,7 +38,7 @@ struct LargePreviewView: View {
                     .help(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片"))
                 Button { store.step(1) } label: { Image(systemName: "chevron.right") }
                 Spacer()
-                if store.focusedFile?.kind != .video {
+                if store.playbackFile == nil {
                 if loading { ProgressView().controlSize(.small).help(L10n.text("正在加载高清图")) }
                 if let failure, thumbnail != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure) }
                 Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch)
@@ -50,6 +50,9 @@ struct LargePreviewView: View {
                 Text("\(Int(zoom * 100))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40)
                 }
                 PreviewSortMenu()
+                if store.focusedAsset?.isLivePhoto == true {
+                    Button(L10n.text(store.livePhotoMotionID == store.focusedID ? "返回照片" : "播放实况")) { store.toggleLivePhotoPlayback() }
+                }
                 Button { store.showGroupOverview = true } label: { Image(systemName: "square.grid.2x2") }.help(L10n.text("网格预览"))
                 Button { store.toggleFullscreenPreview() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
                     .disabled(store.focusedFile == nil).help(L10n.text(store.focusedFile?.kind == .video ? "全屏播放" : "全屏高清预览（空格）"))
@@ -71,7 +74,7 @@ struct LargePreviewView: View {
             if preview.fileID != store.focusedFile?.id { zoom = 1 }
             await store.preparePreviewCache()
             let assetID = store.focusedID
-            await preview.load(store.selectedFolderID == nil && store.focusedFile?.kind != .video ? store.focusedFile : nil, hdr: store.hdrPreview, maximum: 2800) { metadata in
+            await preview.load(store.selectedFolderID == nil && store.playbackFile == nil ? store.focusedFile : nil, hdr: store.hdrPreview, maximum: 2800) { metadata in
                 if let assetID { store.updateMetadata(assetID, value: metadata) }
             }
         }
