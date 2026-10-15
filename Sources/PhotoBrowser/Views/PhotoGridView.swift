@@ -13,7 +13,7 @@ struct PhotoGridView: View {
                     ContentUnavailableView(L10n.text("没有匹配的照片"), systemImage: "magnifyingglass")
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: store.thumbnailSize, maximum: store.thumbnailSize + 70), spacing: 12)], spacing: 14) {
-                    if store.scope == "all", !store.culling.active {
+                    if store.scope == "all" {
                         ForEach(store.subdirectories, id: \.path) { url in
                             FolderCard(url: url, thumbnailHeight: store.thumbnailSize) { store.load(url) }
                                 .id("folder:" + url.path)
@@ -26,7 +26,6 @@ struct PhotoGridView: View {
                                 store.select(asset, modifiers: count == 2 ? [] : modifiers)
                                 if count == 2 {
                                     store.showGroupOverview = false
-                                    if store.culling.active { store.culling.grid = false }
                                     if asset.isVideo { store.video.playWhenReady(asset.preferred) }
                                 }
                             })

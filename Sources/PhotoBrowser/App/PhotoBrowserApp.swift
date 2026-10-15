@@ -55,9 +55,7 @@ import AppKit
                 } else { Button(L10n.text("全屏高清预览")) { store.toggleFullscreenPreview() }.keyboardShortcut(.space, modifiers: [])
                     .disabled(store.focusedFile == nil || store.selectedFolderID != nil || store.isMoving || store.isLoading)
                 }
-                Button(L10n.text("切换网格 / 大图")) {
-                    if store.culling.active { store.culling.grid.toggle() } else { store.showGroupOverview.toggle() }
-                }.keyboardShortcut("j")
+                Button(L10n.text("切换网格 / 大图")) { store.showGroupOverview.toggle() }.keyboardShortcut("j")
                 Button(L10n.text("在 Camera Raw 中打开")) { if let asset = store.focusedAsset { store.openInCameraRaw(asset) } }
                     .disabled(store.focusedAsset == nil || store.focusedAsset?.isVideo == true || store.focusedAsset?.isLivePhoto == true || store.isMoving)
                 Button(L10n.text("将所选照片组成一组")) { store.createGroup() }.keyboardShortcut("g")
@@ -92,7 +90,6 @@ import AppKit
             return .terminateCancel
         }
         store?.cancelMetadata()
-        store?.culling.pause()
         store?.stopDirectoryObservation()
         store?.cancelPreviewGeneration()
         store?.video.stop()

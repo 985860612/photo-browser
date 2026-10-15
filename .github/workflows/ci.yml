@@ -18,7 +18,7 @@ jobs:
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       - name: Build and sign check executables
         run: |
-          for PHOTO_CHECK_PRODUCT in BrowserCoreChecks BrowserCullingChecks BrowserThumbnailChecks BrowserHDRChecks BrowserLocalizationChecks; do
+          for PHOTO_CHECK_PRODUCT in BrowserCoreChecks BrowserThumbnailChecks BrowserHDRChecks BrowserLocalizationChecks; do
             swift build --product "$PHOTO_CHECK_PRODUCT"
             PHOTO_CHECK_BINARY="$(swift build --show-bin-path)/$PHOTO_CHECK_PRODUCT"
             codesign --force --sign - "$PHOTO_CHECK_BINARY"
@@ -26,8 +26,6 @@ jobs:
           done
       - name: Check pairing, grouping, move safety, and recovery
         run: swift run BrowserCoreChecks
-      - name: Check Vision analysis and culling persistence
-        run: swift run BrowserCullingChecks
       - name: Check preview selection and folder navigation
         run: bash scripts/check-preview-store.sh
       - name: Check decoded caching, preloading, cancellation, and HDR

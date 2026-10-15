@@ -10,19 +10,6 @@ extension BrowserStore {
         guard let window, !(window.firstResponder is NSTextView), !(window.firstResponder is NSTextField),
               window.identifier?.rawValue != "PhotoBrowser.Settings",
               !isLoading, window.attachedSheet == nil, NSApp.modalWindow == nil else { return event }
-        if culling.active, event.keyCode == 6, modifiers == .command {
-            if !event.isARepeat { culling.undo(); repairCullingSelection() }
-            return nil
-        }
-        if culling.active, modifiers.isEmpty, let key = event.charactersIgnoringModifiers?.lowercased() {
-            switch key {
-            case "p": if !event.isARepeat { markCullingSelection(.keep) }; return nil
-            case "m": if !event.isARepeat { markCullingSelection(.maybe) }; return nil
-            case "x": if !event.isARepeat { markCullingSelection(.reject) }; return nil
-            case "u": if !event.isARepeat { markCullingSelection(.unreviewed) }; return nil
-            default: break
-            }
-        }
         if event.keyCode == 8, modifiers == .command, canCopyFiles {
             copyFilesToClipboard(); return nil
         }
