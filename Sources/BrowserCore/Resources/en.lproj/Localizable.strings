@@ -427,3 +427,26 @@
 "未识别的照片标记：%@" = "Unrecognized photo datum: %@";
 
 "坐标转换失败，请检查照片坐标和坐标系设置。" = "Coordinate conversion failed. Check the photo coordinates and coordinate-system setting.";
+
+// ISO disc images
+"1 个镜像已选" = "1 disk image selected";
+"镜像挂载状态已变化，请重新打开后再推出。" = "The disk image mount has changed. Open it again before ejecting.";
+"请选择有效的 ISO 光盘镜像。" = "Choose a valid ISO disc image.";
+"镜像未以只读方式挂载，无法打开。" = "The disk image was not mounted read-only and cannot be opened.";
+"无法找到镜像的挂载目录，请检查镜像格式或是否已在其他应用打开。" = "Cannot find the mounted image. Check its format or whether another app has already opened it.";
+"光盘镜像操作失败：%@" = "Disc image operation failed: %@";
+"打开照片目录或 ISO 镜像" = "Open Photo Folder or ISO Image";
+"正在只读加载镜像：%@" = "Opening disk image read-only: %@";
+"镜像内路径无效。" = "The path inside the disk image is invalid.";
+"镜像加载失败" = "Failed to open disk image";
+"正在推出镜像：%@" = "Ejecting disk image: %@";
+"已推出镜像：%@" = "Ejected disk image: %@";
+"镜像推出失败，请关闭正在使用镜像的程序后重试。" = "Cannot eject the disk image. Close apps using it and try again.";
+"双击只读加载镜像：" = "Double-click to open disk image read-only: ";
+"只读打开镜像" = "Open Disk Image Read-Only";
+"推出镜像" = "Eject Disk Image";
+"只读镜像" = "Read-Only Image";
+"返回镜像所在目录" = "Return to Image Folder";
+"正在加载光盘镜像…" = "Opening disc image…";
+"%@ 个子文件夹 · %@ 个镜像 · 双击进入浏览照片" = "Folders: %@ · Disk images: %@ · Double-click to browse photos";
+"此文件夹没有照片、子文件夹或 ISO 镜像" = "This folder has no photos, subfolders, or ISO images";

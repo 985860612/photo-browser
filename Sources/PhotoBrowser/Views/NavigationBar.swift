@@ -11,9 +11,9 @@ struct NavigationBar: View {
                 .disabled(!store.canGoBack).help(L10n.text("后退 ⌘["))
             Button { store.navigateHistory(1) } label: { Image(systemName: "chevron.right") }
                 .disabled(!store.canGoForward).help(L10n.text("前进 ⌘]"))
-            Button { if let url = store.directory { store.load(url.deletingLastPathComponent()) } } label: { Image(systemName: "arrow.up") }
+            Button { store.goUp() } label: { Image(systemName: "arrow.up") }
                 .disabled(store.directory == nil || store.directory?.path == "/" || store.isLoading).help(L10n.text("上一级 ⌘↑"))
-            Image(systemName: "folder").foregroundStyle(.blue)
+            Image(systemName: store.activeDiskImage == nil ? "folder" : "opticaldisc").foregroundStyle(.blue)
             if store.editingPath {
                 TextField(L10n.text("输入文件夹路径"), text: $store.pathText).textFieldStyle(.plain)
                     .font(.system(size: 13)).padding(.horizontal, 10).padding(.vertical, 7)
@@ -33,7 +33,7 @@ struct NavigationBar: View {
                                     ForEach(store.breadcrumbs, id: \.path) { url in
                                         Button(url.path == "/" ? L10n.text("计算机") : url.lastPathComponent) { store.load(url) }
                                             .buttonStyle(.plain).id(url.path).help(url.path)
-                                        if url != store.directory { Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.secondary) }
+                                        if url != store.breadcrumbs.last { Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.secondary) }
                                     }
                                 }.font(.system(size: 12)).fixedSize(horizontal: true, vertical: false)
                                 Color.clear.frame(minWidth: 36, maxWidth: .infinity)
@@ -49,8 +49,21 @@ struct NavigationBar: View {
                 }.frame(height: 32)
             }
             Menu {
-                ForEach(store.subdirectories, id: \.path) { url in Button(url.lastPathComponent) { store.load(url) } }
-            } label: { Image(systemName: "folder") }.disabled(store.subdirectories.isEmpty).help(L10n.text("进入子文件夹"))
+                ForEach(store.navigationEntries, id: \.path) { url in Button(url.lastPathComponent) { store.load(url) } }
+            } label: { Image(systemName: "folder") }.disabled(store.navigationEntries.isEmpty).help(L10n.text("进入子文件夹"))
+            if let image = store.activeDiskImage {
+                Label(L10n.text("只读镜像"), systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
+                Button { store.load(image.source.deletingLastPathComponent()) } label: { Image(systemName: "arrow.uturn.backward") }
+                    .disabled(store.isLoading || store.isOperatingDiskImage).help(L10n.text("返回镜像所在目录"))
+            }
+            if !store.mountedDiskImages.isEmpty {
+                Menu {
+                    ForEach(store.mountedDiskImages, id: \.root) { image in
+                        Button(image.source.lastPathComponent) { store.ejectDiskImage(image) }
+                    }
+                } label: { Label(L10n.text("推出镜像"), systemImage: "eject") }
+                    .disabled(store.isOperatingDiskImage || store.isLoading || store.isMoving || store.isExportingLivePhotoVideo || store.isCopyingImage)
+            }
         }.buttonStyle(.borderless).padding(.horizontal, 15).padding(.vertical, 10)
             .onChange(of: store.editingPath) { _, value in
                 focused = value

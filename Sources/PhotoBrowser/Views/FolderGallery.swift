@@ -10,18 +10,18 @@ struct FolderGallery: View {
                 VStack(alignment: .leading, spacing: 22) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 7) {
-                            Text(store.directory?.lastPathComponent ?? L10n.text("文件夹")).font(.system(size: 24, weight: .semibold))
-                            Text(L10n.text("\(store.subdirectories.count) 个子文件夹 · 双击进入浏览照片")).font(.callout).foregroundStyle(.secondary)
+                            Text(store.directoryDisplayName).font(.system(size: 24, weight: .semibold))
+                            Text(L10n.text("\(store.subdirectories.count) 个子文件夹 · \(store.diskImages.count) 个镜像 · 双击进入浏览照片")).font(.callout).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button(L10n.text("上一级")) { if let url = store.directory { store.load(url.deletingLastPathComponent()) } }.disabled(store.directory?.path == "/")
+                        Button(L10n.text("上一级")) { store.goUp() }.disabled(store.directory?.path == "/")
                     }
-                    if store.subdirectories.isEmpty {
-                        Label(L10n.text("此文件夹没有照片或子文件夹"), systemImage: "folder").foregroundStyle(.secondary).padding(.vertical, 30)
+                    if store.navigationEntries.isEmpty {
+                        Label(L10n.text("此文件夹没有照片、子文件夹或 ISO 镜像"), systemImage: "folder").foregroundStyle(.secondary).padding(.vertical, 30)
                     } else {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 360), spacing: 18)], alignment: .leading, spacing: 20) {
-                            ForEach(store.subdirectories, id: \.path) { url in
-                                FolderCard(url: url) { store.load(url) }.id("folder:" + url.path)
+                            ForEach(store.navigationEntries, id: \.path) { url in
+                                DirectoryEntryCard(url: url) { store.load(url) }.id("folder:" + url.path)
                             }
                         }
                     }

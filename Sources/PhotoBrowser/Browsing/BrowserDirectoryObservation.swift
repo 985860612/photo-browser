@@ -4,7 +4,7 @@ import BrowserCore
 extension BrowserStore {
     func observeFocusedFiles() { directoryObserver?.watchFiles(focusedAsset?.files ?? []) }
     func startDirectoryObservation() {
-        guard let directory else { return }
+        guard let directory, !isReadOnlyDirectory else { return }
         let revision = observationRevision
         observationStartTask = Task { [weak self] in
             do {
@@ -76,7 +76,7 @@ extension BrowserStore {
         let previousDates = observedFolderDates
         let foldersChanged = !previousDates.isEmpty && previousDates != snapshot.dates
         observedFolderDates = snapshot.dates
-        guard changed || foldersChanged else { return }
+        guard changed || foldersChanged || snapshot.diskImages != diskImages else { return }
         let snapshotIDs = Set(snapshot.assets.map(\.id))
         let changedFiles = snapshot.assets.filter { $0.fingerprint != oldByID[$0.id]?.fingerprint }
             .flatMap { ($0.mediaFiles + (oldByID[$0.id]?.mediaFiles ?? [])) }
@@ -100,6 +100,8 @@ extension BrowserStore {
             return value
         }
         subdirectories = snapshot.folders
+        diskImages = snapshot.diskImages
+        isReadOnlyDirectory = snapshot.isReadOnly || activeDiskImage != nil
         groups = groups.compactMap { group in
             var value = group; value.assetIDs = value.assetIDs.filter { newIDs.contains($0) }; return value.assetIDs.isEmpty ? nil : value
         }
@@ -113,7 +115,7 @@ extension BrowserStore {
         if focusedID == nil, oldByID.isEmpty, selectedFolderID == nil, let first = visibleAssets.first {
             focusedID = first.id; selection = [first.id]
         }
-        if let selectedFolderID, !snapshot.folders.contains(where: { $0.path == selectedFolderID }) { self.selectedFolderID = nil }
+        if let selectedFolderID, !navigationEntries.contains(where: { $0.path == selectedFolderID }) { self.selectedFolderID = nil }
         if previousFile != focusedFile { video.stop() }
         observeFocusedFiles()
         if changed { startPreviewGeneration(); previewContentRevision = UUID() }

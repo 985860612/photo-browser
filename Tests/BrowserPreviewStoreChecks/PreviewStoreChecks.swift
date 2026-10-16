@@ -5,7 +5,14 @@ import BrowserCore
 @main struct PreviewStoreChecks {
     @MainActor static func main() async {
         _ = NSApplication.shared
-        do { try await warmQueueChecks(); try await run() }
+        do {
+            if let index = CommandLine.arguments.firstIndex(of: "--disk-image-directory"), index + 1 < CommandLine.arguments.count {
+                try await realDiskImageChecks(in: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+                return
+            }
+            try await diskImageChecks()
+            try await warmQueueChecks(); try await run()
+        }
         catch { print("FAIL: \(error.localizedDescription)"); exit(1) }
     }
 

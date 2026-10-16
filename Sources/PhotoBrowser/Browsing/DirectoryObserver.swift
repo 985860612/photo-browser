@@ -80,14 +80,23 @@ private final class WatchedDescriptor: @unchecked Sendable {
 struct DirectorySnapshot {
     let assets: [PhotoAsset]
     let folders: [URL]
+    let diskImages: [URL]
+    let isReadOnly: Bool
     let dates: [String: Date]
     static func read(_ directory: URL) throws -> DirectorySnapshot {
         let assets = try DirectoryScanner.scan(directory)
-        let folders = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey], options: [.skipsHiddenFiles])
-            .filter { try $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true }
+        let entries = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .contentModificationDateKey], options: [.skipsHiddenFiles])
+        let folders = try entries.filter { try $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true }
+            .map(\.standardizedFileURL)
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        let images = try entries.filter {
+            guard DiskImageService.supports($0) else { return false }
+            let values = try $0.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            return values.isRegularFile == true && values.isSymbolicLink != true
+        }.map(\.standardizedFileURL).sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
         var dates: [String: Date] = [:]
         for url in [directory] + folders { dates[url.path] = try url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast }
-        return DirectorySnapshot(assets: assets, folders: folders, dates: dates)
+        let readOnly = try directory.resourceValues(forKeys: [.volumeIsReadOnlyKey]).volumeIsReadOnly == true
+        return DirectorySnapshot(assets: assets, folders: folders, diskImages: images, isReadOnly: readOnly, dates: dates)
     }
 }
