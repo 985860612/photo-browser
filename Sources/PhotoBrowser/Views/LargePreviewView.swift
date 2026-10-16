@@ -64,9 +64,11 @@ struct LargePreviewView: View {
                 PhotoClipboardMenu(asset: asset)
                 MediaDeleteMenu(asset: asset)
                 Divider()
-                Button(L10n.text(asset.isVideo ? "全屏播放" : "全屏高清预览")) { store.toggleFullscreenPreview() }
+                Button(L10n.text(asset.isVideo ? "全屏播放" : "全屏高清预览"), systemImage: "arrow.up.left.and.arrow.down.right") {
+                    store.toggleFullscreenPreview()
+                }.labelStyle(.titleAndIcon)
                 CameraRawMenu(asset: asset)
-                Button(L10n.text("在 Finder 显示")) { store.revealFocused() }
+                Button(L10n.text("在 Finder 显示"), systemImage: "folder") { store.revealFocused() }.labelStyle(.titleAndIcon)
             }
         }
         .onDisappear { store.cancelAdjacentPreviews() }
