@@ -63,6 +63,7 @@ extension BrowserStore {
         directory = url; isLoading = true; status = L10n.text("扫描照片并合并同名格式…")
         selectedFolderID = nil
         navigationScrollTarget = nil
+        gridScrollID = nil
         assets = []; groups = []; subdirectories = []; diskImages = []; selection = []; focusedID = nil; preferredFileID = nil; scope = "all"; search = ""; showGroupOverview = false
         selectionAnchorID = nil; rangeSelectionBase = nil
         pathText = url.path; editingPath = false
