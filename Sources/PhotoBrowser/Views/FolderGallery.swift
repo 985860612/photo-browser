@@ -84,14 +84,15 @@ struct FolderCard: View {
 
     private var card: some View {
         VStack(alignment: .center, spacing: 7) {
-            ZStack {
+            // The grid owns the cover size; a wide image must not widen the card.
+            Color.clear.frame(height: thumbnailHeight ?? 160).overlay {
                 if let cover {
                     if thumbnailHeight != nil { Image(nsImage: cover).resizable().scaledToFit().padding(5) }
                     else { Image(nsImage: cover).resizable().scaledToFill() }
                 }
                 else if loading { ProgressView().controlSize(.small) }
                 else { Image(systemName: "folder").font(.system(size: 42, weight: .light)).foregroundStyle(.blue.opacity(0.7)) }
-            }.frame(maxWidth: .infinity, alignment: .center).frame(height: thumbnailHeight ?? 160)
+            }
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             HStack(spacing: 5) {
                 Image(systemName: "folder.fill").foregroundStyle(.blue)
