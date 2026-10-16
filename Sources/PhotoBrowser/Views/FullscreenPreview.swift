@@ -33,7 +33,7 @@ struct FullscreenPreview: View {
                     MediaDeleteMenu(asset: asset)
                     Divider()
                     CameraRawMenu(asset: asset)
-                    Button(L10n.text("在 Finder 显示")) { store.revealFocused() }
+                    Button(L10n.text("在 Finder 显示"), systemImage: "folder") { store.revealFocused() }.labelStyle(.titleAndIcon)
                 }
             }
             .task(id: store.previewRequestID) {
