@@ -11,8 +11,8 @@ struct FilmstripView: View {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 8) {
                     if store.scope == "all" {
-                        ForEach(store.subdirectories, id: \.path) { url in
-                            FolderCard(url: url, thumbnailHeight: size - 15) { store.load(url) }
+                        ForEach(store.navigationEntries, id: \.path) { url in
+                            DirectoryEntryCard(url: url, thumbnailHeight: size - 15) { store.load(url) }
                                 .frame(width: size).id("folder:" + url.path)
                         }
                     }
@@ -39,7 +39,7 @@ struct FilmstripView: View {
             .onChange(of: store.navigationScrollTarget) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
             .onChange(of: store.sortingRevision) { _, _ in if let id = store.selectedItemID { proxy.scrollTo(id, anchor: .center) } }
             .onAppear {
-                if store.scope == "all", let folder = store.subdirectories.first, store.focusedID == store.visibleAssets.first?.id {
+                if store.scope == "all", let folder = store.navigationEntries.first, store.focusedID == store.visibleAssets.first?.id {
                     proxy.scrollTo("folder:" + folder.path, anchor: .leading)
                 } else if let id = store.focusedID { proxy.scrollTo(id, anchor: .center) }
             }

@@ -76,7 +76,7 @@ struct BrowserView: View {
                     Label(store.previewFailures > 0 ? L10n.text("\(store.previewFailures) 张预览失败") : L10n.text("缓存提示"), systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.orange).help(store.previewFailureDetails)
                 }
-                Text(store.selectedFolderID == nil ? L10n.text("\(store.selection.count) 张已选") : L10n.text("1 个目录已选")).font(.caption).foregroundStyle(.secondary)
+                Text(store.selectedEntryDescription ?? L10n.text("\(store.selection.count) 张已选")).font(.caption).foregroundStyle(.secondary)
                 Slider(value: $store.thumbnailSize, in: 110...360).frame(width: 100).help(L10n.text("缩略图大小"))
             }.padding(.horizontal, 15).padding(.vertical, 9)
         }
@@ -90,7 +90,7 @@ struct BrowserView: View {
             }
         }
         .toolbar { toolbar }
-        .disabled(store.isMoving)
+        .disabled(store.isMoving || store.isEjectingDiskImage)
         .onChange(of: store.scope) { _, _ in store.changeScope() }
         .sheet(item: $store.archiveGroup) { group in ArchiveSheet(group: group).environmentObject(store) }
         .sheet(item: $store.renameGroup) { group in RenameGroupSheet(group: group).environmentObject(store) }
@@ -134,7 +134,7 @@ struct BrowserView: View {
                 Text(L10n.text("打开照片目录，同名 RAW、HIF 和 JPG 会自动合并显示。"))
             } actions: { Button(L10n.text("打开照片目录…")) { store.chooseDirectory() }.buttonStyle(.borderedProminent) }
         } else if store.isLoading {
-            VStack(spacing: 14) { ProgressView(); Text(L10n.text("正在扫描照片目录…")).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 14) { ProgressView(); Text(store.isOperatingDiskImage ? store.status : L10n.text("正在扫描照片目录…")).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if store.assets.isEmpty {
             FolderGallery()
         } else {

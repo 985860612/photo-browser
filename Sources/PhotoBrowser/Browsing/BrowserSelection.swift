@@ -57,7 +57,7 @@ extension BrowserStore {
         guard !isMoving, !isLoading else { return }
         let list = visibleAssets
         // Fullscreen and range selection operate on photos; normal browsing follows every displayed item.
-        let folders = scope == "all" && !isFullscreenPreview && !extendingSelection ? subdirectories : []
+        let folders = scope == "all" && !isFullscreenPreview && !extendingSelection ? navigationEntries : []
         let total = folders.count + list.count
         guard total > 0 else { return }
         let index: Int?
@@ -74,7 +74,7 @@ extension BrowserStore {
 
     func openSelectedFolder() {
         guard !isMoving, !isLoading, let path = selectedFolderID,
-              let url = subdirectories.first(where: { $0.path == path }) else { return }
+              let url = navigationEntries.first(where: { $0.path == path }) else { return }
         load(url)
     }
 

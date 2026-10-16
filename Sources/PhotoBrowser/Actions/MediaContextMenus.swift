@@ -22,10 +22,10 @@ struct CameraRawMenu: View {
         if asset.isLivePhoto {
             Button(L10n.text(store.livePhotoMotionID == asset.id ? "返回照片" : "播放实况")) { store.toggleLivePhotoPlayback(asset) }.disabled(store.isMoving || store.isLoading)
         } else if !asset.isVideo {
-            Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }
+            Button(L10n.text("在 Camera Raw 中打开")) { store.openInCameraRaw(asset) }.disabled(store.isReadOnlyDirectory)
             Menu(L10n.text("指定格式在 Camera Raw 中打开")) {
                 ForEach(asset.imageFiles) { file in Button(file.format) { store.openInCameraRaw(asset, file: file) } }
-            }
+            }.disabled(store.isReadOnlyDirectory)
         } else {
             Button(L10n.text("播放视频")) { store.playVideo(asset) }.disabled(store.isMoving || store.isLoading)
         }

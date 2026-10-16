@@ -104,6 +104,12 @@ import Combine
     @Published var showGroupOverview = false { didSet { if showGroupOverview { video.pause() } } }
     @Published var renameGroup: PhotoGroup?
     @Published var subdirectories: [URL] = []
+    @Published var diskImages: [URL] = []
+    @Published var mountedDiskImages: [MountedDiskImage] = []
+    @Published var mountingDiskImage: URL?
+    @Published var isEjectingDiskImage = false
+    @Published var isReadOnlyDirectory = false
+    let diskImageService: DiskImageService
     @Published var folderCacheRevision = UUID()
     let folderSummaries: FolderSummaryCache
     let folderSizes: FolderSizeCache
@@ -135,7 +141,9 @@ import Combine
     private var observations: Set<AnyCancellable> = []
 
     init(supportDirectory: URL? = nil, thumbnails: ThumbnailCache = .shared, defaults: UserDefaults = .standard, displayCache: DisplayPhotoCache = .shared,
-         folderSummaries: FolderSummaryCache = .shared, folderSizes: FolderSizeCache = .shared, monitoringEnabled: Bool = true) {
+         folderSummaries: FolderSummaryCache = .shared, folderSizes: FolderSizeCache = .shared, monitoringEnabled: Bool = true,
+         diskImageService: DiskImageService = DiskImageService()) {
+        self.diskImageService = diskImageService
         self.folderSummaries = folderSummaries; self.folderSizes = folderSizes
         preferencesDefaults = defaults
         preferredCoordinateSystem = LocationPreferences(defaults: defaults).preferredCoordinateSystem
@@ -236,7 +244,7 @@ import Combine
         return L10n.text("\(assets.count) 张照片 · \(totalFiles) 个图像文件 · \(groups.count) 个分组")
     }
     var canArchive: Bool {
-        !isMoving && !isReadingMetadata && !history.contains { ["prepared", "moving", "undoing", "recoveryNeeded"].contains($0.state) }
+        !isReadOnlyDirectory && !isOperatingDiskImage && !isMoving && !isReadingMetadata && !history.contains { ["prepared", "moving", "undoing", "recoveryNeeded"].contains($0.state) }
     }
     var canDeleteSelection: Bool {
         canArchive && !isLoading && !editingPath && selectedFolderID == nil

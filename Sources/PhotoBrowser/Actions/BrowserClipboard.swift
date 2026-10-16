@@ -4,7 +4,7 @@ import CoreImage
 
 extension BrowserStore {
     func openInCameraRaw(_ asset: PhotoAsset, file: PhotoFile? = nil) {
-        guard !isMoving, !asset.isVideo, !asset.isLivePhoto else { return }
+        guard !isMoving, !isReadOnlyDirectory, !asset.isVideo, !asset.isLivePhoto else { return }
         let source = file ?? asset.imageFiles.first(where: { $0.kind == .raw }) ?? asset.preferred
         do { try CameraRawLauncher.open(source) { [weak self] error in
             if let error { self?.report(error) }
