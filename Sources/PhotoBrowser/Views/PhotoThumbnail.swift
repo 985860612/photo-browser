@@ -15,12 +15,12 @@ struct PhotoThumbnail: View {
 
     var body: some View {
         VStack(spacing: 7) {
-            ZStack {
+            Color.clear.frame(height: height).overlay {
                 if let image { Image(nsImage: image).resizable().scaledToFit().padding(5) }
                 else if let failure {
                     Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure)
                 } else { ProgressView().controlSize(.small) }
-            }.frame(maxWidth: .infinity).frame(height: height)
+            }
                 .overlay(alignment: .bottomTrailing) {
                     if asset.isLivePhoto {
                         Image(systemName: "livephoto").font(.system(size: 12)).padding(4)
