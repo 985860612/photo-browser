@@ -14,7 +14,7 @@ struct InspectorView: View {
                     if let metadataFailure { Text(metadataFailure).font(.caption2).foregroundStyle(.orange) }
                     if let location = asset.metadata?.location {
                         GlassDivider(inset: 0)
-                        locationFields(location)
+                        locationFields(location, metadata: asset.metadata)
                     }
                     GlassDivider(inset: 0)
                     VStack(alignment: .leading, spacing: 13) {
@@ -58,7 +58,8 @@ struct InspectorView: View {
                     var seen: Set<String> = [], readHeader = false
                     var headerFailure: Error?
                     for source in [asset.metadataFile, file, asset.preferred] + asset.imageFiles.filter(\.isLivePhoto) where seen.insert(source.id).inserted {
-                        if store.focusedAsset?.metadata?.lensModel != nil, store.focusedAsset?.metadata?.location != nil { break }
+                        if store.focusedAsset?.metadata?.lensModel != nil, store.focusedAsset?.metadata?.location != nil,
+                           store.focusedAsset?.metadata?.gpsMapDatumRead == true { break }
                         do {
                             let metadata = try await store.thumbnails.sourceMetadata(source)
                             try Task.checkCancellation()
@@ -78,11 +79,17 @@ struct InspectorView: View {
         "\(store.focusedID ?? "")|\(store.focusedFile?.id ?? "")|\(store.focusedAsset?.fingerprint ?? "")"
     }
 
-    private func locationFields(_ location: PhotoLocation) -> some View {
+    private func locationFields(_ location: PhotoLocation, metadata: PhotoMetadata?) -> some View {
         VStack(alignment: .leading, spacing: 13) {
             sectionTitle(L10n.text("拍摄位置"), icon: "mappin.and.ellipse")
             information(L10n.text("纬度"), location.latitudeLabel, icon: "globe")
             information(L10n.text("经度"), location.longitudeLabel, icon: "globe")
+            information(L10n.text("坐标系"), (metadata?.coordinateSystem(preferred: store.preferredCoordinateSystem) ?? store.preferredCoordinateSystem).label, icon: "globe")
+            information(L10n.text("判断来源"), metadata?.detectedCoordinateSystem != nil ? L10n.text("照片标记") : L10n.text("使用默认设置"), icon: "info.circle")
+            if let datum = metadata?.gpsMapDatum, metadata?.detectedCoordinateSystem == nil {
+                Text(L10n.text("未识别的照片标记：\(datum)"))
+                    .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
             if let altitude = location.altitude {
                 information(L10n.text("海拔"), String(format: "%.1f m", altitude), icon: "mountain.2")
             }

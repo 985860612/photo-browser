@@ -96,6 +96,9 @@ import Combine
             Task { [weak self] in await self?.applyDecodeConcurrency() }
         }
     }
+    @Published var preferredCoordinateSystem: PhotoCoordinateSystem = .wgs84 {
+        didSet { LocationPreferences(defaults: preferencesDefaults).preferredCoordinateSystem = preferredCoordinateSystem }
+    }
     private let previewPreferences: PreviewPreferences
     let preferencesDefaults: UserDefaults
     @Published var showGroupOverview = false { didSet { if showGroupOverview { video.pause() } } }
@@ -135,6 +138,7 @@ import Combine
          folderSummaries: FolderSummaryCache = .shared, folderSizes: FolderSizeCache = .shared, monitoringEnabled: Bool = true) {
         self.folderSummaries = folderSummaries; self.folderSizes = folderSizes
         preferencesDefaults = defaults
+        preferredCoordinateSystem = LocationPreferences(defaults: defaults).preferredCoordinateSystem
         previewSortField = defaults.string(forKey: "previewSortField").flatMap(PreviewSortField.init(rawValue:)) ?? .original
         previewSortDescending = defaults.bool(forKey: "previewSortDescending")
         self.monitoringEnabled = monitoringEnabled
@@ -258,6 +262,12 @@ import Combine
                 if assets[index].metadata?.location == nil {
                     assets[index].metadata?.gpsLatitude = location.latitude
                     assets[index].metadata?.gpsLongitude = location.longitude
+                    assets[index].metadata?.gpsMapDatum = value.gpsMapDatum
+                    assets[index].metadata?.gpsMapDatumRead = value.gpsMapDatumRead
+                }
+                if assets[index].metadata?.gpsLatitude == location.latitude, assets[index].metadata?.gpsLongitude == location.longitude {
+                    if assets[index].metadata?.gpsMapDatum == nil { assets[index].metadata?.gpsMapDatum = value.gpsMapDatum }
+                    if value.gpsMapDatumRead == true { assets[index].metadata?.gpsMapDatumRead = true }
                 }
                 if assets[index].metadata?.gpsAltitude == nil,
                    assets[index].metadata?.gpsLatitude == location.latitude, assets[index].metadata?.gpsLongitude == location.longitude,

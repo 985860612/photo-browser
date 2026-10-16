@@ -119,7 +119,9 @@ enum ThumbnailImageDecoder {
         try check()
         try disk.write(mutable as Data, key: key, suffix: ".jpg", token: token)
         try check()
-        let metadata = ImageMetadataReader.read(source)
+        var metadata = ImageMetadataReader.read(source)
+        // Embedded RAW previews may omit a datum present in the original header.
+        if embedded { metadata?.gpsMapDatumRead = nil }
         if let metadata { try disk.write(JSONEncoder().encode(metadata), key: key, suffix: ".json", token: token) }
         return LoadedPreview(image: image, metadata: metadata)
     }

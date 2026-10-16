@@ -42,7 +42,7 @@ public final class MetadataReader {
         p.executableURL = binary
         p.currentDirectoryURL = directory
         p.arguments = ["-fast", "-j", "-DateTimeOriginal", "-SubSecTimeOriginal", "-SequenceNumber", "-FocalLength#", "-FNumber", "-ISO", "-ExposureTime", "-Model", "-LensModel", "-ImageWidth", "-ImageHeight",
-                       "-GPSLatitude#", "-GPSLatitudeRef#", "-GPSLongitude#", "-GPSLongitudeRef#", "-GPSAltitude#", "-GPSAltitudeRef#", "--"] + assets.map { $0.metadataFile.url.lastPathComponent }
+                       "-GPSMapDatum", "-GPSLatitude#", "-GPSLatitudeRef#", "-GPSLongitude#", "-GPSLongitudeRef#", "-GPSAltitude#", "-GPSAltitudeRef#", "--"] + assets.map { $0.metadataFile.url.lastPathComponent }
         p.standardOutput = output; p.standardError = errorHandle
         lock.lock()
         if cancelled { lock.unlock(); throw CancellationError() }
@@ -81,6 +81,8 @@ public final class MetadataReader {
             value.lensModel = object["LensModel"] as? String
             value.width = (object["ImageWidth"] as? NSNumber)?.intValue
             value.height = (object["ImageHeight"] as? NSNumber)?.intValue
+            value.gpsMapDatum = object["GPSMapDatum"] as? String
+            value.gpsMapDatumRead = true
             if let location = PhotoLocation(exifLatitude: (object["GPSLatitude"] as? NSNumber)?.doubleValue,
                                             latitudeRef: object["GPSLatitudeRef"] as? String,
                                             exifLongitude: (object["GPSLongitude"] as? NSNumber)?.doubleValue,

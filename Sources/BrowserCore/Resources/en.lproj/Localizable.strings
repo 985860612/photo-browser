@@ -409,3 +409,21 @@
 "已复制 %@ 个文件到剪贴板" = "Copied %@ files to the clipboard";
 "已将 %@ 个项目、%@ 个文件移到 _del，可在移动记录中撤销" = "Moved %@ items and %@ files to _del; undo in Move History";
 "已移动 %@ 个项目、%@ 个文件，可在移动记录中撤销" = "Moved %@ items and %@ files; undo in Move History";
+
+"照片坐标系" = "Photo Coordinate System";
+
+"未识别时优先使用" = "Use When Unrecognized";
+
+"优先识别照片中的坐标系标记；没有可识别标记时使用此设置。修改立即生效，重开软件后保留。" = "Photo coordinate-system markers take priority. This setting applies when no marker is recognized. Changes apply immediately and are saved.";
+
+"坐标系" = "Coordinate System";
+
+"判断来源" = "Determined By";
+
+"照片标记" = "Photo Metadata";
+
+"使用默认设置" = "Default Setting";
+
+"未识别的照片标记：%@" = "Unrecognized photo datum: %@";
+
+"坐标转换失败，请检查照片坐标和坐标系设置。" = "Coordinate conversion failed. Check the photo coordinates and coordinate-system setting.";

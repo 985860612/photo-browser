@@ -1,6 +1,6 @@
 import Foundation
 
-/// EXIF coordinates stay in their original WGS 84 system; no geographic guessing or offsets.
+/// Raw EXIF coordinates stay unchanged; the coordinate system is resolved separately from metadata.
 public struct PhotoLocation: Equatable, Sendable {
     public let latitude: Double
     public let longitude: Double
