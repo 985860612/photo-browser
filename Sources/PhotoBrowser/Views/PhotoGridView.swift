@@ -41,9 +41,14 @@ struct PhotoGridView: View {
                                 Button(L10n.text("在 Finder 显示所有格式")) { NSWorkspace.shared.activateFileViewerSelecting(asset.mediaFiles.map(\.url)) }
                             }
                     }
-                }.padding(15)
-            }.onChange(of: store.navigationScrollTarget) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
-                .onChange(of: store.sortingRevision) { _, _ in if let id = store.selectedItemID { proxy.scrollTo(id, anchor: .center) } }
+                }.scrollTargetLayout().padding(15)
+            }.scrollPosition(id: $store.gridScrollID, anchor: .top)
+                .onChange(of: store.navigationScrollTarget, initial: true) { _, id in
+                    if let id { store.gridScrollID = id; proxy.scrollTo(id, anchor: .center) }
+                }
+                .onChange(of: store.sortingRevision) { _, _ in
+                    if let id = store.selectedItemID { store.gridScrollID = id; proxy.scrollTo(id, anchor: .center) }
+                }
         }
         }
     }

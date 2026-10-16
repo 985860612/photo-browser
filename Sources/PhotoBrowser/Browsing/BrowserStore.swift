@@ -7,8 +7,8 @@ import Combine
     @Published var directory: URL?
     @Published var assets: [PhotoAsset] = [] { didSet { visibleOrdering = nil } }
     @Published var groups: [PhotoGroup] = [] { didSet { visibleOrdering = nil } }
-    @Published var scope = "all" { didSet { visibleOrdering = nil } }
-    @Published var search = "" { didSet { visibleOrdering = nil } }
+    @Published var scope = "all" { didSet { visibleOrdering = nil; if scope != oldValue { gridScrollID = nil } } }
+    @Published var search = "" { didSet { visibleOrdering = nil; if search != oldValue { gridScrollID = nil } } }
     var visibleOrdering: [PhotoAsset]? { didSet { visiblePositions = nil } }
     private var visiblePositions: [String: Int]?
     @Published var previewSortField: PreviewSortField = .original { didSet { if oldValue != previewSortField { sortingChanged() } } }
@@ -19,7 +19,16 @@ import Combine
     @Published var selection: Set<String> = []
     @Published var selectedFolderID: String?
     @Published var navigationScrollTarget: String?
-    @Published var focusedID: String? { didSet { if focusedID != oldValue { video.stop(); livePhotoMotionID = nil; observeFocusedFiles() } } }
+    // Fullscreen replaces the grid, so its visible-row anchor belongs to the store.
+    @Published var gridScrollID: String?
+    @Published var focusedID: String? {
+        didSet {
+            if focusedID != oldValue {
+                video.stop(); livePhotoMotionID = nil; observeFocusedFiles()
+                if isFullscreenPreview { gridScrollID = focusedID }
+            }
+        }
+    }
     @Published var preferredFileID: String? { didSet { if preferredFileID != oldValue { if livePhotoMotionID != nil || video.fileID != focusedFile?.id { video.stop() }; livePhotoMotionID = nil } } }
     @Published var isLoading = false
     @Published var livePhotoMotionID: String?
