@@ -6,19 +6,29 @@ struct UpdateSettingsView: View {
 
     var body: some View {
         Section {
-            LabeledContent(L10n.text("当前版本"), value: updater.version)
+            HStack {
+                LabeledContent(L10n.text("当前版本"), value: updater.version)
+                Button(L10n.text("检查更新…")) { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+            }
             Toggle(L10n.text("自动检查更新"), isOn: $updater.automaticallyChecksForUpdates)
                 .disabled(!updater.isAvailable)
             Toggle(L10n.text("自动下载并安装更新"), isOn: $updater.automaticallyDownloadsUpdates)
                 .disabled(!updater.isAvailable || !updater.allowsAutomaticUpdates)
-            Text(L10n.text("启动时及每隔 24 小时检查新版。开启自动更新后，在后台下载并在退出时安装；也可立即安装并重新启动。"))
-                .font(.caption).foregroundStyle(.secondary)
-            Button(L10n.text("检查更新…")) { updater.checkForUpdates() }
-                .disabled(!updater.canCheckForUpdates)
-            if let date = updater.lastUpdateCheckDate {
-                LabeledContent(L10n.text("上次检查"), value: date.formatted(date: .abbreviated, time: .shortened))
-            }
-            if let status = updater.status { Text(status).font(.caption).textSelection(.enabled) }
         } header: { Label(L10n.text("软件更新"), systemImage: "arrow.down.circle") }
+        footer: {
+            let lastCheck = updater.lastUpdateCheckDate.map {
+                L10n.text("上次检查：\($0.formatted(date: .abbreviated, time: .shortened))")
+            }
+            let summary = [updater.status, lastCheck].compactMap { $0 }.joined(separator: " · ")
+            if !summary.isEmpty { Text(summary).textSelection(.enabled) }
+        }
+        Section {
+            Text(L10n.text("启动时及每隔 24 小时检查新版；自动下载的更新在退出时安装。"))
+                .font(.caption).foregroundStyle(.secondary)
+            DisclosureGroup(L10n.text("了解更多")) {
+                Text(L10n.text("也可从更新提示立即安装并重新启动；文件操作完成前会等待。"))
+            }.font(.caption).foregroundStyle(.secondary)
+        }
     }
 }
