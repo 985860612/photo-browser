@@ -64,7 +64,7 @@ extension ThumbnailChecks {
             try require(try Data(contentsOf: jpeg) == bytes && freshJPEG.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate == date,
                         "GPS enrichment does not regenerate cached JPEGs")
             let stored = try JSONSerialization.jsonObject(with: Data(contentsOf: cacheDirectory.appendingPathComponent(headerKey + ".json"))) as! [String: Any]
-            try require(stored["version"] as? Int == 2, "enriched header cache records its GPS-capable schema")
+            try require(stored["version"] as? Int == 3, "enriched header cache records its GPS-capable schema")
             try require(try Data(contentsOf: file.url) == original, "GPS reading leaves original photo bytes unchanged")
             try fm.removeItem(at: file.url)
             let offline = try await ThumbnailCache(directory: cacheDirectory).sourceMetadata(file)

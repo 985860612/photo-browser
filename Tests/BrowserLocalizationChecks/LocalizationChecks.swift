@@ -30,6 +30,9 @@ import BrowserCore
         try require(L10n.text("发现新版本：\("0.4.12")") == (chinese ? "发现新版本：0.4.12" : "New version available: 0.4.12"), "Update version did not translate")
         try require(L10n.text("在地图中打开") == (chinese ? "在地图中打开" : "Open in Maps") &&
                     L10n.text("纬度") == (chinese ? "纬度" : "Latitude"), "GPS fields and map action did not translate")
+        try require(L10n.text("未识别时优先使用") == (chinese ? "未识别时优先使用" : "Use When Unrecognized") &&
+                    L10n.text("照片标记") == (chinese ? "照片标记" : "Photo Metadata") &&
+                    L10n.text("使用默认设置") == (chinese ? "使用默认设置" : "Default Setting"), "Coordinate-system setting and provenance did not translate")
         try require(L10n.text("100% 像素") == (chinese ? "100% 像素" : "100% Pixels"), "A literal percent sign was changed")
         try require(L10n.text("\(1) 张已选") == (chinese ? "1 张已选" : "Selected: 1"), "Single selection count did not translate")
         try require(L10n.text("\(1259) 张照片 · \(2518) 个图像文件 · \(14) 个分组") == (chinese ? "1259 张照片 · 2518 个图像文件 · 14 个分组" : "Photos: 1259 · Image files: 2518 · Groups: 14"), "Status counts did not translate")

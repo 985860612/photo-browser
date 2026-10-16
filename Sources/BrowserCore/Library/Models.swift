@@ -29,6 +29,13 @@ public struct PhotoMetadata: Codable, Sendable {
     public var gpsLatitude: Double?
     public var gpsLongitude: Double?
     public var gpsAltitude: Double?
+    public var gpsMapDatum: String?
+    /// nil in legacy metadata; true also records an absent tag so it is not repeatedly reread.
+    public var gpsMapDatumRead: Bool?
+    public var detectedCoordinateSystem: PhotoCoordinateSystem? { PhotoCoordinateSystem(mapDatum: gpsMapDatum) }
+    public func coordinateSystem(preferred: PhotoCoordinateSystem) -> PhotoCoordinateSystem {
+        detectedCoordinateSystem ?? preferred
+    }
     public var location: PhotoLocation? {
         guard let gpsLatitude, let gpsLongitude else { return nil }
         return PhotoLocation(latitude: gpsLatitude, longitude: gpsLongitude, altitude: gpsAltitude)

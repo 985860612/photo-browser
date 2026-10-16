@@ -31,6 +31,7 @@ private final class Counts: @unchecked Sendable {
             }
             try await workerChecks()
             try await gpsChecks()
+            try await coordinateSystemChecks()
             try networkReaderChecks()
             try await livePhotoChecks()
             try await cacheChecks()

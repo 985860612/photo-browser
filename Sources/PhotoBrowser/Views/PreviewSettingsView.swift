@@ -10,6 +10,15 @@ struct PreviewSettingsView: View {
         Form {
             UpdateSettingsView()
             Section {
+                Picker(L10n.text("未识别时优先使用"), selection: $store.preferredCoordinateSystem) {
+                    ForEach(PhotoCoordinateSystem.allCases, id: \.self) { system in
+                        Text(system.label).tag(system)
+                    }
+                }
+                Text(L10n.text("优先识别照片中的坐标系标记；没有可识别标记时使用此设置。修改立即生效，重开软件后保留。"))
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: { Label(L10n.text("照片坐标系"), systemImage: "globe") }
+            Section {
                 Stepper(value: $store.previewBefore, in: PreviewPreferences.range) {
                     HStack { Text(L10n.text("向前预加载")); Spacer(); Text(L10n.text("\(store.previewBefore) 张")).monospacedDigit() }
                 }

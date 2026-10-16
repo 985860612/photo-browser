@@ -28,7 +28,7 @@ import BrowserCore
 
     @MainActor static func run() async throws {
         try await directoryObserverChecks()
-        try mapChecks()
+        try await mapChecks()
         try await coordinatorChecks()
         try await folderDeletionChecks()
         try await permanentMediaDeletionChecks()

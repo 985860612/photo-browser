@@ -18,7 +18,7 @@ public actor ThumbnailCache {
     private let memory = NSCache<NSString, Entry>()
     private struct SourceMetadata: Codable {
         let metadata: PhotoMetadata?
-        var version: Int? = 2
+        var version: Int? = 3
     }
     private final class MetadataEntry: NSObject {
         let value: SourceMetadata
@@ -58,7 +58,7 @@ public actor ThumbnailCache {
     }
 
     /// Read original metadata independently of old/embedded thumbnail metadata. No pixel decoding.
-    /// Missing lens/GPS tags are cached too. Old headers are enriched once without regenerating JPEGs.
+    /// Missing lens/GPS/datum tags are cached too. Old headers are enriched once without regenerating JPEGs.
     public func sourceMetadata(_ file: PhotoFile) async throws -> PhotoMetadata? {
         try Task.checkCancellation()
         let key = Self.metadataKey(file)
@@ -76,7 +76,7 @@ public actor ThumbnailCache {
                 do { return try JSONDecoder().decode(SourceMetadata.self, from: bytes) }
                 catch is DecodingError { return nil } // Damaged local metadata can be reread.
             }
-            if let saved, saved.version == 2, saved.metadata != nil { try check(); return saved }
+            if let saved, saved.version == 3, saved.metadata != nil { try check(); return saved }
             // Use the same byte-backed NAS JPEG reader as previews. Mixing ImageIO URL sources
             // with concurrent preview reads can stall SMB opens for several seconds.
             guard let source = try PhotoMediaSource.open(file, check: check) else {

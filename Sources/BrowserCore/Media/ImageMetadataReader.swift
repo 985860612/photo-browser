@@ -23,6 +23,8 @@ public enum ImageMetadataReader {
         let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any]
         value.camera = tiff?[kCGImagePropertyTIFFModel as String] as? String
         let gps = props[kCGImagePropertyGPSDictionary as String] as? [String: Any] ?? [:]
+        value.gpsMapDatum = gps[kCGImagePropertyGPSMapDatum as String] as? String
+        value.gpsMapDatumRead = true
         if let location = PhotoLocation(exifLatitude: (gps[kCGImagePropertyGPSLatitude as String] as? NSNumber)?.doubleValue,
                                         latitudeRef: gps[kCGImagePropertyGPSLatitudeRef as String] as? String,
                                         exifLongitude: (gps[kCGImagePropertyGPSLongitude as String] as? NSNumber)?.doubleValue,
