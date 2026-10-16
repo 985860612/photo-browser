@@ -57,7 +57,7 @@ public actor ThumbnailCache {
         Self.digest("metadata-v1|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)")
     }
 
-    /// Read the original header independently of old/embedded thumbnail metadata. No pixel decoding.
+    /// Read original metadata independently of old/embedded thumbnail metadata. No pixel decoding.
     /// Missing lens/GPS tags are cached too. Old headers are enriched once without regenerating JPEGs.
     public func sourceMetadata(_ file: PhotoFile) async throws -> PhotoMetadata? {
         try Task.checkCancellation()
@@ -77,7 +77,9 @@ public actor ThumbnailCache {
                 catch is DecodingError { return nil } // Damaged local metadata can be reread.
             }
             if let saved, saved.version == 2, saved.metadata != nil { try check(); return saved }
-            guard let source = try file.isLivePhoto ? PhotoMediaSource.open(file, check: check) : CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            // Use the same byte-backed NAS JPEG reader as previews. Mixing ImageIO URL sources
+            // with concurrent preview reads can stall SMB opens for several seconds.
+            guard let source = try PhotoMediaSource.open(file, check: check) else {
                 throw BrowserFailure.message(L10n.text("无法读取 \(file.url.lastPathComponent)"))
             }
             guard let metadata = ImageMetadataReader.read(source) else {

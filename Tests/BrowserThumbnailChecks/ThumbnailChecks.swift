@@ -24,6 +24,11 @@ private final class Counts: @unchecked Sendable {
 @main struct ThumbnailChecks {
     static func main() async {
         do {
+            let arguments = Array(CommandLine.arguments.dropFirst())
+            if arguments.first == "--nas-read-check" {
+                try await nasReadChecks(Array(arguments.dropFirst()))
+                return
+            }
             try await workerChecks()
             try await gpsChecks()
             try networkReaderChecks()
