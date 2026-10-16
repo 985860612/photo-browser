@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import BrowserCore
-import ImageIO
 
 struct CaptureDates {
     var dates: [String: Date] = [:]
@@ -16,7 +15,6 @@ struct CaptureDates {
     private var checked: [String: String] = [:]
     private var scope = ""
     private let thumbnails: ThumbnailCache
-    private let workers = PreviewWorkQueue()
 
     init(thumbnails: ThumbnailCache) { self.thumbnails = thumbnails }
 
@@ -30,7 +28,7 @@ struct CaptureDates {
         cancel(); self.scope = scope
         let snapshot = assets.filter { !$0.isVideo && $0.metadata?.captured == nil && checked[$0.id] != $0.fingerprint }
         guard !snapshot.isEmpty else { return }
-        let ticket = ticket, thumbnails = thumbnails, workers = workers
+        let ticket = ticket, thumbnails = thumbnails
         loading = true
         task = Task { [weak self] in
             var result = CaptureDates()
@@ -39,13 +37,8 @@ struct CaptureDates {
                     let preview = try await thumbnails.image(asset.preferred, maximum: 520, background: true)
                     if let captured = preview.metadata?.captured { result.dates[asset.id] = captured }
                     else {
-                        let file = asset.metadataFile
-                        result.dates[asset.id] = try await workers.run(background: true) { check in
-                            try check()
-                            guard let source = CGImageSourceCreateWithURL(file.url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
-                                  let metadata = ImageMetadataReader.read(source) else { return nil }
-                            try check(); return metadata.captured
-                        }
+                        // Share the inspector's EXIF cache and bounded NAS reader.
+                        result.dates[asset.id] = try await thumbnails.sourceMetadata(asset.metadataFile)?.captured
                     }
                 } catch is CancellationError { return }
                 catch { /* Missing capture dates use modification time; preview errors remain visible. */ }

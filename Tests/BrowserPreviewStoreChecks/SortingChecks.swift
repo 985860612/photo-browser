@@ -123,6 +123,34 @@ extension PreviewStoreChecks {
         store.assets = [PhotoAsset(id: "raw", name: "raw", files: [raw])]
         store.previewSortField = .captured; try await until { !store.isReadingSortDates }
         try expect(store.assets[0].metadata?.captured != nil, "cached RAW previews without date metadata use the original source-header capture date")
+
+        // A legacy thumbnail may lack dates even after the inspector has cached the source EXIF.
+        let offlineURL = photos.appendingPathComponent("offline.jpg")
+        try fm.copyItem(at: photos.appendingPathComponent("z.jpg"), to: offlineURL)
+        let offlineValues = try offlineURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let offline = PhotoFile(url: offlineURL, kind: .rendered, size: Int64(offlineValues.fileSize!), modified: offlineValues.contentModificationDate!)
+        let header = try await store.thumbnails.sourceMetadata(offline)
+        try expect(header?.captured != nil, "offline capture-date fixture caches the original EXIF date")
+        _ = try await store.thumbnails.image(offline, maximum: 520)
+        let offlineKey = ThumbnailCache.digest("v1|\(offline.url.path)|\(offline.size)|\(offline.modified.timeIntervalSince1970)|520")
+        try JSONEncoder().encode(PhotoMetadata()).write(to: root.appendingPathComponent("cache/" + offlineKey + ".json"))
+        try fm.removeItem(at: offlineURL)
+        let loader = CaptureDateLoader(thumbnails: ThumbnailCache(directory: root.appendingPathComponent("cache")))
+        defer { loader.cancel() }
+        let offlineAsset = PhotoAsset(id: "offline", name: "offline", files: [offline])
+        var backfill: CaptureDates?
+        loader.load([offlineAsset], scope: "offline") { backfill = $0 }
+        try await until { !loader.loading }
+        try expect(backfill?.dates[offlineAsset.id] == header?.captured,
+                   "capture-date backfill reuses shared EXIF cache with the original offline and a legacy dateless thumbnail")
+        try expect(backfill?.fingerprints[offlineAsset.id] == offlineAsset.fingerprint,
+                   "cached capture-date backfill retains the source fingerprint")
+        loader.cancel(reset: true)
+        var cancelledCallback = false
+        loader.load([offlineAsset], scope: "cancelled") { _ in cancelledCallback = true }
+        loader.cancel()
+        try await Task.sleep(for: .milliseconds(30))
+        try expect(!cancelledCallback, "cancelling capture-date backfill suppresses obsolete completion callbacks")
     }
 
 }
