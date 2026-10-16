@@ -275,6 +275,7 @@ import Combine
             if assets[index].metadata?.aperture == nil { assets[index].metadata?.aperture = value.aperture }
             if assets[index].metadata?.iso == nil { assets[index].metadata?.iso = value.iso }
             if assets[index].metadata?.shutter == nil { assets[index].metadata?.shutter = value.shutter }
+            if assets[index].metadata?.bitRate == nil { assets[index].metadata?.bitRate = value.bitRate }
             if let location = value.location {
                 if assets[index].metadata?.location == nil {
                     assets[index].metadata?.gpsLatitude = location.latitude

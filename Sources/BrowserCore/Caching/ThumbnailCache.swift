@@ -50,7 +50,8 @@ public actor ThumbnailCache {
 
     public nonisolated static func digest(_ string: String) -> String { SHA256.hash(data: Data(string.utf8)).map { String(format: "%02x", $0) }.joined() }
     private nonisolated static func key(_ file: PhotoFile, maximum: Int) -> String {
-        Self.digest("\(file.kind == .video ? "video-v1" : "v1")|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)|\(maximum)")
+        // v2 refreshes legacy video metadata that predates bitrate extraction.
+        Self.digest("\(file.kind == .video ? "video-v2" : "v1")|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)|\(maximum)")
     }
 
     private nonisolated static func metadataKey(_ file: PhotoFile) -> String {

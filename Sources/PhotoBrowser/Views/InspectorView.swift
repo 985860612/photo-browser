@@ -134,6 +134,7 @@ struct InspectorView: View {
             information(L10n.text("时长"), VideoMedia.durationLabel(value?.duration), icon: "timer")
             information(L10n.text("分辨率"), value?.width.flatMap { width in value?.height.map { "\(width) × \($0)" } } ?? "—", icon: "viewfinder")
             information(L10n.text("帧率"), value?.frameRate.map { String(format: "%.2f fps", $0) } ?? "—", icon: "speedometer")
+            information(L10n.text("码率"), VideoMedia.bitRateLabel(value?.bitRate), icon: "waveform.path")
         }
     }
 

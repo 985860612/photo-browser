@@ -44,6 +44,8 @@ public struct PhotoMetadata: Codable, Sendable {
     public var height: Int?
     public var duration: Double?
     public var frameRate: Float?
+    /// Average video-track bitrate in bits per second, excluding audio and container overhead.
+    public var bitRate: Float?
     public init(captured: Date? = nil, sequence: Int? = nil, focalLength: Double? = nil) {
         self.captured = captured; self.sequence = sequence; self.focalLength = focalLength
     }
