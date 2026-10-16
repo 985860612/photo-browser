@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import BrowserCore
 
 extension ThumbnailChecks {
@@ -27,6 +28,18 @@ extension ThumbnailChecks {
         try check(first.image.size.width == 24 && first.image.size.height == 32 && first.metadata?.width == 48 && first.metadata?.height == 64,
                   "video covers apply rotation and keep native resolution metadata")
         try check((first.metadata?.duration ?? 0) > 1 && (first.metadata?.frameRate ?? 0) > 0, "video duration and frame rate are available")
+        let track = try await AVURLAsset(url: videoURL).loadTracks(withMediaType: .video).first!
+        let trackBitRate = try await track.load(.estimatedDataRate)
+        try check(trackBitRate > 0 && first.metadata?.bitRate == trackBitRate, "video bitrate comes from the video track in bits per second")
+        let legacyKey = ThumbnailCache.digest("video-v1|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)|32")
+        let currentKey = ThumbnailCache.digest("video-v2|\(file.url.path)|\(file.size)|\(file.modified.timeIntervalSince1970)|32")
+        var legacyMetadata = first.metadata!
+        legacyMetadata.bitRate = nil
+        try JSONEncoder().encode(legacyMetadata).write(to: cacheDirectory.appendingPathComponent(legacyKey + ".json"))
+        try fm.moveItem(at: cacheDirectory.appendingPathComponent(currentKey + ".jpg"), to: cacheDirectory.appendingPathComponent(legacyKey + ".jpg"))
+        try fm.removeItem(at: cacheDirectory.appendingPathComponent(currentKey + ".json"))
+        let refreshed = try await ThumbnailCache(directory: cacheDirectory).image(file, maximum: 32)
+        try check(refreshed.metadata?.bitRate == trackBitRate, "old video caches without bitrate are refreshed automatically")
         let summaries = FolderSummaryCache(directory: root.appendingPathComponent("summaries"), checkInterval: 0)
         let summary = try await summaries.summary(of: root)
         try check(summary.count == 1 && summary.videoCount == 1, "folder summaries count video and photo families separately")
@@ -36,7 +49,7 @@ extension ThumbnailChecks {
                   "MP4, MOV and M4V are recognized as independent files even with identical basenames")
         try fm.moveItem(at: videoURL, to: root.appendingPathComponent("offline.bin"))
         let disk = try await ThumbnailCache(directory: cacheDirectory).image(file, maximum: 32)
-        try check(disk.image.size == first.image.size && disk.metadata?.duration == first.metadata?.duration,
+        try check(disk.image.size == first.image.size && disk.metadata?.duration == first.metadata?.duration && disk.metadata?.bitRate == trackBitRate,
                   "video covers and metadata survive a cache restart without reading the original")
         let time = Date()
         let captures = (0..<6).map { index in
@@ -47,6 +60,12 @@ extension ThumbnailChecks {
         try check(candidates.count == 1 && candidates[0].assetIDs == ["capture-0", "capture-1", "capture-2"],
                   "panorama grouping preserves consecutive photos while excluding consecutive videos")
         try check(VideoMedia.durationLabel(3661) == "1:01:01" && VideoMedia.durationLabel(.infinity) == "—", "video duration labels handle long and unavailable durations")
+        try check(VideoMedia.bitRateLabel(56_320_000) == "56.32 Mbps" && VideoMedia.bitRateLabel(768_000) == "768.00 kbps"
+                  && VideoMedia.bitRateLabel(1_000_000) == "1.00 Mbps", "bitrate labels use decimal kbps and Mbps")
+        try check([nil, Float.zero, -1, .infinity, .nan].allSatisfy { VideoMedia.bitRateLabel($0) == "—" },
+                  "missing and invalid bitrates display as unknown")
+        let legacy = try JSONDecoder().decode(PhotoMetadata.self, from: Data(#"{"duration":2,"frameRate":30}"#.utf8))
+        try check(legacy.bitRate == nil && legacy.frameRate == 30, "legacy metadata without bitrate remains decodable")
         do { _ = try await cache.image(PhotoFile(url: root.appendingPathComponent("missing.mp4"), kind: .video), maximum: 32)
             throw BrowserFailure.message("missing video succeeded")
         } catch let error as BrowserFailure {

@@ -13,6 +13,13 @@ public enum VideoMedia {
             : String(format: "%d:%02d", total / 60, total % 60)
     }
 
+    public static func bitRateLabel(_ bitsPerSecond: Float?) -> String {
+        guard let bitsPerSecond, bitsPerSecond.isFinite, bitsPerSecond > 0 else { return "—" }
+        return bitsPerSecond >= 1_000_000
+            ? String(format: "%.2f Mbps", bitsPerSecond / 1_000_000)
+            : String(format: "%.2f kbps", bitsPerSecond / 1_000)
+    }
+
     public static func preview(_ file: PhotoFile, maximum: Int, background isBackground: Bool = false) async throws -> LoadedPreview {
         try await (isBackground ? background : foreground).run {
             let asset = AVURLAsset(url: file.url)
@@ -28,11 +35,13 @@ public enum VideoMedia {
                 let size = try await track.load(.naturalSize)
                 let transform = try await track.load(.preferredTransform)
                 let frameRate = try await track.load(.nominalFrameRate)
+                let bitRate = try await track.load(.estimatedDataRate)
                 let bounds = CGRect(origin: .zero, size: size).applying(transform)
                 var metadata = PhotoMetadata()
                 metadata.width = Int(abs(bounds.width).rounded()); metadata.height = Int(abs(bounds.height).rounded())
                 metadata.duration = duration.isFinite && duration >= 0 ? duration : nil
                 metadata.frameRate = frameRate.isFinite && frameRate > 0 ? frameRate : nil
+                metadata.bitRate = bitRate.isFinite && bitRate > 0 ? bitRate : nil
                 let sample = CMTime(seconds: duration.isFinite && duration > 2 ? 1 : 0, preferredTimescale: 600)
                 let result = try await generator.image(at: sample)
                 try Task.checkCancellation()

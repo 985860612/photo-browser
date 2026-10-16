@@ -34,6 +34,15 @@ extension PreviewStoreChecks {
         store.focusedID = store.assets[0].id; store.selection = [store.assets[0].id]
         try expect(store.focusedFile?.kind == .video && store.directorySummary.contains("1"), "video-only directories have a focused media file and status counts")
         try expect(store.adjacentPreviewFiles.isEmpty, "videos are not sent through still-image preloading")
+        let videoID = store.focusedID!
+        var legacyMetadata = PhotoMetadata()
+        legacyMetadata.duration = 2; legacyMetadata.frameRate = 10
+        store.updateMetadata(videoID, value: legacyMetadata)
+        var enrichedMetadata = legacyMetadata
+        enrichedMetadata.bitRate = 56_320_000
+        store.updateMetadata(videoID, value: enrichedMetadata)
+        try expect(store.focusedAsset?.metadata?.bitRate == enrichedMetadata.bitRate && store.focusedAsset?.metadata?.duration == 2,
+                   "video inspector enriches existing session metadata with bitrate")
         await store.video.load(store.focusedFile!); try await until { !store.video.loading }
         let selectedItem = store.video.player.currentItem
         store.preferredFileID = store.focusedFile!.id

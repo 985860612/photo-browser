@@ -175,6 +175,7 @@
 "时长" = "Duration";
 "分辨率" = "Resolution";
 "帧率" = "Frame Rate";
+"码率" = "Bitrate";
 "全部照片与视频" = "All Photos and Videos";
 "全屏播放" = "Fullscreen Playback";
 "播放 / 暂停" = "Play / Pause";
