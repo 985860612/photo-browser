@@ -6,6 +6,14 @@ import BrowserCore
     @MainActor static func main() async {
         _ = NSApplication.shared
         do {
+            if CommandLine.arguments.contains("--focus-points-only") {
+                let root = FileManager.default.temporaryDirectory.appendingPathComponent("PhotoBrowser-FocusChecks-\(UUID().uuidString)")
+                try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+                defer { try? FileManager.default.removeItem(at: root) }
+                try await focusPointChecks(root: root)
+                print("PASS all focus point checks")
+                return
+            }
             if let index = CommandLine.arguments.firstIndex(of: "--disk-image-directory"), index + 1 < CommandLine.arguments.count {
                 try await realDiskImageChecks(in: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
                 return
@@ -107,6 +115,7 @@ import BrowserCore
         try await adjacentDecodeChecks(root: root, jpeg: data as Data)
         try await deletionChecks(root: root, jpeg: data as Data)
         try await canvasRenderChecks(root: root)
+        try await focusPointChecks(root: root)
         print("PASS all preview store and navigation checks")
     }
 

@@ -5,6 +5,7 @@ import BrowserCore
 struct FullscreenPreview: View {
     @EnvironmentObject private var store: BrowserStore
     @StateObject private var preview = PreviewPresentation()
+    @StateObject private var focus = FocusPointPresentation()
     private var photo: DisplayPhoto? { preview.photo }
     private var thumbnail: NSImage? { preview.thumbnail }
     private var failure: String? { preview.failure }
@@ -44,6 +45,7 @@ struct FullscreenPreview: View {
                     if let assetID { store.updateMetadata(assetID, value: metadata) }
                 }
             }
+            .task(id: store.focusPointFile) { await focus.load(store.focusPointFile) }
     }
 
     private var canvas: some View {
@@ -53,7 +55,8 @@ struct FullscreenPreview: View {
                 VideoPreviewView(file: file, playback: store.video).ignoresSafeArea()
             } else {
             PhotoCanvas(photo: preview.fileID == store.focusedFile?.id ? photo : nil,
-                        identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale) { preview.failure = $0 }
+                        identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale,
+                        focusRegions: focus.regions(for: store.focusPointFile, enabled: store.showFocusPoints)) { preview.failure = $0 }
                 .ignoresSafeArea().opacity(photo != nil && preview.fileID == store.focusedFile?.id ? 1 : 0)
             if photo == nil, let thumbnail, preview.fileID == store.focusedFile?.id {
                 Image(nsImage: thumbnail).resizable().scaledToFit().ignoresSafeArea()
@@ -66,6 +69,11 @@ struct FullscreenPreview: View {
                         .padding(.bottom, controlsVisible ? 60 : 20)
                 }
             } else if photo == nil && thumbnail == nil { ProgressView(L10n.text("加载照片预览…")) }
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if store.focusPointFile != nil {
+                FocusPointStatus(focus: focus, file: store.focusPointFile).padding(.top, controlsVisible ? 54 : 0)
             }
         }
     }
@@ -93,6 +101,7 @@ struct FullscreenPreview: View {
             Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).help(L10n.text("启用原图 HDR / EDR 显示；普通照片保持 SDR"))
             Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch)
                 .help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG"))
+            FocusPointToggle(enabled: $store.showFocusPoints)
             if let asset = store.focusedAsset {
                 ForEach(asset.imageFiles) { file in
                     Button(file.format) { store.preferredFileID = file.id }

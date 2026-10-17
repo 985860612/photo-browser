@@ -136,6 +136,9 @@ import Combine
     @Published var hdrPreview = UserDefaults.standard.object(forKey: "hdrPreview") as? Bool ?? true {
         didSet { UserDefaults.standard.set(hdrPreview, forKey: "hdrPreview") }
     }
+    @Published var showFocusPoints = false {
+        didSet { preferencesDefaults.set(showFocusPoints, forKey: "showFocusPoints") }
+    }
     weak var previewWindow: NSWindow?
     var enteredFullscreen = false
     var loadID = UUID()
@@ -155,6 +158,7 @@ import Combine
         self.diskImageService = diskImageService
         self.folderSummaries = folderSummaries; self.folderSizes = folderSizes
         preferencesDefaults = defaults
+        showFocusPoints = defaults.bool(forKey: "showFocusPoints")
         preferredCoordinateSystem = LocationPreferences(defaults: defaults).preferredCoordinateSystem
         previewSortField = defaults.string(forKey: "previewSortField").flatMap(PreviewSortField.init(rawValue:)) ?? .original
         previewSortDescending = defaults.bool(forKey: "previewSortDescending")
@@ -196,6 +200,10 @@ import Combine
         if let file = focusedFile, file.kind == .video { return file }
         guard let asset = focusedAsset, livePhotoMotionID == asset.id else { return nil }
         return asset.mediaFiles.first(where: \.isLivePhoto)
+    }
+    var focusPointFile: PhotoFile? {
+        guard showFocusPoints, selectedFolderID == nil, playbackFile == nil else { return nil }
+        return focusedFile
     }
     var previewRequestID: String {
         let file = focusedFile

@@ -10,6 +10,7 @@ struct PhotoCanvas: NSViewRepresentable {
     let hdr: Bool
     @Binding var zoom: Double
     @Binding var fitScale: Double
+    var focusRegions: [FocusRegion] = []
     var report: (String) -> Void
 
     func makeNSView(context: Context) -> CanvasView {
@@ -22,7 +23,7 @@ struct PhotoCanvas: NSViewRepresentable {
         view.onZoom = { zoom = $0 }
         view.onFitScale = { fitScale = $0 }
         view.onFailure = report
-        view.configure(photo: photo, identity: identity, hdr: hdr, zoom: zoom)
+        view.configure(photo: photo, identity: identity, hdr: hdr, zoom: zoom, focusRegions: focusRegions)
     }
 }
 
@@ -35,6 +36,7 @@ struct PhotoCanvas: NSViewRepresentable {
     private var hdr = true
     private var zoom: Double = 1
     private var pan = CGPoint.zero
+    private var focusRegions: [FocusRegion] = []
     private var dragPoint: CGPoint?
     private var screenObserver: NSObjectProtocol?
     private var lastReportedFit: Double = 0
@@ -67,10 +69,11 @@ struct PhotoCanvas: NSViewRepresentable {
         super.viewDidChangeBackingProperties(); reportFit(); needsDisplay = true
     }
 
-    func configure(photo: DisplayPhoto?, identity: String, hdr: Bool, zoom: Double) {
-        guard self.photo?.image !== photo?.image || self.identity != identity || self.hdr != hdr || self.zoom != zoom else { return }
+    func configure(photo: DisplayPhoto?, identity: String, hdr: Bool, zoom: Double, focusRegions: [FocusRegion] = []) {
+        guard self.photo?.image !== photo?.image || self.identity != identity || self.hdr != hdr || self.zoom != zoom || self.focusRegions != focusRegions else { return }
         if self.identity != identity { pan = .zero; self.identity = identity }
         self.photo = photo; self.hdr = hdr; self.zoom = zoom
+        self.focusRegions = focusRegions
         frameRevision &+= 1; retriedFrame = false
         reportFit()
         if zoom == 1 { pan = .zero }
@@ -141,12 +144,40 @@ struct PhotoCanvas: NSViewRepresentable {
             let placed = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
                 .transformed(by: CGAffineTransform(translationX: x, y: y))
             frame = placed.composited(over: background).cropped(to: viewport)
+            // Draw after tone mapping, using exactly the image's drawable-size and pan transform.
+            // Border widths stay constant on screen, including when zooming or using Retina.
+            let line = 2 * viewport.width / bounds.width
+            let ordered = focusRegions.filter { $0.kind != .inFocus } + focusRegions.filter { $0.kind == .inFocus }
+            for region in ordered {
+                let rect = CGRect(x: x + region.rect.minX * photo.size.width * scale,
+                                  y: y + (1 - region.rect.maxY) * photo.size.height * scale,
+                                  width: region.rect.width * photo.size.width * scale,
+                                  height: region.rect.height * photo.size.height * scale)
+                let color: CIColor
+                switch region.kind {
+                case .inFocus: color = CIColor(red: 1, green: 0.05, blue: 0.05)
+                case .selected: color = CIColor(red: 1, green: 0.85, blue: 0)
+                case .recorded: color = CIColor(red: 0, green: 0.85, blue: 1)
+                }
+                frame = border(rect, width: line + 2, color: .black, over: frame)
+                frame = border(rect, width: line, color: color, over: frame)
+            }
+            frame = frame.cropped(to: viewport)
         }
         let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: command)
         destination.colorSpace = outputSpace
         destination.isFlipped = true
         destination.alphaMode = .none
         _ = try ciContext.startTask(toRender: frame, from: viewport, to: destination, at: .zero)
+    }
+    private func border(_ rect: CGRect, width: CGFloat, color: CIColor, over image: CIImage) -> CIImage {
+        let outer = rect.insetBy(dx: -width / 2, dy: -width / 2)
+        let thickness = min(width, min(outer.width, outer.height) / 2)
+        let strips = [CGRect(x: outer.minX, y: outer.minY, width: outer.width, height: thickness),
+                      CGRect(x: outer.minX, y: outer.maxY - thickness, width: outer.width, height: thickness),
+                      CGRect(x: outer.minX, y: outer.minY, width: thickness, height: outer.height),
+                      CGRect(x: outer.maxX - thickness, y: outer.minY, width: thickness, height: outer.height)]
+        return strips.reduce(image) { CIImage(color: color).cropped(to: $1).composited(over: $0) }
     }
     private func changeZoom(_ value: Double, at anchor: CGPoint) {
         let new = min(10, max(0.1, value)), ratio = new / zoom
