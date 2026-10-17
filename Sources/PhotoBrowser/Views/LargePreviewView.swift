@@ -50,7 +50,6 @@ struct LargePreviewView: View {
                     .help(photo.map { L10n.text("原图 \($0.isHDR ? "HDR" : "SDR") · \($0.bitsPerComponent) 位") } ?? L10n.text("HDR / EDR 预览"))
                 Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch)
                     .help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG；缺少对应格式时自动使用已有格式"))
-                FocusPointToggle(enabled: $store.showFocusPoints)
                 Button(L10n.text("适应")) { zoom = 1 }
                 Slider(value: $zoom, in: 0.1...10).frame(width: 70).help(L10n.text("缩放"))
                 Text("\(Int(zoom * 100))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40)

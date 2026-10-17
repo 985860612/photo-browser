@@ -75,6 +75,10 @@ struct PreviewSettingsView: View {
             }
         } header: { Label(L10n.text("语言"), systemImage: "character.bubble") }
         Section {
+            FocusPointToggle(enabled: $store.showFocusPoints)
+        } header: { Label(L10n.text("照片预览"), systemImage: "viewfinder") }
+        footer: { Text(L10n.text("显示相机记录的对焦区域；红色为已合焦，黄色为已选择，青色为记录位置。")) }
+        Section {
             Picker(L10n.text("未识别时优先使用"), selection: $store.preferredCoordinateSystem) {
                 ForEach(PhotoCoordinateSystem.allCases, id: \.self) { system in
                     Text(system.label).tag(system)
