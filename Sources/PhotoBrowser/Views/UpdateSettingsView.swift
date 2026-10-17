@@ -24,11 +24,10 @@ struct UpdateSettingsView: View {
             if !summary.isEmpty { Text(summary).textSelection(.enabled) }
         }
         Section {
-            Text(L10n.text("启动时及每隔 24 小时检查新版；自动下载的更新在退出时安装。"))
-                .font(.caption).foregroundStyle(.secondary)
-            DisclosureGroup(L10n.text("了解更多")) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.text("启动时及每隔 24 小时检查新版；自动下载的更新在退出时安装。"))
                 Text(L10n.text("也可从更新提示立即安装并重新启动；文件操作完成前会等待。"))
-            }.font(.caption).foregroundStyle(.secondary)
+            }.font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
