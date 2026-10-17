@@ -5,6 +5,7 @@ import BrowserCore
 struct LargePreviewView: View {
     @EnvironmentObject private var store: BrowserStore
     @StateObject private var preview = PreviewPresentation()
+    @StateObject private var focus = FocusPointPresentation()
     private var photo: DisplayPhoto? { preview.photo }
     private var thumbnail: NSImage? { preview.thumbnail }
     private var loading: Bool { preview.loading }
@@ -21,7 +22,8 @@ struct LargePreviewView: View {
                         VideoPreviewView(file: file, playback: store.video)
                     } else {
                     PhotoCanvas(photo: preview.fileID == store.focusedFile?.id ? photo : nil,
-                                identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale) { preview.failure = $0 }
+                                identity: store.focusedFile?.id ?? "", hdr: store.hdrPreview, zoom: $zoom, fitScale: $fitScale,
+                                focusRegions: focus.regions(for: store.focusPointFile, enabled: store.showFocusPoints)) { preview.failure = $0 }
                         .opacity(photo != nil && preview.fileID == store.focusedFile?.id ? 1 : 0)
                     if photo == nil, let thumbnail, preview.fileID == store.focusedFile?.id {
                         Image(nsImage: thumbnail).resizable().scaledToFit()
@@ -32,6 +34,9 @@ struct LargePreviewView: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(alignment: .topLeading) {
+                if store.focusPointFile != nil { FocusPointStatus(focus: focus, file: store.focusPointFile) }
+            }
             HStack(spacing: 8) {
                 Button { store.step(-1) } label: { Image(systemName: "chevron.left") }
                 Text(store.focusedFile?.url.lastPathComponent ?? L10n.text("请选择照片")).lineLimit(1)
@@ -45,6 +50,7 @@ struct LargePreviewView: View {
                     .help(photo.map { L10n.text("原图 \($0.isHDR ? "HDR" : "SDR") · \($0.bitsPerComponent) 位") } ?? L10n.text("HDR / EDR 预览"))
                 Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch)
                     .help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG；缺少对应格式时自动使用已有格式"))
+                FocusPointToggle(enabled: $store.showFocusPoints)
                 Button(L10n.text("适应")) { zoom = 1 }
                 Slider(value: $zoom, in: 0.1...10).frame(width: 70).help(L10n.text("缩放"))
                 Text("\(Int(zoom * 100))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40)
@@ -72,6 +78,7 @@ struct LargePreviewView: View {
             }
         }
         .onDisappear { store.cancelAdjacentPreviews() }
+        .task(id: store.focusPointFile) { await focus.load(store.focusPointFile) }
         .task(id: store.previewRequestID) {
             if preview.fileID != store.focusedFile?.id { zoom = 1 }
             await store.preparePreviewCache()

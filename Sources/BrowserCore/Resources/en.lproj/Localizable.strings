@@ -478,3 +478,18 @@
 "上次检查：%@" = "Last checked: %@";
 "启动时及每隔 24 小时检查新版；自动下载的更新在退出时安装。" = "Checks at launch and every 24 hours. Automatically downloaded updates install on quit.";
 "也可从更新提示立即安装并重新启动；文件操作完成前会等待。" = "You can also install and relaunch from the update dialog. Installation waits for file operations to finish.";
+
+"对焦点" = "Focus Points";
+"显示相机记录的对焦区域；红色为已合焦，黄色为已选择，青色为记录位置。" = "Show focus areas recorded by the camera: red for in focus, yellow for selected, cyan for recorded location.";
+"显示的是拍摄时记录的对焦区域，不代表该区域一定清晰。" = "These are focus areas recorded at capture; they do not guarantee sharpness.";
+"读取对焦点…" = "Reading focus points…";
+"已合焦" = "In Focus";
+"已选择" = "Selected";
+"记录位置" = "Recorded Location";
+"手动对焦 · 无自动对焦点" = "Manual focus · No autofocus points";
+"未记录有效对焦点" = "No valid focus points recorded";
+"暂不支持此照片的对焦点" = "Focus points are not supported for this photo yet";
+"无法解析对焦点信息。" = "Unable to parse focus point information.";
+"显示对焦点需要 ExifTool。请安装后重试：brew install exiftool。" = "Showing focus points requires ExifTool. Install it and try again: brew install exiftool.";
+"读取对焦点超时，请重试。" = "Reading focus points timed out. Please try again.";
+"读取对焦点失败：%@" = "Unable to read focus points: %@";
