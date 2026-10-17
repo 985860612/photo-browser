@@ -51,6 +51,10 @@ struct BrowserView: View {
                 if store.isLoading || store.isReadingMetadata || store.isMoving { ProgressView().controlSize(.small) }
                 if store.directory != nil && !store.isLoading {
                     Text(store.directorySummary).font(.caption).monospacedDigit().lineLimit(1).layoutPriority(1)
+                    if store.selectedFolderID == nil, store.playbackFile == nil, store.focusedFile != nil {
+                        Text("·").foregroundStyle(.secondary)
+                        CurrentPhotoPixelCount().layoutPriority(1)
+                    }
                 }
                 if !store.status.isEmpty {
                     if store.directory != nil && !store.isLoading { Text("·").foregroundStyle(.secondary) }

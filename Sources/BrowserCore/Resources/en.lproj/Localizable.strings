@@ -480,6 +480,12 @@
 "也可从更新提示立即安装并重新启动；文件操作完成前会等待。" = "You can also install and relaunch from the update dialog. Installation waits for file operations to finish.";
 
 "对焦点" = "Focus Points";
+"%@ · %@ 像素" = "%@ · %@ pixels";
+"%@ · %@ · %@ · %@ 位" = "%@ · %@ · %@ · %@-bit";
+"当前照片：%@" = "Current photo: %@";
+"当前照片：像素未知" = "Current photo: Pixel count unavailable";
+"当前照片：读取像素…" = "Current photo: Reading pixel count…";
+"照片未提供有效的像素尺寸。" = "The photo does not provide valid pixel dimensions.";
 "显示对焦点" = "Show Focus Points";
 "照片预览" = "Photo Preview";
 "显示相机记录的对焦区域；红色为已合焦，黄色为已选择，青色为记录位置。" = "Show focus areas recorded by the camera: red for in focus, yellow for selected, cyan for recorded location.";

@@ -108,8 +108,9 @@ struct FullscreenPreview: View {
                 }
             }
             if loading { ProgressView().controlSize(.small); Text(L10n.text("加载高清原图…")) }
-            else if let photo {
-                Text(L10n.text("\(Int(photo.size.width)) × \(Int(photo.size.height)) · \(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位")).foregroundStyle(.secondary)
+            else if let photo, let pixels = PhotoPixelSize(photo: photo) {
+                Text(L10n.text("\(pixels.resolution) · \(pixels.total) · \(photo.isHDR ? "HDR" : "SDR") · \(photo.bitsPerComponent) 位"))
+                    .monospacedDigit().lineLimit(1).foregroundStyle(.secondary).help(pixels.detail)
             }
             }
         }.padding(20).onHover { hoveringControls = $0; revealControls() }
