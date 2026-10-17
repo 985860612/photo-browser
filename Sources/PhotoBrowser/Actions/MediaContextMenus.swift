@@ -24,9 +24,12 @@ struct CameraRawMenu: View {
                 store.toggleLivePhotoPlayback(asset)
             }.labelStyle(.titleAndIcon).disabled(store.isMoving || store.isLoading)
         } else if !asset.isVideo {
-            Button(L10n.text("在 Camera Raw 中打开"), systemImage: "camera.aperture") {
+            Button(store.cameraRawSources(for: asset).count > 1
+                   ? L10n.text("在 Camera Raw 中打开所选 \(store.cameraRawSources(for: asset).count) 张照片")
+                   : L10n.text("在 Camera Raw 中打开"), systemImage: "camera.aperture") {
                 store.openInCameraRaw(asset)
             }.labelStyle(.titleAndIcon).disabled(store.isReadOnlyDirectory)
+                .help(L10n.text("在 Camera Raw 胶片栏中多选照片，按 ⌘⇧M 合并全景并保存到原目录。"))
             Menu {
                 ForEach(asset.imageFiles) { file in
                     Button(file.format, systemImage: "photo") { store.openInCameraRaw(asset, file: file) }

@@ -34,6 +34,7 @@ import BrowserCore
     }
 
     @MainActor static func run() async throws {
+        try cameraRawSelectionChecks()
         try await directoryObserverChecks()
         try await mapChecks()
         try await coordinatorChecks()

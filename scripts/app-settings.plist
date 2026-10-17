@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>Build</key>
-	<string>25</string>
+	<string>26</string>
 	<key>FeedURL</key>
 	<string>https://github.com/985860612/photo-browser/releases/latest/download/appcast.xml</string>
 	<key>PublicEDKey</key>
@@ -11,6 +11,6 @@
 	<key>SigningAccount</key>
 	<string>local.wxj.PhotoBrowser</string>
 	<key>Version</key>
-	<string>0.4.20</string>
+	<string>0.4.21</string>
 </dict>
 </plist>

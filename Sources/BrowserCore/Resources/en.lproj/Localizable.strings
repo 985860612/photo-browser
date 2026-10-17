@@ -157,8 +157,15 @@
 "无法读取原图：%@" = "Cannot read the original image: %@";
 "有未完成的移动记录，请先检查并恢复文件。" = "Some moves did not finish. Check and recover the files first.";
 "未分组" = "Ungrouped";
-"未找到 Adobe Bridge。请先安装 Bridge 并启用 Camera Raw。" = "Adobe Bridge was not found. Install Bridge and enable Camera Raw first.";
-"Bridge 未能打开 Camera Raw。请确认 Camera Raw 已启用且支持此照片格式。" = "Bridge could not open Camera Raw. Make sure Camera Raw is enabled and supports this photo format.";
+"未找到 Adobe Camera Raw 插件，请先安装 Camera Raw。" = "Adobe Camera Raw plug-in was not found. Install Camera Raw first.";
+"Camera Raw 组件缺失，请重新安装完整应用。" = "The Camera Raw component is missing. Reinstall the complete app.";
+"Camera Raw 正在编辑其他照片，请先完成或取消。" = "Camera Raw is editing another selection. Finish or cancel that edit first.";
+"请先选择照片。" = "Select photos first.";
+"在 Camera Raw 中打开所选 %@ 张照片" = "Open %@ Selected Photos in Camera Raw";
+"在 Camera Raw 胶片栏中多选照片，按 ⌘⇧M 合并全景并保存到原目录。" = "Select photos in Camera Raw's filmstrip, then press ⌘⇧M to merge a panorama and save it beside the originals.";
+"已向 Camera Raw 发送 %@ 张照片；可在胶片栏多选后合并全景。" = "Sent %@ photos to Camera Raw. Select images in its filmstrip to merge a panorama.";
+"Camera Raw 已打开；点击“完成”保存到照片或配套 XMP。" = "Camera Raw opened. Click Done to save settings to the photo or its XMP sidecar.";
+"Camera Raw 未能正常完成编辑（%@）。诊断文件：%@" = "Camera Raw did not finish normally (%@). Diagnostic file: %@";
 "复制文件到剪贴板" = "Copy Files to Clipboard";
 "复制图片到剪贴板" = "Copy Image to Clipboard";
 "已复制 %d 个文件到剪贴板" = "Copied %d files to the clipboard";

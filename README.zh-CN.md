@@ -38,9 +38,11 @@ ISO 光盘镜像会与子文件夹一起显示为光盘卡片。双击卡片，�
 4. ⌘ 点击多选、⇧ 点击连选；⇧＋左右方向键以起始照片为锚点延伸连续选择，反向按键收缩范围，普通左右键恢复单张切换。⌘G 手动成组；在右侧按当前照片拆分、合并到其他组、或移出所选照片。
 5. 右键分组选择“重命名…”，名称会保存，移动整组时默认使用此名称作为文件夹名；原照片名保持不变。“移动整组到新文件夹…”列出目标位置、所有格式及 XMP 文件，选择存放位置并填写新文件夹名称后，点击“确认移动”才修改原文件位置；可通过移动记录撤销。目标文件夹必须是新目录。
 6. “移动记录”可撤销，也可恢复因退出或连接中断而未完成的操作。遇到同名文件、文件变化或缺失会报告并停止。
-7. 在照片网格、底部缩略图或大图上右键，选择“在 Camera Raw 中打开”。优先选同名 RAW；也可在“指定格式”子菜单选择 HIF/JPG。通过 JSX 在 Adobe Bridge 中定位照片并执行“在 Camera Raw 中打开”，使用 Bridge 承载的 Camera Raw，无需启动 Photoshop。需要安装 Bridge 并启用 Camera Raw；若 Bridge 提示外部脚本来源，请核对后允许。格式和相机支持由所装版本决定，打开失败会提示。此入口只打开素材，是否保存修改由你在 Camera Raw 中决定。参见 [Adobe Bridge 打开文件说明](https://helpx.adobe.com/bridge/desktop/organize-and-find-files/organize-files-and-folders/open-files.html)。
+7. 用 ⌘／⇧ 多选照片，右键选择“在 Camera Raw 中打开所选 N 张照片”，即可一起送入同一个胶片栏。每张照片优先取 RAW，否则取首选图片，同名 RAW 和 JPG 不会重复传入；“指定格式”子菜单仍只打开该文件。**实验性原生宿主**直接加载本机 Adobe Camera Raw 插件，不启动 Bridge 或 Photoshop。点击“完成”保存设置到实际照片或 XMP；“取消”放弃当前调整。关闭后核对目录变化并保留选择和分组。同时只允许一个编辑会话。本机已验证 Camera Raw 18.1.1、TIFF 和 Nikon D3S NEF，其他版本与格式可能不兼容。浏览器尚不能呈现 Adobe XMP 调色效果；像素导入未实现，HDR 合并尚未验证。参见[宿主实现与实验记录](docs/camera-raw-host-probe.md)。
 8. 大图和全屏均支持触控板捏合缩放、双指/鼠标滚动平移、鼠标拖拽平移（触控手势让照片跟随手指，兼容自然滚动开关）、⌘或 Option＋滚轮缩放，双击切换适应屏幕与 100% 像素。空白目录页显示子文件夹封面与合并后的照片数量，双击卡片进入，自动隐藏空的照片信息栏。
 9. 苹果键盘按 **⌫（Backspace / Delete）**，将选中照片的全部 RAW、HIF/JPG 和 XMP 移到当前目录下的 `_del` 文件夹；Fn＋⌫ 或独立前向 Delete 键同样可用。连续删除复用 `_del`，不会永久清除文件，可从“移动记录”恢复文件及原有分组。遇到同名文件会在整批移动前停止。输入文字时仍是普通退格；长按不会继续删除下一张，目录卡片不参与删除。
+
+全景拼接：在 Camera Raw 的胶片栏中选中待拼接照片（⌘A 全选），按 **⌘⇧M**，使用上次的拼接设置直接生成全景，保存到原目录的 `-Pano.dng`。关闭编辑器回到浏览器后，当前目录会识别新文件。已用三张有重叠区域的 TIFF 验证生成 1278×510 DNG，浏览器能扫描并解码原始分辨率。⌘M 可以进入全景预览，但本机普通“Merge…”保存面板的系统服务连接失败，当前请使用已验证的 ⌘⇧M 流程。参见 [Adobe 全景说明](https://helpx.adobe.com/camera-raw/desktop/hdr-and-advanced-output/create-panoramas.html)和[快捷键](https://helpx.adobe.com/camera-raw/desktop/get-started/overview-and-setup/default-keyboard-shortcuts.html)。
 
 带 GPS 的照片在右侧显示「拍摄位置」，包含经纬度及可用海拔。点击「在地图中打开」可跳转到苹果地图的对应坐标；没有有效 GPS 时隐藏位置区域，不根据文件名或相机型号推测位置。原始经纬度保持不变。优先读取照片的 GPSMapDatum 标记，识别 WGS-84、GCJ-02 或 BD-09；缺失或无法识别时使用「设置 → 照片坐标系 → 未识别时优先使用」（默认 WGS-84）。设置立即生效并持久保存，明确的照片标记始终优先。右侧显示采用的坐标系和判断来源；无法识别的原始标记也会保留显示。仅凭经纬度无法可靠识别坐标系，不根据坐标数值、文件名或相机型号猜测。系统地区为中国大陆（CN）时，打开地图前会联网核实地点所属地区；先按照片来源坐标系规范化，再为大陆底图生成 GCJ-02 坐标；国际底图使用 WGS-84。已是目标坐标系时保持原值，避免重复偏移。系统地区用作国内地图模式的判断依据；若实际地图服务与系统地区不一致，仍可能出现偏移。地区查询失败会显示错误，不猜测坐标。旧原图头部缓存会在原图可访问时补读一次坐标系标记，不重新生成缩略图；缺失 GPS 的结果也会缓存。照片浏览不会自动启动地图，只有点击按钮才调用 [苹果地图接口](https://developer.apple.com/documentation/mapkit/mkmapitem/openinmaps%28launchoptions%3A%29)。
 
@@ -74,13 +76,14 @@ MP4、MOV、M4V 会与照片一起展示，视频与同名照片及其他视频�
 
 ## 构建与检查
 
-要求 macOS 14+、Swift 6 工具链。使用系统 SwiftUI、AppKit、ImageIO，无需下载安装第三方 Swift 包。
+要求 macOS 14+、Swift 6 工具链及 Command Line Tools 或 Xcode。使用系统图像界面框架和 Sparkle。打包脚本会将固定版本的 [Adobe 官方 Photoshop C++ SDK](https://github.com/AdobeDocs/photoshop-cpp-sdk) 下载到忽略的 `.build/camera-raw-sdk`，仅用于编译辅助程序，SDK 使用受其许可约束。可通过 `PHOTO_CAMERA_RAW_SDK=/path/to/sdk` 指定已有 SDK；SDK 和 Adobe 插件都不随应用分发。打包后的应用无需 Python、编译器或 SDK。单独 `swift run PhotoBrowser` 不会打包 Camera Raw 辅助程序。
 
 ```bash
 swift run BrowserCoreChecks
 swift run BrowserHDRChecks
 swift run BrowserThumbnailChecks
 bash scripts/check-preview-store.sh
+bash scripts/check-camera-raw.sh
 bash scripts/build-app.sh
 bash scripts/check-localization.sh 'dist/照片浏览器.app'
 open 'dist/照片浏览器.app'
@@ -98,6 +101,10 @@ swift run BrowserSmokeChecks '/path/to/photos' DSC00648 DSC00672
 
 构建 Apple Silicon 与 Intel 通用版：`PHOTO_BROWSER_UNIVERSAL=1 bash scripts/build-app.sh`。中英文验证覆盖语言资源、动态数量、Unicode 名称、错误提示、旧分组读取及应用包内资源加载。
 
+已安装 Camera Raw 和 ExifTool 时，`bash scripts/check-camera-raw.sh --ui` 会用临时 TIFF 验证混色保存、已有设置重新载入、取消和 Swift 启动器链路；追加 `--raw /path/to/sample.NEF` 可检查 RAW 副本及配套 XMP，不把原文件交给测试插件。界面测试要求 Color Mixer → HSL → Luminance 面板显示八色数值行；自动操作代码只编译进测试辅助程序。正式编辑不限时，退出浏览器后已打开的编辑器可以继续使用。状态及错误记录保存在 `~/Library/Application Support/PhotoBrowser/CameraRawHost/`。
+
+追加 `--panorama` 会生成三张重叠 TIFF，使用 ⌘⇧M 合成 DNG，通过 ExifTool 独立核验格式和尺寸，并比较输入文件哈希。合成素材由测试代码生成，不读取用户照片。检查还覆盖每张照片只取一种格式、视频／实况排除、规范路径去重、多文件取消，以及 Swift 启动器实际批量传入。
+
 附近缩略图使用独立优先队列，普通队列按游标继续加载，不再为每张卡片扫描或重建剩余图库。队列索引和取出任务在独立 actor 中执行；卡片出现通知按 100 毫秒合并，采用最新位置的附近照片，旧优先级不能覆盖新请求。照片位置按当前可见顺序建立索引，排序、分组、搜索或照片更新时失效。沿用现有懒加载网格、多选、键盘导航和右键菜单。
 
 ## 代码模块划分
@@ -114,6 +121,7 @@ swift run BrowserSmokeChecks '/path/to/photos' DSC00648 DSC00672
 | `Sources/PhotoBrowser/Browsing` | 浏览状态、目录监测、选择和排序接入 |
 | `Sources/PhotoBrowser/Previews` | 预加载任务、渐进预览和 Metal 绘制 |
 | `Sources/PhotoBrowser/Actions` | 分组、剪贴板、Camera Raw 和文件操作命令 |
+| `Native/CameraRawHost` | 单独编译并随应用打包的 Camera Raw 调参宿主 |
 | `Sources/PhotoBrowser/Playback` | 视频播放状态与播放命令 |
 | `Sources/PhotoBrowser/Views` | 主布局、视图组件、信息面板与弹窗 |
 

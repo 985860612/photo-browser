@@ -157,8 +157,15 @@
 "无法读取原图：%@" = "无法读取原图：%@";
 "有未完成的移动记录，请先检查并恢复文件。" = "有未完成的移动记录，请先检查并恢复文件。";
 "未分组" = "未分组";
-"未找到 Adobe Bridge。请先安装 Bridge 并启用 Camera Raw。" = "未找到 Adobe Bridge。请先安装 Bridge 并启用 Camera Raw。";
-"Bridge 未能打开 Camera Raw。请确认 Camera Raw 已启用且支持此照片格式。" = "Bridge 未能打开 Camera Raw。请确认 Camera Raw 已启用且支持此照片格式。";
+"未找到 Adobe Camera Raw 插件，请先安装 Camera Raw。" = "未找到 Adobe Camera Raw 插件，请先安装 Camera Raw。";
+"Camera Raw 组件缺失，请重新安装完整应用。" = "Camera Raw 组件缺失，请重新安装完整应用。";
+"Camera Raw 正在编辑其他照片，请先完成或取消。" = "Camera Raw 正在编辑其他照片，请先完成或取消。";
+"请先选择照片。" = "请先选择照片。";
+"在 Camera Raw 中打开所选 %@ 张照片" = "在 Camera Raw 中打开所选 %@ 张照片";
+"在 Camera Raw 胶片栏中多选照片，按 ⌘⇧M 合并全景并保存到原目录。" = "在 Camera Raw 胶片栏中多选照片，按 ⌘⇧M 合并全景并保存到原目录。";
+"已向 Camera Raw 发送 %@ 张照片；可在胶片栏多选后合并全景。" = "已向 Camera Raw 发送 %@ 张照片；可在胶片栏多选后合并全景。";
+"Camera Raw 已打开；点击“完成”保存到照片或配套 XMP。" = "Camera Raw 已打开；点击“完成”保存到照片或配套 XMP。";
+"Camera Raw 未能正常完成编辑（%@）。诊断文件：%@" = "Camera Raw 未能正常完成编辑（%@）。诊断文件：%@";
 "复制文件到剪贴板" = "复制文件到剪贴板";
 "复制图片到剪贴板" = "复制图片到剪贴板";
 "已复制 %d 个文件到剪贴板" = "已复制 %d 个文件到剪贴板";
