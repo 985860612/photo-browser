@@ -1,5 +1,7 @@
 # 自动更新与发布
 
+项目级 [photo-browser-release 技能](../.claude/skills/photo-browser-release/SKILL.md) 复用本页流程，提供线上产物校验与正常退出指定应用的辅助脚本，并补充本机备份、Camera Raw 编辑会话保留和更新探针缓存排查。技能源码由项目 `.claude/skills/` 维护，Codex 入口位于 `.agents/skills/`。
+
 应用使用 Sparkle 2.10.0。正式更新源为 GitHub 最新稳定 Release 的 `appcast.xml` 附件：
 
 `https://github.com/985860612/photo-browser/releases/latest/download/appcast.xml`
