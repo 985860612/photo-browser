@@ -2,83 +2,101 @@ import AppKit
 import BrowserCore
 
 @MainActor enum CameraRawLauncher {
-    static func open(_ file: PhotoFile, completion: @escaping (Error?) -> Void) throws {
-        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.adobe.bridge") else {
-            throw BrowserFailure.message(L10n.text("未找到 Adobe Bridge。请先安装 Bridge 并启用 Camera Raw。"))
-        }
-        // Bridge's loaded thumbnails use canonical paths (e.g. /private/tmp rather than /tmp).
-        let resolved = file.url.withUnsafeFileSystemRepresentation { path in realpath(path, nil) }
-        guard let resolved else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
-        defer { free(resolved) }
-        let messages = [String(cString: resolved),
-                        L10n.text("无法在 Camera Raw 中打开照片："),
-                        L10n.text("Bridge 未能打开 Camera Raw。请确认 Camera Raw 已启用且支持此照片格式。")]
-        let encoded = try JSONSerialization.data(withJSONObject: messages)
-        // ExtendScript may interpret UTF-8 JSX files as the legacy system encoding.
-        // ASCII JSON with escaped UTF-16 units preserves all paths and localized messages.
-        let arguments = String(decoding: encoded, as: UTF8.self).utf16.map { unit in
-            unit <= 127 ? String(UnicodeScalar(unit)!) : String(format: "\\u%04x", unit)
-        }.joined()
-        let request = "photoBrowserCameraRaw_" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
-        let script = """
-        #target bridge
-        (function (args) {
-            var key = "\(request)", task, doc, file = new File(args[0]);
-            var deadline = new Date().getTime() + 30000;
-            function cleanup() {
-                if (task !== undefined) app.cancelTask(task);
-                delete $.global[key];
-            }
-            function fail(error) {
-                cleanup();
-                alert(args[1] + error.message);
-            }
-            try {
-                if (!file.exists) throw new Error(args[0]);
-                doc = app.document;
-                app.bringToFront();
-                doc.bringToFront();
-                if (doc.thumbnail.spec.fsName != file.parent.fsName)
-                    doc.thumbnail = new Thumbnail(file.parent);
-                $.global[key] = function () {
-                    try {
-                        if (new Date().getTime() >= deadline) throw new Error(args[2]);
-                        var selected = doc.getSelection();
-                        var menu = MenuElement.find("OpenInCameraRaw");
-                        if (!menu) throw new Error(args[2]);
-                        if (selected.length == 1 && selected[0].spec.fsName == file.fsName) {
-                            cleanup();
-                            // Refresh Bridge's command context immediately before dispatch.
-                            doc.deselectAll();
-                            doc.select(selected[0]);
-                            doc.chooseMenuItem("OpenInCameraRaw");
-                            return;
-                        }
-                        var children = doc.thumbnail.children;
-                        for (var i = 0; i < children.length; i++) {
-                            if (children[i].spec.fsName == file.fsName) {
-                                doc.deselectAll();
-                                doc.select(children[i]);
-                                return;
-                            }
-                        }
-                    } catch (error) { fail(error); }
-                };
-                task = app.scheduleTask('$.global["' + key + '"]()', 200, true);
-            } catch (error) { fail(error); }
-        })(\(arguments));
-        """
-        let scripts = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PhotoBrowser/CameraRaw", isDirectory: true)
-        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
-        let url = scripts.appendingPathComponent(UUID().uuidString + ".jsx")
-        try Data(script.utf8).write(to: url, options: .atomic)
-        launch(url, with: app, completion: completion)
+    struct HostResult: Decodable {
+        let version: Int
+        let status: String
+        let stage: String
+        let code: Int
+        let editorOpened: Bool
     }
-    private static func launch(_ url: URL, with app: URL, completion: @escaping (Error?) -> Void) {
-        let configuration = NSWorkspace.OpenConfiguration(); configuration.activates = true
-        NSWorkspace.shared.open([url], withApplicationAt: app, configuration: configuration) { _, error in
-            Task { @MainActor in completion(error) }
+    private struct Session {
+        let process: Process
+        let images: Set<URL>
+    }
+    private static var session: Session?
+
+    @discardableResult static func open(_ file: PhotoFile, completion: @escaping (Error?) -> Void) throws -> Bool {
+        try open([file], completion: completion)
+    }
+
+    static func canonicalImages(_ files: [PhotoFile]) -> [URL] {
+        var seen = Set<URL>()
+        return files.map { $0.url.resolvingSymlinksInPath().standardizedFileURL }.filter { seen.insert($0).inserted }
+    }
+
+    @discardableResult static func open(_ files: [PhotoFile], completion: @escaping (Error?) -> Void) throws -> Bool {
+        let images = canonicalImages(files)
+        guard !images.isEmpty else { throw BrowserFailure.message(L10n.text("请先选择照片。")) }
+        if let active = session {
+            if let app = NSRunningApplication(processIdentifier: active.process.processIdentifier) {
+                NSApp.yieldActivation(to: app)
+                app.activate(options: [])
+            }
+            if active.images == Set(images) { return false }
+            throw BrowserFailure.message(L10n.text("Camera Raw 正在编辑其他照片，请先完成或取消。"))
+        }
+        let helperApp = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/CameraRawHost.app")
+        let helper = helperApp.appendingPathComponent("Contents/MacOS/CameraRawHost")
+        guard FileManager.default.isExecutableFile(atPath: helper.path), let identifier = Bundle(url: helperApp)?.bundleIdentifier else {
+            throw BrowserFailure.message(L10n.text("Camera Raw 组件缺失，请重新安装完整应用。"))
+        }
+        let plugin = try installedPlugin()
+        for image in images where !FileManager.default.isReadableFile(atPath: image.path) {
+            throw BrowserFailure.message(L10n.text("文件不存在：\(image.path)"))
+        }
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("PhotoBrowser/CameraRawHost", isDirectory: true)
+        let request = support.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: request, withIntermediateDirectories: true)
+        let result = request.appendingPathComponent("result.json")
+        let manifest = request.appendingPathComponent("request.json")
+        let data = try JSONSerialization.data(withJSONObject: ["version": 1, "images": images.map(\.path)])
+        try data.write(to: manifest, options: .atomic)
+        let process = Process()
+        process.executableURL = helper
+        // A JSON manifest avoids shell escaping and command-line size limits for large selections.
+        process.arguments = [plugin.path, manifest.path, result.path]
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        process.terminationHandler = { ended in
+            Task { @MainActor in
+                guard session?.process === ended else { return }
+                session = nil
+                do {
+                    try validateResult(at: result, exitCode: ended.terminationStatus,
+                                       exitedNormally: ended.terminationReason == .exit)
+                    completion(nil)
+                } catch { completion(error) }
+            }
+        }
+        session = Session(process: process, images: Set(images))
+        NSApp.yieldActivation(toApplicationWithBundleIdentifier: identifier)
+        do { try process.run() }
+        catch {
+            session = nil
+            throw error
+        }
+        return true
+    }
+
+    static func installedPlugin(in roots: [URL]? = nil) throws -> URL {
+        let roots = roots ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library"),
+                              URL(fileURLWithPath: "/Library")]
+        for root in roots {
+            let plugin = root.appendingPathComponent("Application Support/Adobe/Plug-Ins/CC/File Formats/Camera Raw.plugin")
+            if Bundle(url: plugin)?.executableURL != nil { return plugin }
+        }
+        throw BrowserFailure.message(L10n.text("未找到 Adobe Camera Raw 插件，请先安装 Camera Raw。"))
+    }
+
+    static func validateResult(at url: URL, exitCode: Int32, exitedNormally: Bool) throws {
+        let result = try? JSONDecoder().decode(HostResult.self, from: Data(contentsOf: url))
+        guard exitedNormally, exitCode == 0, let result, result.version == 1,
+              result.status == "closed", result.stage == "settings", result.editorOpened,
+              [0, -128].contains(result.code) else {
+            let detail = result.map { "\($0.stage): \($0.code)" } ?? "process: \(exitCode)"
+            throw BrowserFailure.message(L10n.text("Camera Raw 未能正常完成编辑（\(detail)）。诊断文件：\(url.path)"))
         }
     }
 }

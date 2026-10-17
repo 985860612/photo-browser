@@ -37,7 +37,8 @@ Examples from the Simplified Chinese interface. English is also supported.
 - **Folder navigation:** clickable breadcrumbs, a path field, history, parent navigation, and subfolder cards. Single-click selects a card; double-click opens it. Folder and photo-info panels can be collapsed independently.
 - **ISO disc images:** ISO files appear beside subfolders as disc cards. Double-click a card, select an ISO with ⌘O, or enter its path with ⌘L to mount it read-only and browse photos, videos, and folders without extracting the whole disc. Images mount only when opened. Moving, deleting, and Camera Raw editing are disabled inside images; groups and previews remain local. Parent navigation at an image root returns to the ISO's source folder. Eject Disk Image unmounts an opened image; quitting ejects app-owned mounts without forcing busy or unrelated disks. Reopening restores the image and relative subfolder.
 - **Folder caching:** cover fingerprints, photo counts and recursive file sizes persist locally. Folder cards show saved results first, then validate in the background. Directory checks are throttled to five minutes, sizes expire after six hours, and moves/deletion/undo invalidate affected folders and ancestors. ⌘R forces a refresh; cached timestamps and update failures appear in the card tooltip. The first visit calculates any missing entries.
-- **Camera Raw:** open the preferred RAW or a specific format in Camera Raw hosted by Adobe Bridge. Bridge and an enabled Camera Raw plug-in must be installed separately. This entry selects the photo in Bridge and invokes Open in Camera Raw without launching Photoshop. Format and camera support depend on the installed Camera Raw version; failures are reported.
+- **Camera Raw (experimental):** Command-/Shift-select photos, then right-click → **Open Selected Photos in Camera Raw** to send them to one filmstrip. Each capture contributes its RAW if available, otherwise its preferred image; matching RAW/JPEG formats are not sent twice. Explicit format actions open that single file. Requires a separately installed Adobe Camera Raw plug-in; Bridge and Photoshop are not launched. Use **Done** to save settings into the actual photos or XMP sidecars, or **Cancel** to discard current edits. Only one editor session runs at a time. Verified with Camera Raw 18.1.1 on Apple Silicon using TIFF and Nikon D3S NEF; other versions and formats may fail. The browser does not render Adobe XMP edits; pixel import and HDR merge are not verified. See [host details](docs/camera-raw-host-probe.md).
+- **Camera Raw panoramas:** select the desired images in Camera Raw's filmstrip (Command-A for all), then **Command-Shift-M** to merge with the last-used settings and save a `-Pano.dng` beside the source images. Closing the editor reconciles the current folder and preserves selection/groups. Three overlapping TIFF fixtures produced a 1278×510 DNG that the browser scanned and decoded at full resolution. Command-M opens the merge preview, but its normal Merge/save-panel path currently fails to connect to the macOS file-panel service on the tested machine; use the verified Command-Shift-M route. [Adobe panorama instructions](https://helpx.adobe.com/camera-raw/desktop/hdr-and-advanced-output/create-panoramas.html), [shortcuts](https://helpx.adobe.com/camera-raw/desktop/get-started/overview-and-setup/default-keyboard-shortcuts.html).
 - **Video playback:** MP4, MOV, and M4V appear as independent items alongside photos, with cached covers and duration badges. Double-click to play in the main preview; use Space to play/pause, the player controls to seek and change volume, and Control-Command-F for fullscreen. Switching items stops the previous video. The inspector shows duration, resolution, frame rate, average video bitrate (kbps or Mbps), and file size. Playback depends on macOS codec support, and unsupported files show an error. Videos support copying files and reversible moves to `_del`; they are excluded from automatic panorama grouping.
 - **Browsing diagnostics:** the status bar shows how many neighboring photo previews are actually resident. Settings shows memory use, foreground cache hits, and queue/source-open/decode/GPU-completion durations, with the latest 100 requests retained for this session. Decoding can include file I/O; the figures do not claim to separate all disk reads from decoder work.
 - **Cache management:** Settings shows local thumbnail/video-cover storage and a configurable 1–20 GB quota (default 2 GB). Local usage is indexed once, updated as files are written or removed, and reconciled every five minutes when queried. Maintenance sorts entries only when over quota; access history is flushed at most every 30 seconds during maintenance and immediately at quit. Eviction follows recent access, including across launches. Clear Preview Cache releases decoded RAM and removes local thumbnails/covers; the displayed image/player, original files, groups, move history, folder indexes, and playback positions are retained. Background warming stops after clearing; thumbnails regenerate on demand.
@@ -98,7 +99,7 @@ Normal RAW thumbnails use embedded JPEG previews. Fullscreen RAW uses macOS orig
 
 ## Build
 
-Requires macOS 14+, a Swift 6 toolchain, and Apple Command Line Tools or Xcode. The project uses SwiftUI, AppKit, ImageIO, Core Image, and Metal; there are no third-party Swift package dependencies.
+Requires macOS 14+, a Swift 6 toolchain, and Apple Command Line Tools or Xcode. The project uses SwiftUI, AppKit, ImageIO, Core Image, Metal, and Sparkle. The app builder downloads a pinned [Adobe Photoshop C++ SDK](https://github.com/AdobeDocs/photoshop-cpp-sdk) to the ignored `.build/camera-raw-sdk` directory to compile the native helper. Its license applies to SDK use; neither the SDK nor the Adobe plug-in is included in the app. Set `PHOTO_CAMERA_RAW_SDK=/path/to/sdk` to use an existing SDK. The packaged app needs no Python, compiler, or SDK at runtime. A plain `swift run PhotoBrowser` does not package the helper.
 
 ```bash
 git clone https://github.com/985860612/photo-browser.git
@@ -120,10 +121,15 @@ swift run BrowserCoreChecks
 swift run BrowserHDRChecks
 swift run BrowserThumbnailChecks
 bash scripts/check-preview-store.sh
+bash scripts/check-camera-raw.sh
 bash scripts/check-localization.sh 'dist/照片浏览器.app'
 ```
 
 Localization checks run in separate English and Chinese processes, verify catalog coverage and interpolated names/counts/paths, and check the packaged app's resource loading. Core move checks use temporary fixtures to verify all-format moves, undo, collisions, partial failures, journal failures, and crash recovery.
+
+With Camera Raw and ExifTool installed, `bash scripts/check-camera-raw.sh --ui` also opens disposable TIFF copies, verifies mixer settings via ExifTool, reloads existing settings, checks Cancel, and exercises the bundled-helper Swift launcher. Add `--raw /path/to/sample.NEF` to test a copied RAW plus XMP; original files are not passed to these checks. UI checks require Camera Raw's Color Mixer → HSL → Luminance panel with eight visible rows. Test automation is compiled only into test helpers. Production sessions have no editing timeout and can stay open after the browser quits; their small status/error records remain under `~/Library/Application Support/PhotoBrowser/CameraRawHost/`.
+
+Add `--panorama` to the UI checks to generate three overlapping TIFFs, merge via Command-Shift-M, verify the DNG independently with ExifTool, and compare source hashes. Generated test images contain no user photographs. Batch checks also verify canonical-path deduplication, one-format-per-capture selection, two-file cancellation, and launching a batch through the packaged Swift launcher.
 
 For a read-only check against your own photos:
 
@@ -145,6 +151,7 @@ swift run BrowserSmokeChecks '/path/to/photos' PHOTO_BASENAME ANOTHER_BASENAME
 | `Sources/PhotoBrowser/Browsing` | One browser state owner, directory observation, selection, and sorting integration |
 | `Sources/PhotoBrowser/Previews` | Warming task ownership, progressive presentation, and Metal rendering |
 | `Sources/PhotoBrowser/Actions` | Group, clipboard, Camera Raw, and file-operation commands |
+| `Native/CameraRawHost` | Isolated settings-only Camera Raw host, built and bundled separately |
 | `Sources/PhotoBrowser/Playback` | Video player state and playback commands |
 | `Sources/PhotoBrowser/Views` | Layout, reusable view components, inspector, and sheets |
 

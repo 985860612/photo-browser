@@ -9,7 +9,9 @@ PHOTO_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :Version' "$PHOTO_SETTINGS")
 PHOTO_BUILD=$(/usr/libexec/PlistBuddy -c 'Print :Build' "$PHOTO_SETTINGS")
 PHOTO_FEED=$(/usr/libexec/PlistBuddy -c 'Print :FeedURL' "$PHOTO_SETTINGS")
 PHOTO_PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c 'Print :PublicEDKey' "$PHOTO_SETTINGS")
-mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources" "$APP_PATH/Contents/Frameworks"
+mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources" "$APP_PATH/Contents/Frameworks" "$APP_PATH/Contents/Helpers"
+# Never ship UI automation, even if a test-build variable leaked into the environment.
+PHOTO_CAMERA_RAW_TESTING=0 bash scripts/build-camera-raw-host.sh "$APP_PATH/Contents/Helpers/CameraRawHost.app"
 if [ "${PHOTO_BROWSER_UNIVERSAL:-0}" = "1" ]; then
   PHOTO_BINARIES=()
   for PHOTO_ARCH in arm64 x86_64; do

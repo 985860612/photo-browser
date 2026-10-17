@@ -4,11 +4,27 @@ import CoreImage
 
 extension BrowserStore {
     func openInCameraRaw(_ asset: PhotoAsset, file: PhotoFile? = nil) {
-        guard !isMoving, !isReadOnlyDirectory, !asset.isVideo, !asset.isLivePhoto else { return }
-        let source = file ?? asset.imageFiles.first(where: { $0.kind == .raw }) ?? asset.preferred
-        do { try CameraRawLauncher.open(source) { [weak self] error in
-            if let error { self?.report(error) }
-        } } catch { report(error) }
+        guard !isMoving, !isLoading, !isReadOnlyDirectory, !asset.isVideo, !asset.isLivePhoto else { return }
+        let sources = cameraRawSources(for: asset, file: file)
+        let editedDirectories = Set(sources.map { $0.url.deletingLastPathComponent().resolvingSymlinksInPath() })
+        do {
+            let launched = try CameraRawLauncher.open(sources) { [weak self] error in
+                guard let self else { return }
+                if let error { self.report(error) }
+                if let directory = self.directory?.resolvingSymlinksInPath(), editedDirectories.contains(directory) {
+                    self.scheduleAutomaticRefresh(full: true)
+                }
+            }
+            if launched { status = L10n.text("已向 Camera Raw 发送 \(sources.count) 张照片；可在胶片栏多选后合并全景。") }
+        } catch { report(error) }
+    }
+
+    func cameraRawSources(for asset: PhotoAsset, file: PhotoFile? = nil) -> [PhotoFile] {
+        if let file { return [file] }
+        let targets = selection.contains(asset.id) ? visibleAssets.filter { selection.contains($0.id) } : [asset]
+        return targets.filter { !$0.isVideo && !$0.isLivePhoto }.map {
+            $0.imageFiles.first(where: { $0.kind == .raw }) ?? $0.preferred
+        }
     }
 
     var canCopyFiles: Bool {
