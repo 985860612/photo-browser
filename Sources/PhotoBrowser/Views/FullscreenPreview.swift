@@ -101,7 +101,6 @@ struct FullscreenPreview: View {
             Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch).help(L10n.text("启用原图 HDR / EDR 显示；普通照片保持 SDR"))
             Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch)
                 .help(L10n.text("开启时优先预览 RAW，关闭时优先预览 HIF/JPG"))
-            FocusPointToggle(enabled: $store.showFocusPoints)
             if let asset = store.focusedAsset {
                 ForEach(asset.imageFiles) { file in
                     Button(file.format) { store.preferredFileID = file.id }

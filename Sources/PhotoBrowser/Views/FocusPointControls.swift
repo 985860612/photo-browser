@@ -4,7 +4,7 @@ import BrowserCore
 struct FocusPointToggle: View {
     @Binding var enabled: Bool
     var body: some View {
-        Toggle(L10n.text("对焦点"), isOn: $enabled).toggleStyle(.switch)
+        Toggle(L10n.text("显示对焦点"), isOn: $enabled).toggleStyle(.switch)
             .help(L10n.text("显示相机记录的对焦区域；红色为已合焦，黄色为已选择，青色为记录位置。"))
             .accessibilityIdentifier("focusPointsToggle")
     }
