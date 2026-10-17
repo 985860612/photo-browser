@@ -96,12 +96,12 @@ struct PreviewSettingsView: View {
                 store.previewBefore = 2; store.previewAfter = 5; store.previewDecodeConcurrency = PreviewPreferences.defaultConcurrency
             }
         } header: { Label(L10n.text("预览缓存"), systemImage: "photo.stack") }
-        footer: { Text(L10n.text("按当前浏览顺序预加载；设为 0 可关闭该方向。")) }
-        Section {
-            DisclosureGroup(L10n.text("了解更多")) {
+        footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.text("按当前浏览顺序预加载；设为 0 可关闭该方向。"))
                 Text(L10n.text("主窗口与全屏共用预加载范围，缓存受内存预算限制，当前照片优先。"))
                 Text(L10n.text("解码默认 4 路，范围 1–8 路；调整后，正在解码的任务会继续完成。"))
-            }.font(.caption).foregroundStyle(.secondary)
+            }.fixedSize(horizontal: false, vertical: true)
         }
     }
 }
