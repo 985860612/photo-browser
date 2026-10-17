@@ -459,6 +459,10 @@
 "%@ 个子文件夹 · %@ 个镜像 · 双击进入浏览照片" = "Folders: %@ · Disk images: %@ · Double-click to browse photos";
 "此文件夹没有照片、子文件夹或 ISO 镜像" = "This folder has no photos, subfolders, or ISO images";
 "浏览" = "Browsing";
+"语言" = "Language";
+"界面语言" = "Interface Language";
+"跟随系统" = "System Default";
+"语言更改将在下次启动时生效，其他更改立即生效并自动保存。" = "Language changes apply the next time you open the app. Other changes apply immediately and are saved automatically.";
 "缓存" = "Cache";
 "诊断" = "Diagnostics";
 "更新" = "Updates";

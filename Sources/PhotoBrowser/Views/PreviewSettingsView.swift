@@ -6,8 +6,27 @@ struct PreviewSettingsView: View {
     @EnvironmentObject private var store: BrowserStore
     @State private var selectedTab: SettingsTab = .browsing
     @State private var windowHeight: CGFloat = 540
+    @State private var interfaceLanguage = InterfaceLanguage.saved
 
     private enum SettingsTab { case browsing, cache, diagnostics, updates }
+
+    private enum InterfaceLanguage: String {
+        case system, simplifiedChinese = "zh-Hans", english = "en"
+
+        static var saved: Self {
+            guard let identifier = Bundle.main.bundleIdentifier,
+                  let languages = UserDefaults.standard.persistentDomain(forName: identifier)?["AppleLanguages"] as? [String],
+                  !languages.isEmpty else { return .system }
+            let language = Bundle.preferredLocalizations(from: ["en", "zh-Hans"], forPreferences: languages).first ?? "en"
+            return Self(rawValue: language) ?? .system
+        }
+
+        func save() {
+            // Only override this app's language. Removing the override restores system preferences.
+            if self == .system { UserDefaults.standard.removeObject(forKey: "AppleLanguages") }
+            else { UserDefaults.standard.set([rawValue], forKey: "AppleLanguages") }
+        }
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -31,12 +50,16 @@ struct PreviewSettingsView: View {
             }
         }
         .onChange(of: store.diskLimitGB) { _, _ in Task { await store.applyDiskLimit() } }
+        .onChange(of: interfaceLanguage) { _, language in language.save() }
     }
 
     private func settingsForm<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             Form(content: content).formStyle(.grouped).scrollBounceBehavior(.basedOnSize)
-            if selectedTab == .browsing || selectedTab == .cache {
+            if selectedTab == .browsing {
+                Text(L10n.text("语言更改将在下次启动时生效，其他更改立即生效并自动保存。"))
+                    .font(.caption).foregroundStyle(.secondary).padding(.bottom, 12)
+            } else if selectedTab == .cache {
                 Text(L10n.text("更改立即生效并自动保存。"))
                     .font(.caption).foregroundStyle(.secondary).padding(.bottom, 12)
             }
@@ -44,6 +67,13 @@ struct PreviewSettingsView: View {
     }
 
     @ViewBuilder private var browsingSections: some View {
+        Section {
+            Picker(L10n.text("界面语言"), selection: $interfaceLanguage) {
+                Text(L10n.text("跟随系统")).tag(InterfaceLanguage.system)
+                Text(verbatim: "简体中文").tag(InterfaceLanguage.simplifiedChinese)
+                Text(verbatim: "English").tag(InterfaceLanguage.english)
+            }
+        } header: { Label(L10n.text("语言"), systemImage: "character.bubble") }
         Section {
             Picker(L10n.text("未识别时优先使用"), selection: $store.preferredCoordinateSystem) {
                 ForEach(PhotoCoordinateSystem.allCases, id: \.self) { system in
