@@ -8,7 +8,7 @@ struct PreviewSettingsView: View {
     @State private var windowHeight: CGFloat = 540
     @State private var interfaceLanguage = InterfaceLanguage.saved
 
-    private enum SettingsTab { case browsing, cache, diagnostics, updates }
+    private enum SettingsTab { case browsing, ai, cache, diagnostics, updates }
 
     private enum InterfaceLanguage: String {
         case system, simplifiedChinese = "zh-Hans", english = "en"
@@ -32,6 +32,8 @@ struct PreviewSettingsView: View {
         TabView(selection: $selectedTab) {
             settingsForm { browsingSections }
                 .tabItem { Label(L10n.text("浏览"), systemImage: "photo") }.tag(SettingsTab.browsing)
+            settingsForm { AIModelSettingsView(defaults: store.preferencesDefaults) }
+                .tabItem { Label(L10n.text("AI 模型"), systemImage: "sparkles") }.tag(SettingsTab.ai)
             settingsForm { CacheSettingsView() }
                 .tabItem { Label(L10n.text("缓存"), systemImage: "internaldrive") }.tag(SettingsTab.cache)
             settingsForm { PreviewDiagnosticsSettingsView() }

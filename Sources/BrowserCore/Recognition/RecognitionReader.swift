@@ -17,9 +17,10 @@ public actor RecognitionReader {
         self.localRuns = localRuns
     }
 
-    public func read(_ asset: PhotoAsset, refresh: Bool = false) throws -> RecognitionMetadata? {
+    public func read(_ asset: PhotoAsset, refresh: Bool = false) async throws -> RecognitionMetadata? {
         try Task.checkCancellation()
         guard !asset.isVideo, let first = asset.imageFiles.first else { return nil }
+        if let generated = try await GeneratedRecognitionStore.shared.read(asset) { return generated }
         let directory = first.url.deletingLastPathComponent().standardizedFileURL
         if refresh { localIndexes[directory] = nil; nasIndexes[directory] = nil; contexts.removeAll() }
         if let localRuns {

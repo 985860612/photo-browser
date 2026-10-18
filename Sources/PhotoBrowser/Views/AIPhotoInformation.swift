@@ -9,8 +9,13 @@ struct AIPhotoInformation: View {
     @State private var loading = true
     @State private var refreshID = UUID()
     @State private var forceRefresh = false
+    @State private var generationTask: Task<Void, Never>?
+    @State private var generating = false
+    @State private var generationFailure: String?
+    @State private var generationID = UUID()
 
     private var request: String { (asset.imageFiles.first?.url.deletingLastPathComponent().path ?? "") + "|" + asset.id + "|" + asset.fingerprint + "|" + refreshID.uuidString }
+    private var assetRequest: String { (asset.imageFiles.first?.url.deletingLastPathComponent().path ?? "") + "|" + asset.id + "|" + asset.fingerprint }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
@@ -20,7 +25,19 @@ struct AIPhotoInformation: View {
                 Button { forceRefresh = true; refreshID = UUID() } label: { Image(systemName: "arrow.clockwise") }
                     .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
                     .help(L10n.text("重新读取 AI 信息")).accessibilityLabel(L10n.text("重新读取 AI 信息"))
+                    .disabled(generating)
             }
+            HStack(spacing: 7) {
+                Button { generate() } label: {
+                    Label(L10n.text(metadata?.failure == nil && metadata != nil ? "重新生成" : "生成 AI 信息"), systemImage: "sparkles")
+                }.disabled(generating || loading).font(.caption)
+                if generating {
+                    ProgressView().controlSize(.mini)
+                    Button(L10n.text("取消")) { generationTask?.cancel() }.font(.caption)
+                }
+            }
+            if generating { Text(L10n.text("正在准备 720 像素图片并生成…")).font(.caption).foregroundStyle(.secondary) }
+            if let generationFailure { Text(generationFailure).font(.caption2).foregroundStyle(.orange).textSelection(.enabled) }
             if loadedRequest != request || loading {
                 HStack(spacing: 7) { ProgressView().controlSize(.mini); Text(L10n.text("正在读取 AI 信息…")).font(.caption).foregroundStyle(.secondary) }
             } else if let failure {
@@ -58,6 +75,8 @@ struct AIPhotoInformation: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: assetRequest) { _, _ in cancelGeneration() }
+        .onDisappear { cancelGeneration() }
         .task(id: request) {
             let identity = request
             let refresh = forceRefresh; forceRefresh = false
@@ -73,6 +92,31 @@ struct AIPhotoInformation: View {
             loadedRequest = identity; loading = false
         }
 
+    }
+
+    private func cancelGeneration() {
+        generationTask?.cancel(); generationID = UUID(); generating = false; generationFailure = nil
+    }
+    private func generate() {
+        let selected = asset, identity = assetRequest, ticket = UUID()
+        generationID = ticket; generating = true; generationFailure = nil
+        generationTask = Task {
+            do {
+                let configuration = try AIModelConfiguration.load()
+                guard let key = try AIModelKeychain.read(configuration) else {
+                    throw BrowserFailure.message(L10n.text("请先在设置 → AI 模型中配置服务和密钥。"))
+                }
+                let result = try await PhotoRecognitionGenerator.shared.generate(selected, configuration: configuration, apiKey: key)
+                try Task.checkCancellation()
+                guard assetRequest == identity, generationID == ticket else { return }
+                metadata = result; failure = nil; loadedRequest = request; loading = false
+            } catch is CancellationError {}
+            catch {
+                guard assetRequest == identity, generationID == ticket else { return }
+                if !Task.isCancelled { generationFailure = error.localizedDescription }
+            }
+            if generationID == ticket { generating = false }
+        }
     }
 }
 

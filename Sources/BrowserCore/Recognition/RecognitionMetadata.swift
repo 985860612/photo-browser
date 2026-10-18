@@ -117,7 +117,7 @@ public struct RecognitionContext: Sendable {
         return dictionary + ".term." + digest.map { String(format: "%02x", $0) }.joined()
     }
 
-    private func labeledFields(_ raw: String) -> [String: String] {
+    func labeledFields(_ raw: String) -> [String: String] {
         var result: [String: String] = [:], current: String?
         for line in raw.components(separatedBy: .newlines) {
             if line.trimmingCharacters(in: .whitespaces).hasPrefix("```") { continue }
