@@ -22,7 +22,7 @@ struct AIPhotoInformation: View {
             HStack {
                 Label(L10n.text("AI 照片信息"), systemImage: "sparkles").font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 0)
-                Button { forceRefresh = true; refreshID = UUID() } label: { Image(systemName: "arrow.clockwise") }
+                Button { forceRefresh = true; refreshID = UUID() } label: { Image(systemName: "sparkles") }
                     .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
                     .help(L10n.text("重新读取 AI 信息")).accessibilityLabel(L10n.text("重新读取 AI 信息"))
                     .disabled(generating)
