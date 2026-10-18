@@ -46,6 +46,18 @@ struct LargePreviewView: View {
                 if store.playbackFile == nil {
                 if loading { ProgressView().controlSize(.small).help(L10n.text("正在加载高清图")) }
                 if let failure, thumbnail != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(failure) }
+                if let asset = store.focusedAsset, asset.imageFiles.count > 1 {
+                    Menu {
+                        ForEach(asset.imageFiles) { file in
+                            Button { store.preferredFileID = file.id } label: {
+                                if file.id == store.focusedFile?.id { Label(file.format, systemImage: "checkmark") }
+                                else { Text(file.format) }
+                            }
+                        }
+                    } label: { Text(store.focusedFile?.format ?? asset.preferred.format) }
+                        .fixedSize().help(L10n.text("预览格式"))
+                        .accessibilityLabel(L10n.text("预览格式"))
+                }
                 Toggle("HDR", isOn: $store.hdrPreview).toggleStyle(.switch)
                     .help(photo.map { L10n.text("原图 \($0.isHDR ? "HDR" : "SDR") · \($0.bitsPerComponent) 位") } ?? L10n.text("HDR / EDR 预览"))
                 Toggle(L10n.text("RAW 优先"), isOn: $store.preferRawPreview).toggleStyle(.switch)

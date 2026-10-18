@@ -501,3 +501,27 @@
 "显示对焦点需要 ExifTool。请安装后重试：brew install exiftool。" = "Showing focus points requires ExifTool. Install it and try again: brew install exiftool.";
 "读取对焦点超时，请重试。" = "Reading focus points timed out. Please try again.";
 "读取对焦点失败：%@" = "Unable to read focus points: %@";
+
+/* AI photo information */
+"AI 照片信息" = "AI Photo Information";
+"重新读取 AI 信息" = "Reload AI Information";
+"正在读取 AI 信息…" = "Loading AI information…";
+"AI 信息读取失败" = "Could Not Load AI Information";
+"此照片识别失败。" = "Recognition failed for this photo.";
+"暂无 AI 识别结果" = "No AI recognition results yet";
+"AI 生成结果，尚未经人工复核。" = "AI-generated results; not yet reviewed.";
+"无法解析 AI 识别结果。" = "Could not parse the AI recognition results.";
+"AI 识别结果缺少当前分析记录。" = "The current AI analysis record is missing.";
+"无法解析 AI 标签：%@" = "Could not parse AI label: %@";
+"AI 元数据索引包含无效路径。" = "The AI metadata index contains an invalid path.";
+"读取 AI 本地索引失败：%@" = "Could not read the local AI index: %@";
+"主体" = "Subject";
+"场景" = "Scene";
+"环境" = "Environment";
+"元素" = "Elements";
+"主体色" = "Subject Colors";
+"环境色" = "Environment Colors";
+"人物" = "People";
+"空间" = "Space";
+"景别" = "Shot Size";
+"特征" = "Visual Features";

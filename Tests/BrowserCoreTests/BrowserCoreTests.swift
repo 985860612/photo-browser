@@ -261,6 +261,7 @@ private func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: St
         let suite = BrowserCoreTests()
         let checks: [(String, () throws -> Void)] = [
             ("session repository compatibility and failure checks", SessionRepositoryChecks.run),
+            ("AI metadata compatibility and source association checks", RecognitionChecks.run),
             ("testPairsFormatsAndSidecarsWithoutReadingSubfolders", suite.testPairsFormatsAndSidecarsWithoutReadingSubfolders),
             ("testImportsCSVWithBOMQuotesNewlinesAndDeduplicatesPairs", suite.testImportsCSVWithBOMQuotesNewlinesAndDeduplicatesPairs),
             ("testBurstResetFocalChangeAndTimeGapBreakGroups", suite.testBurstResetFocalChangeAndTimeGapBreakGroups),
