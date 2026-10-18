@@ -1,0 +1,281 @@
+{
+  "version": "2.0.0",
+  "language": "zh-CN",
+  "open_term_code_algorithm": "dictionary + .term. + sha256(exact stripped UTF-8 name), full 64 hex; no synonym mapping",
+  "facets": {
+    "subject_codes": {
+      "dictionary": "subject",
+      "type": "array",
+      "open_vocabulary": true
+    },
+    "scene_codes": {
+      "dictionary": "scene",
+      "type": "array",
+      "open_vocabulary": true
+    },
+    "environment_codes": {
+      "dictionary": "environment",
+      "type": "array",
+      "open_vocabulary": true
+    },
+    "element_codes": {
+      "dictionary": "element",
+      "type": "array",
+      "open_vocabulary": true
+    },
+    "subject_color_codes": {
+      "dictionary": "color",
+      "type": "array",
+      "open_vocabulary": true
+    },
+    "environment_color_codes": {
+      "dictionary": "color",
+      "type": "array",
+      "open_vocabulary": true
+    },
+    "people_code": {
+      "dictionary": "people",
+      "type": "string",
+      "open_vocabulary": false
+    },
+    "space_code": {
+      "dictionary": "space",
+      "type": "string",
+      "open_vocabulary": false
+    },
+    "shot_code": {
+      "dictionary": "shot",
+      "type": "string",
+      "open_vocabulary": false
+    },
+    "visual_codes": {
+      "dictionary": "visual",
+      "type": "array",
+      "open_vocabulary": true
+    }
+  },
+  "dictionaries": {
+    "frame": [
+      {
+        "code": "frame.landscape",
+        "name": "横图"
+      },
+      {
+        "code": "frame.portrait",
+        "name": "竖图"
+      },
+      {
+        "code": "frame.square",
+        "name": "方图"
+      }
+    ],
+    "file_role": [
+      {
+        "code": "file.rendered",
+        "name": "成片"
+      },
+      {
+        "code": "file.raw",
+        "name": "RAW"
+      },
+      {
+        "code": "file.sidecar",
+        "name": "配套文件"
+      }
+    ],
+    "read_state": [
+      {
+        "code": "read.not_attempted",
+        "name": "未读取"
+      },
+      {
+        "code": "read.complete",
+        "name": "读取完成"
+      },
+      {
+        "code": "read.partial",
+        "name": "部分读取"
+      },
+      {
+        "code": "read.failed",
+        "name": "读取失败"
+      }
+    ],
+    "processing": [
+      {
+        "code": "processing.pending",
+        "name": "待识别"
+      },
+      {
+        "code": "processing.succeeded",
+        "name": "结果已持久保存"
+      },
+      {
+        "code": "processing.failed",
+        "name": "处理失败"
+      },
+      {
+        "code": "processing.unsupported",
+        "name": "暂不支持"
+      }
+    ],
+    "curation_action": [
+      {
+        "code": "curation.replace",
+        "name": "人工替换"
+      },
+      {
+        "code": "curation.accept",
+        "name": "确认并固定字段"
+      },
+      {
+        "code": "curation.add",
+        "name": "人工补充标签"
+      },
+      {
+        "code": "curation.reject",
+        "name": "拒绝标签"
+      },
+      {
+        "code": "curation.unblock",
+        "name": "解除拒绝"
+      }
+    ],
+    "validation": [
+      {
+        "code": "validation.valid",
+        "name": "校验通过"
+      },
+      {
+        "code": "validation.needs_review",
+        "name": "格式通过待复核"
+      }
+    ],
+    "job_state": [
+      {
+        "code": "job.planned",
+        "name": "待执行"
+      },
+      {
+        "code": "job.running",
+        "name": "执行中"
+      },
+      {
+        "code": "job.paused",
+        "name": "已暂停"
+      },
+      {
+        "code": "job.succeeded",
+        "name": "全部完成"
+      },
+      {
+        "code": "job.partial_failure",
+        "name": "完成但有失败项"
+      },
+      {
+        "code": "job.failed",
+        "name": "任务失败"
+      },
+      {
+        "code": "job.cancelled",
+        "name": "已取消"
+      }
+    ],
+    "coordinate_system": [
+      {
+        "code": "coordinates.wgs84",
+        "name": "WGS-84"
+      },
+      {
+        "code": "coordinates.gcj02",
+        "name": "GCJ-02"
+      },
+      {
+        "code": "coordinates.bd09",
+        "name": "BD-09"
+      },
+      {
+        "code": "coordinates.unknown",
+        "name": "未确认"
+      }
+    ],
+    "stage": [
+      {
+        "code": "stage.scan",
+        "name": "扫描"
+      },
+      {
+        "code": "stage.prepare",
+        "name": "预处理"
+      },
+      {
+        "code": "stage.infer",
+        "name": "识别"
+      },
+      {
+        "code": "stage.validate",
+        "name": "校验"
+      },
+      {
+        "code": "stage.persist",
+        "name": "持久保存"
+      }
+    ],
+    "people": [
+      {
+        "code": "people.none",
+        "name": "无人"
+      },
+      {
+        "code": "people.present",
+        "name": "有人"
+      },
+      {
+        "code": "people.unknown",
+        "name": "不确定"
+      }
+    ],
+    "space": [
+      {
+        "code": "space.indoor",
+        "name": "室内"
+      },
+      {
+        "code": "space.outdoor",
+        "name": "室外"
+      },
+      {
+        "code": "space.unknown",
+        "name": "不确定"
+      }
+    ],
+    "shot": [
+      {
+        "code": "shot.extreme_close",
+        "name": "特写"
+      },
+      {
+        "code": "shot.close",
+        "name": "近景"
+      },
+      {
+        "code": "shot.medium",
+        "name": "中景"
+      },
+      {
+        "code": "shot.wide",
+        "name": "远景"
+      },
+      {
+        "code": "shot.unknown",
+        "name": "不确定"
+      }
+    ],
+    "subject": [],
+    "scene": [],
+    "environment": [],
+    "element": [],
+    "color": [],
+    "visual": []
+  }
+}

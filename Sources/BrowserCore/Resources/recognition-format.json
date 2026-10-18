@@ -1,0 +1,89 @@
+{
+  "version": "free-environment-text-v2",
+  "separator": "|",
+  "missing": "-",
+  "fields": [
+    {
+      "name": "标题",
+      "output_field": "title"
+    },
+    {
+      "name": "描述",
+      "output_field": "description"
+    },
+    {
+      "name": "主体",
+      "multiple": true,
+      "output_field": "subject_codes",
+      "dictionary": "subject"
+    },
+    {
+      "name": "场景",
+      "multiple": true,
+      "output_field": "scene_codes",
+      "dictionary": "scene"
+    },
+    {
+      "name": "环境",
+      "multiple": true,
+      "output_field": "environment_codes",
+      "dictionary": "environment"
+    },
+    {
+      "name": "元素",
+      "multiple": true,
+      "output_field": "element_codes",
+      "dictionary": "element"
+    },
+    {
+      "name": "主体色",
+      "multiple": true,
+      "output_field": "subject_color_codes",
+      "dictionary": "color"
+    },
+    {
+      "name": "环境色",
+      "multiple": true,
+      "output_field": "environment_color_codes",
+      "dictionary": "color"
+    },
+    {
+      "name": "人物",
+      "values": [
+        "无人",
+        "有人",
+        "不确定"
+      ],
+      "output_field": "people_code",
+      "dictionary": "people"
+    },
+    {
+      "name": "空间",
+      "values": [
+        "室内",
+        "室外",
+        "不确定"
+      ],
+      "output_field": "space_code",
+      "dictionary": "space"
+    },
+    {
+      "name": "景别",
+      "values": [
+        "特写",
+        "近景",
+        "中景",
+        "远景",
+        "不确定"
+      ],
+      "output_field": "shot_code",
+      "dictionary": "shot"
+    },
+    {
+      "name": "特征",
+      "multiple": true,
+      "output_field": "visual_codes",
+      "dictionary": "visual"
+    }
+  ]
+}

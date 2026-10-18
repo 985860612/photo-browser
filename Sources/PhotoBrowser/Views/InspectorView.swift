@@ -33,14 +33,9 @@ struct InspectorView: View {
                         information(L10n.text("照片数量"), L10n.text("\(group.assetIDs.count) 张"), icon: "photo.on.rectangle")
                         groupActions(group)
                     }
-                    GlassDivider(inset: 0)
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            sectionTitle(L10n.text("预览格式"), icon: "square.on.square")
-                            Spacer(minLength: 0)
-                            Text(asset.formatLabel).font(.caption2).foregroundStyle(.secondary)
-                        }
-                        formatPicker(asset)
+                    if !asset.isVideo {
+                        GlassDivider(inset: 0)
+                        AIPhotoInformation(asset: asset)
                     }
                 } else { Text(L10n.text("选择照片查看信息")).foregroundStyle(.secondary) }
             }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
@@ -97,21 +92,6 @@ struct InspectorView: View {
                 Label(L10n.text("在地图中打开"), systemImage: "map")
             }.font(.caption)
         }
-    }
-
-    private func formatPicker(_ asset: PhotoAsset) -> some View {
-        HStack(spacing: 4) {
-            ForEach(asset.mediaFiles) { file in
-                let selected = file.id == store.focusedFile?.id
-                Button { store.preferredFileID = file.id } label: {
-                    Text(file.format).font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(selected ? .primary : .secondary)
-                        .frame(maxWidth: .infinity).padding(.vertical, 7)
-                        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.white.opacity(selected ? 0.13 : 0)))
-                        .contentShape(Rectangle())
-                }.buttonStyle(.plain).accessibilityLabel(L10n.text("预览 \(file.format)"))
-            }
-        }.padding(3).background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white.opacity(0.04)))
     }
 
     private func metadataFields(_ value: PhotoMetadata?) -> some View {

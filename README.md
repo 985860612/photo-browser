@@ -28,7 +28,7 @@ Examples from the Simplified Chinese interface. English is also supported.
 
 ## Features
 
-- **One capture, multiple formats:** pair matching RAW/HIF/JPG/AVIF files and XMP sidecars. AVIF supports thumbnails, large previews, fullscreen originals, and HDR through the same color-managed display path. Choose a format in the inspector, or enable Prefer RAW for large previews.
+- **One capture, multiple formats:** pair matching RAW/HIF/JPG/AVIF files and XMP sidecars. AVIF supports thumbnails, large previews, fullscreen originals, and HDR through the same color-managed display path. Choose a format from the large-preview toolbar or fullscreen controls, or enable Prefer RAW for large previews.
 - **Focus points:** enable Settings → Browsing → Photo Preview → Show Focus Points for large and fullscreen previews. Canon EOS confirmed AF points appear in red and selected points in yellow (including CR2 and original JPEG with AF metadata). Sony recorded focus areas appear in cyan when valid location and frame metadata exist, verified with A7 IV ARW and original JPEG; they do not imply confirmed focus. Frames follow zoom, pan and EXIF orientation. Manual focus, missing data and unsupported files have explicit messages. The setting takes effect immediately, is remembered, and reads occur only when enabled. Requires ExifTool (`brew install exiftool`); originals are never changed.
 - **Fast browsing:** background thumbnails, decoded large-image caching, and adjacent-photo preloading. In Settings (⌘,), configure previous/next counts, defaulting to 2 previous and 5 next; 0 disables a direction. Background large-image decoding defaults to 4 parallel workers, configurable from 1 to 8. Changes apply immediately and persist across launches; running decodes finish normally, and two foreground workers remain available independently. Preloading starts alongside the current photo and preserves overlapping work during navigation; fullscreen preloads native pixels. Decoded-cache capacity follows 1/16 of physical RAM, bounded to 128 MiB–4 GiB, and preserves HDR precision. Under memory pressure, the current photo and closer neighbors take priority. Drag panel dividers or the filmstrip divider to resize them; widths, filmstrip height, panel visibility, and window frame are saved between launches.
 - **Full-resolution preview:** press Space for fullscreen. A cached browsing preview or thumbnail appears while the original loads. Pinch to zoom; scroll or drag to pan. Fit to Screen and 100% Pixels let you inspect detail.
@@ -87,6 +87,18 @@ Burst frames join a candidate when sequence numbers increase, focal length match
 | ⌘J | Toggle grid / large preview |
 | ⌘G | Group selected photos |
 | ⌘⇧F | Show current photo in Finder |
+
+## AI photo information
+
+The inspector shows existing AI titles, descriptions, subjects, scenes, environments, elements, colors, people, spaces, framing, and visual features for the selected photo. Videos omit this section. Use the refresh button to reread results.
+
+The reader first uses the local `~/Library/Application Support/PhotoBrowser/RecognitionRuns/` index, then checks V2 metadata in the selected folder's `.photobrowser/v2/` directory. Results are matched by directory, filename, size, and modification time. The app reads results without requiring the web viewer or running recognition again. Missing results, recognition failures, and read errors have separate states.
+
+Multi-value fields accept pipes, commas, Chinese enumeration commas, semicolons, line breaks, and JSON arrays; repeated labels are removed, while punctuation inside parentheses or quotes is preserved. Descriptions and original model responses remain intact. Names and codes come from the metadata protocol and dictionaries; splitting existing combined labels uses the same deterministic term-code algorithm as recognition. Reading does not rewrite the stored results.
+
+Settings → AI Model configures the HTTPS service URL, model, and API key, with Bailian CSV import and a connection test. The default model is `qwen3.8-flash`; Enable Thinking Mode defaults to off and is explicitly included in every request. Credentials are stored only in this Mac's Keychain, scoped to the service URL, and are excluded from preferences, photo metadata, and release artifacts.
+
+Generate AI Information or Regenerate sends the selected photo only after an explicit click. Before upload, the app converts it to an sRGB JPEG with its longest edge at most 720 pixels, preserving aspect ratio without enlarging small images or modifying originals. Generation supports cancellation and cancels when switching photos. Service errors, truncated or invalid responses, and changed source files preserve previous results. New results and generation history are stored in `~/Library/Application Support/PhotoBrowser/GeneratedRecognition/` and take priority for local display. Existing batch V2 records are preserved. Hosted analyses use a separate local envelope rather than inventing unavailable model-weight provenance, and are not automatically published to a NAS.
 
 ## Data and rendering
 
