@@ -90,7 +90,7 @@ Burst frames join a candidate when sequence numbers increase, focal length match
 
 ## AI photo information
 
-The inspector shows existing AI titles, descriptions, subjects, scenes, environments, elements, colors, people, spaces, framing, and visual features for the selected photo. Videos omit this section. Use the refresh button to reread results.
+The inspector shows existing AI titles, descriptions, subjects, scenes, environments, elements, colors, people, spaces, framing, and visual features for the selected photo. Videos omit this section. The sparkle icon beside the heading generates or regenerates information.
 
 The reader first uses the local `~/Library/Application Support/PhotoBrowser/RecognitionRuns/` index, then checks V2 metadata in the selected folder's `.photobrowser/v2/` directory. Results are matched by directory, filename, size, and modification time. The app reads results without requiring the web viewer or running recognition again. Missing results, recognition failures, and read errors have separate states.
 
@@ -98,7 +98,7 @@ Multi-value fields accept pipes, commas, Chinese enumeration commas, semicolons,
 
 Settings → AI Model configures the HTTPS service URL, model, and API key, with Bailian CSV import and a connection test. The default model is `qwen3.8-flash`; Enable Thinking Mode defaults to off and is explicitly included in every request. Credentials are stored only in this Mac's Keychain, scoped to the service URL, and are excluded from preferences, photo metadata, and release artifacts.
 
-Generate AI Information or Regenerate sends the selected photo only after an explicit click. Before upload, the app converts it to an sRGB JPEG with its longest edge at most 720 pixels, preserving aspect ratio without enlarging small images or modifying originals. Generation supports cancellation and cancels when switching photos. Service errors, truncated or invalid responses, and changed source files preserve previous results. New results and generation history are stored in `~/Library/Application Support/PhotoBrowser/GeneratedRecognition/` and take priority for local display. Existing batch V2 records are preserved. Hosted analyses use a separate local envelope rather than inventing unavailable model-weight provenance, and are not automatically published to a NAS.
+Clicking the sparkle icon beside the AI Photo Information heading sends the selected photo to generate information, or regenerate it when results already exist. Before upload, the app converts it to an sRGB JPEG with its longest edge at most 720 pixels, preserving aspect ratio without enlarging small images or modifying originals. During generation, the icon is disabled and progress and a Cancel button appear below. Switching photos cancels generation. Service errors, truncated or invalid responses, and changed source files preserve previous results. New results and generation history are stored in `~/Library/Application Support/PhotoBrowser/GeneratedRecognition/` and take priority for local display. Existing batch V2 records are preserved. Hosted analyses use a separate local envelope rather than inventing unavailable model-weight provenance, and are not automatically published to a NAS.
 
 ## Data and rendering
 
