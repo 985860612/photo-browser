@@ -4,6 +4,7 @@ import BrowserCore
 import Combine
 
 @MainActor final class BrowserStore: ObservableObject {
+    var directoryKnownAssets: [PhotoAsset] = []
     @Published var directory: URL?
     @Published var assets: [PhotoAsset] = [] { didSet { visibleOrdering = nil } }
     @Published var groups: [PhotoGroup] = [] { didSet { visibleOrdering = nil } }

@@ -3,6 +3,8 @@ import BrowserCore
 
 struct AIPhotoInformation: View {
     let asset: PhotoAsset
+    var cachedMetadata: RecognitionMetadata? = nil
+    var usesCatalog = false
     @State private var metadata: RecognitionMetadata?
     @State private var failure: String?
     @State private var loadedRequest: String?
@@ -76,13 +78,14 @@ struct AIPhotoInformation: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: assetRequest) { _, _ in cancelGeneration() }
+        .onChange(of: cachedMetadata) { _, _ in if usesCatalog { refreshID = UUID() } }
         .onDisappear { cancelGeneration() }
         .task(id: request) {
             let identity = request
             let refresh = forceRefresh; forceRefresh = false
             loading = true; metadata = nil; failure = nil
             do {
-                let result = try await RecognitionReader.shared.read(asset, refresh: refresh)
+                let result = usesCatalog && !refresh ? cachedMetadata : try await RecognitionReader.shared.read(asset, refresh: refresh)
                 try Task.checkCancellation()
                 guard request == identity else { return }
                 metadata = result

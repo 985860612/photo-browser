@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 PHOTO_BUILD_ARGS=(-c release)
 if [ -n "${PHOTO_BROWSER_BUILD_PATH:-}" ]; then PHOTO_BUILD_ARGS+=(--scratch-path "$PHOTO_BROWSER_BUILD_PATH"); fi
 APP_PATH="$PWD/dist/照片浏览器.app"
+if [ "${PHOTO_BROWSER_LOCAL_PREVIEW:-0}" = "1" ]; then APP_PATH="$PWD/dist/照片浏览器-AI分类预览.app"; fi
 PHOTO_SETTINGS="$PWD/scripts/app-settings.plist"
 PHOTO_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :Version' "$PHOTO_SETTINGS")
 PHOTO_BUILD=$(/usr/libexec/PlistBuddy -c 'Print :Build' "$PHOTO_SETTINGS")
@@ -58,6 +59,11 @@ PLIST
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $PHOTO_BUILD" "$APP_PATH/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :SUFeedURL string $PHOTO_FEED" "$APP_PATH/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $PHOTO_PUBLIC_KEY" "$APP_PATH/Contents/Info.plist"
+if [ "${PHOTO_BROWSER_LOCAL_PREVIEW:-0}" = "1" ]; then
+  /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier local.wxj.PhotoBrowser.AICategoryPreview' "$APP_PATH/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Add :PhotoBrowserLocalPreview bool true' "$APP_PATH/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Set :SUEnableAutomaticChecks false' "$APP_PATH/Contents/Info.plist"
+fi
 swift scripts/create-icon.swift "$PWD/.build/AppIcon.iconset"
 iconutil -c icns "$PWD/.build/AppIcon.iconset" -o "$APP_PATH/Contents/Resources/AppIcon.icns"
 codesign --force --sign - "$APP_PATH/Contents/Frameworks/Sparkle.framework"

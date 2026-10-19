@@ -83,8 +83,8 @@ struct DirectorySnapshot {
     let diskImages: [URL]
     let isReadOnly: Bool
     let dates: [String: Date]
-    static func read(_ directory: URL) throws -> DirectorySnapshot {
-        let assets = try DirectoryScanner.scan(directory)
+    static func read(_ directory: URL, knownAssets: [PhotoAsset] = []) throws -> DirectorySnapshot {
+        let assets = try DirectoryScanner.scan(directory, knownAssets: knownAssets)
         let entries = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .contentModificationDateKey], options: [.skipsHiddenFiles])
         let folders = try entries.filter { try $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true }
             .map(\.standardizedFileURL)

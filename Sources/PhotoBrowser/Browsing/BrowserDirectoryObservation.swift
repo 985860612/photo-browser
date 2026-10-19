@@ -40,7 +40,7 @@ extension BrowserStore {
             while self.refreshRequested, revision == self.observationRevision, !Task.isCancelled {
                 guard let directory = self.directory, !self.isMoving, !self.isLoading, !self.isReadingMetadata else { return }
                 let full = self.refreshFullRequested, dates = self.observedFolderDates
-                let focused = self.focusedAsset?.files ?? []
+                let focused = self.focusedAsset?.files ?? [], known = self.directoryKnownAssets
                 self.refreshRequested = false; self.refreshFullRequested = false
                 do {
                     let snapshot = try await self.observationWorkers.run(background: true) { check -> DirectorySnapshot? in
@@ -58,7 +58,7 @@ extension BrowserStore {
                             }
                         }
                         guard needsScan else { return nil }
-                        let result = try DirectorySnapshot.read(directory); try check(); return result
+                        let result = try DirectorySnapshot.read(directory, knownAssets: known); try check(); return result
                     }
                     guard revision == self.observationRevision, self.directory == directory, !Task.isCancelled else { return }
                     if let snapshot {

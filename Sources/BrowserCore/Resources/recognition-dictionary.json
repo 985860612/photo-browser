@@ -104,15 +104,21 @@
     "processing": [
       {
         "code": "processing.pending",
-        "name": "待识别"
+        "name": "待识别",
+        "browse_name": "待识别",
+        "browse_order": 1
       },
       {
         "code": "processing.succeeded",
-        "name": "结果已持久保存"
+        "name": "结果已持久保存",
+        "browse_name": "已识别",
+        "browse_order": 0
       },
       {
         "code": "processing.failed",
-        "name": "处理失败"
+        "name": "处理失败",
+        "browse_name": "识别异常",
+        "browse_order": 2
       },
       {
         "code": "processing.unsupported",
