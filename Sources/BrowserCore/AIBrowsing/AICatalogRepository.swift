@@ -120,13 +120,13 @@ enum AICatalogSQL {
             if !result.contains(where: { path == $0 || path.hasPrefix($0 == "/" ? "/" : $0 + "/") }) { result.append(path) }
         }
     }
-    static func exclusion(root: URL, directories: [URL]) -> (sql: String, values: [AIBind]) {
+    static func exclusion(root: URL, directories: [URL], alias: String = "p") -> (sql: String, values: [AIBind]) {
         var sql = "", values: [AIBind] = []
         for path in excludedPaths(root: root, directories: directories) {
             // Binary path ranges include descendants without LIKE's wildcard or case-folding rules.
             let prefix = path == "/" ? "/" : path + "/"
             let upper = path == "/" ? "0" : path + "0"
-            sql += " AND NOT (p.directory=? OR (p.directory>=? AND p.directory<?))"
+            sql += " AND NOT (\(alias).directory=? OR (\(alias).directory>=? AND \(alias).directory<?))"
             values += [.text(path), .text(prefix), .text(upper)]
         }
         return (sql, values)

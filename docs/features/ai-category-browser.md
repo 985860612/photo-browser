@@ -10,6 +10,16 @@ Click a photo to inspect cached AI information, double-click for a large preview
 
 Folders have **Exclude from AI Album** / **Include in AI Album** context actions. Exclusions cover the folder and all descendants across every AI scope, including search, paging, state totals and facets. Inherited exclusions are labeled and must be removed at the parent folder. Explicit child exclusions remain when a parent is included again. The folder icon shows an exclusion mark; normal folder browsing and original metadata remain available. Rules are saved separately in application preferences (`aiBrowseExcludedDirectories`), so rebuilding the derived index preserves them. Including a folder again uses cached results immediately, without reimport or model requests.
 
+## Image-vector similarity
+
+**Find Similar Photos** opens a separate result sheet and preserves the underlying filters, selection and scroll position. It searches all indexed photo families in the current folder scope, including photos without AI labels, while honoring folder exclusions and omitting the source family. It ranks image pixels rather than tag overlap. The first 100 nearest matches appear initially; Show More expands to at most 500. A smaller displayed L2 distance indicates a closer vector, rather than a confidence percentage.
+
+Apple Vision feature-print revision 2 produces 768 Float32 elements on macOS 14+. The model identifier also fixes crop/scale and storage conventions, so different vector spaces cannot mix. Feature extraction runs locally with at most two workers, preferring existing oriented 720-pixel batch previews and otherwise using the bounded thumbnail cache. Original photos and recognition metadata are not changed, and no language-model endpoint is called.
+
+Vectors and extraction errors live in the derived SQLite `photo_vector` table. Committed batches survive closing or pausing the sheet; reopening resumes missing vectors. File-snapshot changes invalidate vectors, while metadata-only changes preserve them. Retry Failed Photos retries failed sources; Rebuild Vector Index rebuilds the current allowed scope. Initial results explicitly show incomplete coverage while indexing continues. Unavailable originals remain searchable once their vectors have been saved.
+
+Search streams vectors in bounded pages, retains a nearest-K heap, and loads full photo details only for final matches. It does not load all original images or all metadata blobs into memory for a query.
+
 ## Local derived index
 
 `~/Library/Application Support/PhotoBrowser/AIBrowse/catalog-v1.sqlite` is a rebuildable local SQLite index. It contains normalized photos, field terms, memberships, source stamps and folder-scope inventories. WAL allows independent, cancellable read connections while imports commit batches. Pages contain 60 items and use capture-time/row-ID cursors rather than offsets. Lists, summaries and facets are separate requests. Facet results are cached by scope revision and canonical filter parameters.

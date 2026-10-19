@@ -70,6 +70,7 @@ struct AIBrowseView: View {
     @AppStorage("aiShowInformationPanel") private var showInformationPanel = true
     @State private var panelDragStart: Double?
     @FocusState private var searchFocused: Bool
+    @State private var similaritySeed: AICatalogItem?
     var body: some View {
         VStack(spacing: 0) {
             if !store.fullscreen { navigation; Divider() }
@@ -133,6 +134,13 @@ struct AIBrowseView: View {
                 }.padding(10).background(.orange.opacity(0.08))
             }
         }.background(GlassBackdrop().ignoresSafeArea()).controlSize(.small)
+            .sheet(item: $similaritySeed, onDismiss: { store.similarityPresented = false }) { item in
+                if let root = store.root, let repository = store.repository {
+                    AISimilarPhotosView(seed: item, root: root, repository: repository, exclusions: store.excludedDirectories) { selected in
+                        similaritySeed = nil; store.similarityPresented = false; onDirectory(selected)
+                    }
+                }
+            }
             .toolbar {
                 if !store.fullscreen {
                     ToolbarItem(placement: .navigation) {
@@ -204,6 +212,8 @@ struct AIBrowseView: View {
                             .onTapGesture(count: 2) { store.select(item, modifiers: []); store.large = true }
                             .onTapGesture { store.select(item) }
                             .contextMenu {
+                                Button(L10n.text("查看相似图片"), systemImage: "photo.stack") { store.similarityPresented = true; similaritySeed = item }.labelStyle(.titleAndIcon)
+                                Divider()
                                 Button(L10n.text("在目录中查看"), systemImage: "folder") { onDirectory(item) }.labelStyle(.titleAndIcon)
                                 Button(L10n.text("在 Finder 显示"), systemImage: "arrow.up.forward.app") { NSWorkspace.shared.activateFileViewerSelecting([item.asset.preferred.url]) }.labelStyle(.titleAndIcon)
                                 Button(L10n.text("复制文件"), systemImage: "doc.on.doc") { store.select(item, modifiers: []); store.copyFiles() }.labelStyle(.titleAndIcon)
@@ -224,7 +234,7 @@ struct AIBrowseView: View {
     }
 }
 
-private struct AICatalogCard: View {
+struct AICatalogCard: View {
     let item: AICatalogItem
     let root: URL?
     let selected: Bool

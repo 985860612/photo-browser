@@ -26,6 +26,7 @@ import AppKit
                     .disabled(!updater.canCheckForUpdates)
             }
             CommandGroup(replacing: .newItem) {
+                Group {
                 Button(L10n.text("打开照片目录…")) { if ai.active { ai.chooseRoot() } else { store.chooseDirectory() } }.keyboardShortcut("o")
                 Button(L10n.text("刷新目录")) { if ai.active { ai.synchronize() } else { store.refreshDirectory() } }.keyboardShortcut("r")
                     .disabled(ai.active ? ai.syncing : (store.isMoving || store.isLoading))
@@ -34,8 +35,10 @@ import AppKit
                 Button(L10n.text("前进")) { store.navigateHistory(1) }.keyboardShortcut("]").disabled(ai.active || !store.canGoForward)
                 Button(L10n.text("上一级")) { store.goUp() }
                     .keyboardShortcut(.upArrow).disabled(ai.active || store.directory == nil || store.isMoving || store.isLoading)
+                }.disabled(ai.similarityPresented)
             }
             CommandMenu(L10n.text("照片")) {
+                Group {
                 Button(L10n.text("上一项")) { if ai.active { ai.step(-1) } else { store.step(-1) } }.keyboardShortcut(.leftArrow, modifiers: [])
                 Button(L10n.text("下一项")) { if ai.active { ai.step(1) } else { store.step(1) } }.keyboardShortcut(.rightArrow, modifiers: [])
                 Button(L10n.text("向左扩展选择")) { if ai.active { ai.step(-1, extending: true) } else { store.step(-1, extendingSelection: true) } }.keyboardShortcut(.leftArrow, modifiers: [.shift])
@@ -60,6 +63,7 @@ import AppKit
                 Button(L10n.text("将所选照片组成一组")) { store.createGroup() }.keyboardShortcut("g")
                     .disabled(ai.active || store.selection.count < 2 || store.isMoving || store.isReadingMetadata)
                 Button(L10n.text("在 Finder 显示")) { if ai.active { ai.reveal() } else { store.revealFocused() } }.keyboardShortcut("f", modifiers: [.command, .shift])
+                }.disabled(ai.similarityPresented)
             }
         }
         Settings {

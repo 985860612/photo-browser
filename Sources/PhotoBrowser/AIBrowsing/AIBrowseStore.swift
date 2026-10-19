@@ -4,6 +4,7 @@ import BrowserCore
 
 @MainActor final class AIBrowseStore: ObservableObject {
     @Published var active = false
+    @Published var similarityPresented = false
     @Published private(set) var root: URL?
     @Published private(set) var excludedDirectories: [URL] = []
     @Published var filter = AICatalogFilter() { didSet { if filter != oldValue { persist(); reload(debounce: filter.text != oldValue.text) } } }
@@ -245,6 +246,7 @@ import BrowserCore
     }
     func reveal() { if let item = selected { NSWorkspace.shared.activateFileViewerSelecting([item.asset.preferred.url]) } }
     func handleKeyDown(_ event: NSEvent, in window: NSWindow?) -> NSEvent? {
+        if similarityPresented { return event }
         guard let window, !(window.firstResponder is NSTextView), !(window.firstResponder is NSTextField),
               window.identifier?.rawValue != "PhotoBrowser.Settings", window.attachedSheet == nil, NSApp.modalWindow == nil else { return event }
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])

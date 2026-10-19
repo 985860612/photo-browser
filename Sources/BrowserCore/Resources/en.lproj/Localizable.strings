@@ -614,3 +614,25 @@
 "筛选面板" = "Filter Panel";
 "收起筛选面板" = "Hide Filter Panel";
 "展开筛选面板" = "Show Filter Panel";
+
+"查看相似图片" = "Find Similar Photos";
+"相似图片" = "Similar Photos";
+"向量索引" = "Vector Index";
+"图片向量无效，请重新建立相似图片索引。" = "Invalid image vector. Rebuild the similar-photo index.";
+"无法读取图片：%@" = "Cannot read image: %@";
+"照片已变化，请刷新后重试。" = "The photo has changed. Refresh and try again.";
+"显示 %@ 张相似图片" = "Showing %@ similar photos";
+"向量距离越小，画面越相似" = "A smaller vector distance means greater visual similarity";
+"显示更多" = "Show More";
+"重试失败" = "Retry Failed Photos";
+"重新建立向量索引" = "Rebuild Vector Index";
+"返回 AI 分类" = "Back to AI Categories";
+"图片向量搜索范围：%@" = "Image vector search scope: %@";
+"已建立 %@/%@ 张 · 失败 %@ 张" = "Indexed %@/%@ photos · %@ failed";
+"暂停建立索引" = "Pause Indexing";
+"继续建立索引" = "Resume Indexing";
+"首次建立可中断，当前结果仅覆盖已完成向量的照片。" = "Initial indexing can be paused. Current results cover only photos with completed vectors.";
+"重试" = "Retry";
+"向量距离 %@" = "Vector distance %@";
+"暂无相似图片" = "No Similar Photos Yet";
+"建立更多图片向量后会出现结果；当前照片不会出现在结果中。" = "Results will appear as more image vectors are indexed. The source photo is excluded.";
