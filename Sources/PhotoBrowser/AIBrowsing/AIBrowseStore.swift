@@ -4,7 +4,24 @@ import BrowserCore
 
 @MainActor final class AIBrowseStore: ObservableObject {
     @Published var active = false
-    @Published var similarityPresented = false
+    @Published private(set) var similarityTitle = ""
+    private var restoreAfterSimilarity = false
+    private var rankedItems: [AICatalogItem] = []
+    private var rankKey = ""
+    private var normalPosition: (filter: AICatalogFilter, scroll: String?, focused: String?, selection: Set<String>, loaded: Int)?
+    func showSimilar(_ item: AICatalogItem) {
+        if filter.similaritySeedID == nil { normalPosition = (filter, scrollID, focused, selection, items.count) }
+        similarityTitle = item.title; large = false; fullscreen = false
+        filter.similaritySeedID = item.id
+    }
+    func clearSimilarity() {
+        var plain = filter; plain.similaritySeedID = nil
+        if let position = normalPosition, position.filter == plain {
+            restoreScroll = position.scroll; focused = position.focused; selection = position.selection; restoreCount = position.loaded
+        }
+        normalPosition = nil; similarityTitle = ""
+        restoreAfterSimilarity = true; filter = plain
+    }
     @Published private(set) var root: URL?
     @Published private(set) var excludedDirectories: [URL] = []
     @Published var filter = AICatalogFilter() { didSet { if filter != oldValue { persist(); reload(debounce: filter.text != oldValue.text) } } }
@@ -56,9 +73,11 @@ import BrowserCore
         if let bytes = UserDefaults.standard.data(forKey: "aiBrowseState"), let saved = try? JSONDecoder().decode(Saved.self, from: bytes) {
             root = saved.root; filter = saved.filter; scrollID = saved.scroll; restoreScroll = saved.scroll; restoreCount = saved.loaded ?? 60
         }
-        observer = NotificationCenter.default.addObserver(forName: GeneratedRecognitionStore.didSave, object: nil, queue: .main) { [weak self] note in
-            guard let asset = note.userInfo?["asset"] as? PhotoAsset else { return }
-            Task { @MainActor [weak self] in await self?.generated(asset) }
+        observer = NotificationCenter.default.addObserver(forName: BackgroundTaskCoordinator.didChange, object: nil, queue: .main) { [weak self] note in
+            Task { @MainActor [weak self] in
+                guard let self, self.active, !self.loading else { return }
+                self.reload(preservingPages: true)
+            }
         }
     }
     deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
@@ -124,13 +143,32 @@ import BrowserCore
         ticket = UUID(); let request = ticket
         pendingNavigation = nil
         guard let repository, let root else { return }
-        let query = filter, exclusions = excludedDirectories, target = preservingPages ? max(60, items.count, restoreCount) : 60
+        let restoring = restoreAfterSimilarity; restoreAfterSimilarity = false
+        let query = filter, exclusions = excludedDirectories, target = preservingPages || restoring ? max(60, items.count, restoreCount) : 60
         loading = true
-        if !preservingPages { restoreCount = 60; restoreScroll = nil; items = []; cursor = nil; hasMore = false }
+        if !preservingPages { restoreCount = 60; if !restoring { restoreScroll = nil }; items = []; cursor = nil; hasMore = false }
         pageTask = Task {
             do {
                 if debounce { try await Task.sleep(for: .milliseconds(200)) }
                 var result: [AICatalogItem] = [], after: AICatalogCursor?
+                if let seedID = query.similaritySeedID {
+                    guard let seed = try await repository.item(id: seedID), excludedAncestor(of: seed.directory) == nil else {
+                        clearSimilarity(); status = L10n.text("相似参考图已失效，已恢复普通筛选"); return
+                    }
+                    similarityTitle = seed.title
+                    let revision = try await repository.visualRevision(root: root)
+                    let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+                    let key = String(decoding: try encoder.encode(query), as: UTF8.self) + root.path + exclusions.map(\.path).joined(separator: "|") + revision
+                    if rankKey != key {
+                        let ranked = try await repository.rankedPhotos(root: root, filter: query, excluding: exclusions)
+                        try Task.checkCancellation(); guard ticket == request else { return }
+                        rankedItems = ranked.map(\.item); rankKey = key
+                    }
+                    items = Array(rankedItems.prefix(max(60, target))); hasMore = items.count < rankedItems.count; loading = false
+                    selection.formIntersection(Set(items.map(\.id))); if !items.contains(where: { $0.id == focused }) { focused = items.first?.id }
+                    status = L10n.text("按相似度排序，最多显示 500 张；索引进度见后台任务")
+                    loadCounts(request: request); return
+                }
                 repeat {
                     let page = try await repository.page(root: root, filter: query, after: after, excluding: exclusions)
                     try Task.checkCancellation(); guard ticket == request else { return }
@@ -147,6 +185,12 @@ import BrowserCore
         }
     }
     func loadMore() {
+        if filter.similaritySeedID != nil {
+            guard !loading, hasMore else { return }
+            items = Array(rankedItems.prefix(items.count + 60)); hasMore = items.count < rankedItems.count
+            let pending = pendingNavigation; pendingNavigation = nil
+            if let pending, focused == pending.anchor { step(pending.offset, extending: pending.extending) }; return
+        }
         guard !loading, hasMore, let repository, let root else { return }
         let query = filter, request = ticket, after = cursor, exclusions = excludedDirectories
         loading = true
@@ -215,11 +259,6 @@ import BrowserCore
             } catch is CancellationError {} catch { if syncTicket == request { syncing = false; self.error = error.localizedDescription; status = L10n.text("索引更新未完成"); reload(preservingPages: true) } }
         }
     }
-    private func generated(_ asset: PhotoAsset) async {
-        guard let repository, let root, AICatalogPaths.contains(asset.preferred.url, in: root) else { return }
-        do { try await repository.update(asset, root: root); status = L10n.text("AI 信息已更新，筛选结果已刷新"); reload(preservingPages: true) }
-        catch { self.error = error.localizedDescription }
-    }
     func select(_ item: AICatalogItem, modifiers: NSEvent.ModifierFlags = NSEvent.modifierFlags) {
         pendingNavigation = nil
         if modifiers.contains(.shift), let anchor, let a = items.firstIndex(where: { $0.id == anchor }), let b = items.firstIndex(where: { $0.id == item.id }) {
@@ -246,9 +285,8 @@ import BrowserCore
     }
     func reveal() { if let item = selected { NSWorkspace.shared.activateFileViewerSelecting([item.asset.preferred.url]) } }
     func handleKeyDown(_ event: NSEvent, in window: NSWindow?) -> NSEvent? {
-        if similarityPresented { return event }
         guard let window, !(window.firstResponder is NSTextView), !(window.firstResponder is NSTextField),
-              window.identifier?.rawValue != "PhotoBrowser.Settings", window.attachedSheet == nil, NSApp.modalWindow == nil else { return event }
+              window.identifier?.rawValue != "PhotoBrowser.Settings", window.identifier?.rawValue != "PhotoBrowser.BackgroundTasks", window.attachedSheet == nil, NSApp.modalWindow == nil else { return event }
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if event.keyCode == 8, modifiers == .command { copyFiles(); return nil }
         guard modifiers.intersection([.command, .control, .option]).isEmpty else { return event }

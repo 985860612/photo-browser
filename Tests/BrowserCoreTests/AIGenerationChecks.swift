@@ -73,16 +73,23 @@ struct AIGenerationChecks {
         try check((record["analyses"] as? [[String: Any]])?.count == 2, "Regeneration discarded prior analyses")
         let result = try await store.read(asset)
         try check(result?.sections.last?.tags.count == 3, "Generated metadata was not readable")
+        var taskAnalysis = try RecognitionContract.analysis(raw)
+        taskAnalysis["task_item_id"] = "checkpoint-fixture:1"
+        _ = try await store.save(asset, analysis: taskAnalysis)
+        let recovered = try await store.readTask(asset, token: "checkpoint-fixture:1")
+        try check(recovered?.title == "飞机", "A saved AI response must survive a crash before its task checkpoint")
+        try check(try await store.readTask(asset, token: "another-task:1") == nil, "Another task must not reuse a forced generation token")
+        let checkpoint = try Data(contentsOf: location)
         do { _ = try await store.save(asset, analysis: ["invalid": true]); throw Failure(message: "Invalid analysis overwrote results") }
         catch is Failure { throw Failure(message: "Invalid analysis overwrote results") } catch {}
-        try check(try Data(contentsOf: location) == before, "Failed save changed last good result")
+        try check(try Data(contentsOf: location) == checkpoint, "Failed save changed last good result")
         let cancelled = Task { withUnsafeCurrentTask { $0?.cancel() }; return try await store.save(asset, analysis: RecognitionContract.analysis(raw)) }
         do { _ = try await cancelled.value; throw Failure(message: "Cancelled generation committed") }
         catch is CancellationError {}
-        try check(try Data(contentsOf: location) == before, "Cancelled save changed result")
+        try check(try Data(contentsOf: location) == checkpoint, "Cancelled save changed result")
         try Data("changed source".utf8).write(to: fileURL)
         do { _ = try await store.save(asset, analysis: RecognitionContract.analysis(raw)); throw Failure(message: "Changed source accepted") }
         catch is Failure { throw Failure(message: "Changed source accepted") } catch {}
-        try check(try Data(contentsOf: location) == before, "Stale source overwrote results")
+        try check(try Data(contentsOf: location) == checkpoint, "Stale source overwrote results")
     }
 }

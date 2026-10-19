@@ -15,6 +15,7 @@ import AppKit
                 .preferredColorScheme(.dark)
                 .task {
                     store.start(); delegate.store = store; delegate.ai = ai
+                    BackgroundTaskStore.shared.browse = ai; BackgroundTaskStore.shared.start()
                     if CommandLine.arguments.contains("--ai-categories") { ai.activate(directory: store.directory) }
                     updater.start { [weak store] in store?.isMoving == true || store?.isExportingLivePhotoVideo == true || store?.isOperatingDiskImage == true }
                 }
@@ -35,7 +36,7 @@ import AppKit
                 Button(L10n.text("前进")) { store.navigateHistory(1) }.keyboardShortcut("]").disabled(ai.active || !store.canGoForward)
                 Button(L10n.text("上一级")) { store.goUp() }
                     .keyboardShortcut(.upArrow).disabled(ai.active || store.directory == nil || store.isMoving || store.isLoading)
-                }.disabled(ai.similarityPresented)
+                }
             }
             CommandMenu(L10n.text("照片")) {
                 Group {
@@ -63,7 +64,7 @@ import AppKit
                 Button(L10n.text("将所选照片组成一组")) { store.createGroup() }.keyboardShortcut("g")
                     .disabled(ai.active || store.selection.count < 2 || store.isMoving || store.isReadingMetadata)
                 Button(L10n.text("在 Finder 显示")) { if ai.active { ai.reveal() } else { store.revealFocused() } }.keyboardShortcut("f", modifiers: [.command, .shift])
-                }.disabled(ai.similarityPresented)
+                }
             }
         }
         Settings {
@@ -80,7 +81,7 @@ import AppKit
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let store = self?.store else { return event }
+            guard NSApp.keyWindow?.identifier?.rawValue != "PhotoBrowser.BackgroundTasks", let store = self?.store else { return event }
             if let ai = self?.ai, ai.active { return ai.handleKeyDown(event, in: NSApp.keyWindow) }
             return store.handleKeyDown(event, in: NSApp.keyWindow)
         }
@@ -104,19 +105,19 @@ import AppKit
             let alert = NSAlert(); alert.messageText = L10n.text("缓存更新失败：\(error.localizedDescription)")
             alert.addButton(withTitle: L10n.text("知道了")); alert.runModal()
         }
-        guard let store, !store.mountedDiskImages.isEmpty else { return .terminateNow }
-        let fallback = store.activeDiskImage?.source.deletingLastPathComponent()
+        let fallback = store?.activeDiskImage?.source.deletingLastPathComponent()
         Task {
             do {
-                try await store.ejectDiskImagesForTermination()
+                try await BackgroundTaskStore.shared.shutdown()
+                if let store, !store.mountedDiskImages.isEmpty { try await store.ejectDiskImagesForTermination() }
                 sender.reply(toApplicationShouldTerminate: true)
             } catch {
                 let alert = NSAlert()
-                alert.messageText = L10n.text("镜像推出失败，请关闭正在使用镜像的程序后重试。")
+                alert.messageText = L10n.text("后台任务保存或镜像推出失败，请重试。")
                 alert.informativeText = error.localizedDescription
                 alert.addButton(withTitle: L10n.text("知道了")); alert.runModal()
-                if let fallback, store.activeDiskImage == nil { store.load(fallback) }
-                else if let directory = store.directory { store.load(directory, recordNavigation: false) }
+                if let fallback, store?.activeDiskImage == nil { store?.load(fallback) }
+                else if let directory = store?.directory { store?.load(directory, recordNavigation: false) }
                 sender.reply(toApplicationShouldTerminate: false)
             }
         }

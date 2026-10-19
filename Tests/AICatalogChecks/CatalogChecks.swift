@@ -12,6 +12,8 @@ import AppKit
         defer { try? FileManager.default.removeItem(at: temp) }
         try await exclusionChecks(in: temp)
         try await visualSearchChecks(in: temp)
+        try await backgroundTaskChecks(in: temp)
+        try await backgroundRecoveryChecks(in: temp)
         let root = temp.appendingPathComponent("photos"), other = temp.appendingPathComponent("photos-other")
         for folder in [root, other, root.appendingPathComponent("sub"), root.appendingPathComponent("_del"), root.appendingPathComponent(".hidden"), root.appendingPathComponent("@Recently-Snapshot")] {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

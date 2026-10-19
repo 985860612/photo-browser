@@ -10,7 +10,7 @@ mkdir -p dist
 swiftc -parse-as-library -I "$PHOTO_AI_BIN/Modules" -F "$PHOTO_AI_BIN" \
   Sources/PhotoBrowser/Browsing/*.swift Sources/PhotoBrowser/Previews/*.swift \
   Sources/PhotoBrowser/Actions/*.swift Sources/PhotoBrowser/Playback/*.swift \
-  Sources/PhotoBrowser/Views/*.swift Sources/PhotoBrowser/AIBrowsing/*.swift \
+  Sources/PhotoBrowser/Views/*.swift Sources/PhotoBrowser/AIBrowsing/*.swift Sources/PhotoBrowser/BackgroundTasks/*.swift \
   Sources/PhotoBrowser/App/AppUpdater.swift Tests/AIBrowseUIChecks/UIChecks.swift \
   "$PHOTO_AI_BIN"/BrowserCore.build/*.swift.o -Xlinker -rpath -Xlinker "$PHOTO_AI_BIN" -o "$PHOTO_AI_BIN/AIBrowseUIChecks"
 "$PHOTO_AI_BIN/AIBrowseUIChecks" "$PWD/dist/ai-categories.png"

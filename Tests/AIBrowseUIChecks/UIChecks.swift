@@ -64,6 +64,7 @@ import BrowserCore
         guard store.items.isEmpty, store.focused == nil, store.selection.isEmpty else { throw BrowserFailure.message("Empty query must clear selection and detail") }
         window.orderOut(nil)
         try await visualSearchUI(output: URL(fileURLWithPath: CommandLine.arguments.last!).deletingLastPathComponent().appendingPathComponent("similar-photos-ui.png"))
+        try await backgroundTasksUI(output: URL(fileURLWithPath: CommandLine.arguments.last!).deletingLastPathComponent().appendingPathComponent("background-tasks-ui.png"))
         print("PASS native AI UI: page, facets, selected inspector, label interactions, empty result clears selection")
     }
     @MainActor static func visualSearchUI(output: URL) async throws {
@@ -78,29 +79,87 @@ import BrowserCore
         try await repo.synchronize(root: root) { _ in }
         var filter = AICatalogFilter(); filter.state = "processing.pending"
         let seed = try await repo.page(root: root, filter: filter).items[0]
-        let model = AIVisualSearchStore(seed: seed, root: root, repository: repo, exclusions: [])
-        model.start()
-        try await wait { !model.indexing && model.matches.count == 3 }
-        guard model.error == nil, model.progress?.indexed == 4 else { throw BrowserFailure.message("Visual UI indexing failed: \(model.error ?? "unknown")") }
-        let selected = model.selectedID
-        model.refresh(); try await wait { !model.searching }
-        guard model.selectedID == selected, model.matches.allSatisfy({ $0.id != seed.id }) else { throw BrowserFailure.message("Vector refresh changed selection or included the source") }
-        model.start(); model.stop()
-        try await Task.sleep(for: .milliseconds(30))
-        guard !model.indexing && !model.searching else { throw BrowserFailure.message("Closing visual search must cancel owned work") }
-        let hosting = NSHostingView(rootView: AISimilarPhotosView(seed: seed, root: root, repository: repo, exclusions: [], onDirectory: { _ in }).frame(width: 1200, height: 850))
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 850), styleMask: [.titled], backing: .buffered, defer: false)
+        try await repo.indexVisualPhotos(root: root) { _ in }
+        let store = AIBrowseStore(); store.repository = repo; store.active = true
+        store.fields = try repo.fields(); store.states = try repo.states()
+        store.setRoot(root); store.filter.state = "processing.pending"
+        try await wait { !store.loading && store.items.count == 4 }
+        let normal = store.filter
+        store.select(seed, modifiers: []); store.scrollID = seed.id
+        let hosting = NSHostingView(rootView: AIBrowseView(onDirectory: { _ in }).environmentObject(store).frame(width: 1440, height: 940))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 940), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: .darkAqua); window.contentView = hosting; window.orderFront(nil)
-        try await Task.sleep(for: .seconds(1)); hosting.displayIfNeeded()
+        store.showSimilar(seed)
+        try await wait { !store.loading && store.items.count == 3 }
+        guard store.filter.similaritySeedID == seed.id, store.items.allSatisfy({ $0.id != seed.id }), window.attachedSheet == nil else { throw BrowserFailure.message("Similarity must filter the existing wall without presenting a sheet") }
+        let coverage = try await repo.visualIndexStatus(root: root)
+        guard coverage.indexed == 4 else { throw BrowserFailure.message("Filtering unexpectedly changed vector coverage") }
+        store.clearSimilarity()
+        try await wait { !store.loading && store.items.count == 4 }
+        guard store.filter == normal, store.focused == seed.id else { throw BrowserFailure.message("Clearing similarity did not restore the ordinary selection and filters") }
+        store.showSimilar(seed)
+        try await wait { !store.loading && store.items.count == 3 }
+        let target = store.items[0]
+        store.filter.text = target.asset.name
+        try await wait { !store.loading && store.items.count == 1 }
+        guard store.items[0].id == target.id else { throw BrowserFailure.message("Text and similarity filters did not compose") }
+        store.clearSimilarity()
+        try await wait { !store.loading && store.items.count == 1 }
+        guard store.filter.text == target.asset.name else { throw BrowserFailure.message("Clearing similarity removed another filter") }
+        store.filter.text = ""; store.showSimilar(seed)
+        try await wait { !store.loading && store.items.count == 3 }
+        try await Task.sleep(for: .milliseconds(300)); hosting.displayIfNeeded()
         if let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) {
             hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
             try bitmap.representation(using: .png, properties: [:])!.write(to: output)
         }
         window.orderOut(nil)
-        print("PASS native vector-search UI: indexed results, independent selection, refresh, cancellation, result view; screenshot \(output.path)")
+        print("PASS native inline similarity: no sheet, combined filtering, reference exclusion, restored selection and ordinary sorting; screenshot \(output.path)")
     }
     @MainActor static func wait(_ predicate: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(30)
         while !predicate() { if Date() > deadline { throw BrowserFailure.message("UI wait timed out") }; try await Task.sleep(for: .milliseconds(2)) }
+    }
+    @MainActor static func backgroundTasksUI(output: URL) async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("BackgroundUI-" + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 72, pixelsHigh: 48, bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        for y in 0..<48 { for x in 0..<72 {
+            let offset = y * bitmap.bytesPerRow + x * 3
+            bitmap.bitmapData![offset] = UInt8(x * 3); bitmap.bitmapData![offset + 1] = UInt8(y * 5); bitmap.bitmapData![offset + 2] = UInt8((x * y) % 255)
+        } }
+        let png = bitmap.representation(using: .png, properties: [:])!
+        for n in 0..<65 { try png.write(to: root.appendingPathComponent("task-photo-\(n).PNG")) }
+        let repository = try AICatalogRepository(databaseURL: root.appendingPathComponent("catalog.sqlite"), runs: root.appendingPathComponent("runs"), generated: root.appendingPathComponent("generated"))
+        try await repository.synchronize(root: root) { _ in }
+        let coordinator = BackgroundTaskCoordinator(databaseURL: repository.databaseURL)
+        let tasks = BackgroundTaskStore(coordinator: coordinator)
+        try await coordinator.start()
+        var options = BackgroundTaskOptions(root: root); options.ai = false
+        let id = try await coordinator.create(options)
+        tasks.selectedTask = id; tasks.show(root: root)
+        try await wait { tasks.tasks.first(where: { $0.id == id })?.state == .completed }
+        guard tasks.error == nil, let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "PhotoBrowser.BackgroundTasks" }),
+              let hosting = window.contentView else { throw BrowserFailure.message("Background task window failed to open") }
+        let results = try await coordinator.results(root: root, taskID: id)
+        guard results.items.count == 60, results.hasMore, results.items.allSatisfy({ $0.vector == .succeeded && $0.ai == .disabled }) else {
+            throw BrowserFailure.message("Task result pagination or independent AI/vector states failed")
+        }
+        let list = BackgroundResultStore()
+        list.load(coordinator: coordinator, root: root, taskID: id, ai: nil, vector: .succeeded, failures: false, exclusions: [])
+        try await wait { !list.loading && list.rows.count == 60 }
+        try await Task.sleep(for: .milliseconds(300)); hosting.displayIfNeeded()
+        if let image = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) {
+            hosting.cacheDisplay(in: hosting.bounds, to: image)
+            try image.representation(using: .png, properties: [:])!.write(to: output)
+        }
+        options.force = true
+        let second = try await coordinator.create(options)
+        window.close()
+        try await wait { tasks.tasks.first(where: { $0.id == second })?.state == .completed }
+        guard tasks.error == nil else { throw BrowserFailure.message(tasks.error!) }
+        try await tasks.shutdown()
+        print("PASS native background UI: task progress, independent results, filtered pagination and work continues after closing the window; screenshot \(output.path)")
     }
 }

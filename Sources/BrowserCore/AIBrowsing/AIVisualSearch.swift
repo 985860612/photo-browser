@@ -14,6 +14,27 @@ public struct AIVisualIndexProgress: Sendable {
 }
 
 extension AICatalogRepository {
+    public nonisolated func item(id: String) async throws -> AICatalogItem? {
+        let url = databaseURL
+        return try await Self.background { try AICatalogDatabase(url).rows("SELECT item FROM photo WHERE key=?", [.text(id)]).first.map { try JSONDecoder().decode(AICatalogItem.self, from: $0[0].bytes) } }
+    }
+    public nonisolated func visualRevision(root: URL) async throws -> String {
+        let url = databaseURL
+        return try await Self.background {
+            let db = try AICatalogDatabase(url)
+            return String(try db.rows("SELECT revision FROM visual_revision WHERE id=1")[0][0].int) + ":" + String(try db.rows("SELECT revision FROM scope WHERE id=?", [.text(Self.scopeID(root))]).first?.first?.int ?? 0)
+        }
+    }
+    /// Read-only browsing: opening a filter never extracts images or starts an index job.
+    public nonisolated func rankedPhotos(root: URL, filter: AICatalogFilter, excluding directories: [URL] = []) async throws -> [AIVisualMatch] {
+        guard let id = filter.similaritySeedID, let seed = try await item(id: id) else { throw BrowserFailure.message(L10n.text("相似参考图已不存在，请清除相似筛选。")) }
+        let url = databaseURL
+        return try await Self.background {
+            let db = try AICatalogDatabase(url)
+            guard let vector = try AIVisualStorage.vector(db, item: seed) else { throw BrowserFailure.message(L10n.text("参考图尚未建立向量，请在后台任务中生成。")) }
+            return try AIVisualStorage.nearest(db, vector: vector, seed: seed, root: root, excluding: directories, limit: 500, filter: filter)
+        }
+    }
     public nonisolated func visualIndexStatus(root: URL, excluding directories: [URL] = []) async throws -> AIVisualIndexProgress {
         let url = databaseURL
         return try await Self.background { try AIVisualStorage.status(AICatalogDatabase(url), root: root, excluding: directories) }
@@ -89,13 +110,17 @@ extension AICatalogRepository {
 struct AIVisualOutcome: Sendable { let item: AICatalogItem; let data: Data?; let issue: String? }
 enum AIVisualStorage {
     static func vector(_ db: AICatalogDatabase, item: AICatalogItem) throws -> AIImageVector? {
-        let row = try db.rows("SELECT v.data,v.issue FROM photo_vector v JOIN photo p ON p.id=v.photo_id WHERE p.key=? AND v.snapshot=? AND v.model=?", [.text(item.id), .text(AICatalogItem.snapshot(item.asset)), .text(AIImageVector.model)]).first
+        let row = try db.rows("SELECT v.data,v.issue,p.item FROM photo_vector v JOIN photo p ON p.id=v.photo_id WHERE p.key=? AND v.snapshot=p.snapshot AND v.model=?", [.text(item.id), .text(AIImageVector.model)]).first
         guard let row else { return nil }
+        guard AICatalogItem.sameImages(item.asset, try JSONDecoder().decode(AICatalogItem.self, from: row[2].bytes).asset) else { return nil }
         if case .text(let issue) = row[1] { throw BrowserFailure.message(issue) }
         return try AIImageVector(data: row[0].bytes)
     }
     @discardableResult static func put(_ db: AICatalogDatabase, _ result: AIVisualOutcome) throws -> Bool {
-        let item = result.item, snapshot = AICatalogItem.snapshot(result.item.asset)
+        let item = result.item
+        guard let source = try db.rows("SELECT snapshot,item FROM photo WHERE key=?", [.text(item.id)]).first,
+              AICatalogItem.sameImages(item.asset, try JSONDecoder().decode(AICatalogItem.self, from: source[1].bytes).asset) else { return false }
+        let snapshot = source[0].string
         try db.execute("INSERT INTO photo_vector(photo_id,snapshot,directory,model,data,issue) SELECT id,snapshot,directory,?,?,? FROM photo WHERE key=? AND snapshot=? ON CONFLICT(photo_id) DO UPDATE SET snapshot=excluded.snapshot,directory=excluded.directory,model=excluded.model,data=excluded.data,issue=excluded.issue", [
             .text(AIImageVector.model), result.data.map(AIBind.data) ?? .null, result.issue.map(AIBind.text) ?? .null, .text(item.id), .text(snapshot)])
         return try db.rows("SELECT changes()").first?.first?.int == 1
@@ -111,13 +136,24 @@ enum AIVisualStorage {
         let exclusion = AICatalogSQL.exclusion(root: root, directories: directories)
         return try db.rows("SELECT m.photo_id,p.item FROM member m JOIN photo p ON p.id=m.photo_id LEFT JOIN photo_vector v ON v.photo_id=p.id AND v.model=? WHERE m.scope_id=? AND m.photo_id>? AND v.photo_id IS NULL" + exclusion.sql + " ORDER BY m.photo_id LIMIT 64", [.text(AIImageVector.model), .text(AICatalogRepository.scopeID(root)), .integer(after)] + exclusion.values).map { ($0[0].int, try JSONDecoder().decode(AICatalogItem.self, from: $0[1].bytes)) }
     }
-    static func nearest(_ db: AICatalogDatabase, vector: AIImageVector, seed: AICatalogItem, root: URL, excluding directories: [URL], limit: Int) throws -> [AIVisualMatch] {
+    static func nearest(_ db: AICatalogDatabase, vector: AIImageVector, seed: AICatalogItem, root: URL, excluding directories: [URL], limit: Int, filter: AICatalogFilter? = nil) throws -> [AIVisualMatch] {
         try db.execute("BEGIN"); defer { try? db.execute("COMMIT") }
         let exclusion = AICatalogSQL.exclusion(root: root, directories: directories, alias: "v")
         let seedRow = try db.rows("SELECT id FROM photo WHERE key=?", [.text(seed.id)]).first?.first?.int ?? -1
+        // Metadata blobs are large. Use the maintained lightweight source index for
+        // label/state-only ranking; text searches still use the catalog search field.
+        let hasSlim = try !db.rows("SELECT 1 FROM sqlite_master WHERE type='table' AND name='background_source'").isEmpty
+        let slim = filter?.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true && hasSlim
         var heap = AIVisualHeap(limit: max(1, min(500, limit))), after: Int64 = 0
         while true {
-            let rows = try db.rows("SELECT m.photo_id,v.data FROM member m JOIN photo_vector v ON v.photo_id=m.photo_id WHERE m.scope_id=? AND m.photo_id>? AND m.photo_id<>? AND v.model=? AND v.data IS NOT NULL" + exclusion.sql + " ORDER BY m.photo_id LIMIT 512", [.text(AICatalogRepository.scopeID(root)), .integer(after), .integer(seedRow), .text(AIImageVector.model)] + exclusion.values)
+            let rows: [[AIBind]]
+            if let filter {
+                let match = AICatalogSQL.match(root: root, filter: filter, excluding: directories)
+                let from = slim ? match.from.replacingOccurrences(of: "JOIN photo p ON", with: "JOIN background_source p ON") : match.from
+                rows = try db.rows(match.prefix + "SELECT m.photo_id,v.data " + from + " JOIN photo_vector v ON v.photo_id=p.id " + match.whereSQL + " AND m.photo_id>? AND m.photo_id<>? AND v.model=? AND v.data IS NOT NULL AND v.snapshot=p.snapshot ORDER BY m.photo_id LIMIT 512", match.values + [.integer(after), .integer(seedRow), .text(AIImageVector.model)])
+            } else {
+                rows = try db.rows("SELECT m.photo_id,v.data FROM member m JOIN photo_vector v ON v.photo_id=m.photo_id WHERE m.scope_id=? AND m.photo_id>? AND m.photo_id<>? AND v.model=? AND v.data IS NOT NULL" + exclusion.sql + " ORDER BY m.photo_id LIMIT 512", [.text(AICatalogRepository.scopeID(root)), .integer(after), .integer(seedRow), .text(AIImageVector.model)] + exclusion.values)
+            }
             guard !rows.isEmpty else { break }
             for row in rows {
                 try Task.checkCancellation()

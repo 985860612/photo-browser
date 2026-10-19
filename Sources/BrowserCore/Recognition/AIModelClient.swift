@@ -6,8 +6,27 @@ public struct AIModelCompletion: Sendable {
     public let completionTokens: Int?
     public let finishReason: String
 }
+public struct AIModelHTTPError: LocalizedError, Sendable {
+    public let status: Int
+    public let retryAfter: Double?
+    public var errorDescription: String? { L10n.text("AI 请求失败（HTTP \(status)），请检查服务地址、模型和密钥。") }
+}
 
 public enum AIModelClient {
+    static func retryDelay(_ value: String?) -> Double? {
+        guard let value else { return nil }
+        if let seconds = Double(value) { return max(0, seconds) }
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0); formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
+        return formatter.date(from: value).map { max(0, $0.timeIntervalSinceNow) }
+    }
+    private static let session: URLSession = {
+        let options = URLSessionConfiguration.ephemeral
+        options.urlCache = nil; options.httpCookieStorage = nil; options.httpShouldSetCookies = false
+        options.httpMaximumConnectionsPerHost = 32
+        options.timeoutIntervalForRequest = 180; options.timeoutIntervalForResource = 240
+        return URLSession(configuration: options, delegate: NoRedirects(), delegateQueue: nil)
+    }()
     /// Explicit thinking in both modes: never inherit the service's default.
     public static func request(configuration: AIModelConfiguration, apiKey: String,
                                prompt: String, jpeg: Data? = nil) throws -> URLRequest {
@@ -32,16 +51,11 @@ public enum AIModelClient {
     public static func complete(configuration: AIModelConfiguration, apiKey: String,
                                 prompt: String, jpeg: Data? = nil) async throws -> AIModelCompletion {
         let request = try request(configuration: configuration, apiKey: apiKey, prompt: prompt, jpeg: jpeg)
-        let options = URLSessionConfiguration.ephemeral
-        options.urlCache = nil; options.httpCookieStorage = nil; options.httpShouldSetCookies = false
-        options.timeoutIntervalForRequest = 180; options.timeoutIntervalForResource = 240
-        let session = URLSession(configuration: options, delegate: NoRedirects(), delegateQueue: nil)
-        defer { session.invalidateAndCancel() }
         let (bytes, response) = try await session.bytes(for: request)
         guard let response = response as? HTTPURLResponse else { throw failed() }
         guard response.statusCode == 200 else {
             // Do not echo arbitrary server error bodies: they can include credentials or request payloads.
-            throw BrowserFailure.message(L10n.text("AI 请求失败（HTTP \(response.statusCode)），请检查服务地址、模型和密钥。"))
+            throw AIModelHTTPError(status: response.statusCode, retryAfter: retryDelay(response.value(forHTTPHeaderField: "Retry-After")))
         }
         var stream = AIModelStream()
         for try await line in bytes.lines {
