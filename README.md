@@ -56,6 +56,12 @@ Nearby thumbnail requests use a separate priority queue instead of repeatedly sc
 
 ## Getting started
 
+In AI Categories, right-click a photo and choose **Find Similar Photos** to search local 768-dimensional image vectors by visual distance, respecting folder exclusions. Results open separately and preserve the original filters. Initial indexing can be paused, resumed or retried, prefers existing 720-pixel previews, and does not call a language model. Progress explicitly shows the current indexed coverage.
+
+Use the window toolbar to switch between **AI Categories** and **Folders**. AI Categories shows existing recognition results across a folder and its descendants. Combine subject, scene, environment, element and other tags, or search descriptions, tags, filenames and paths. Selections within a field use OR; different fields use AND. Paging, counts and facets use a local SQLite index. Completed scopes reopen from cache; Refresh checks source changes. Browsing does not invoke a model.
+
+Folder context menus can **Exclude from AI Album** or **Include in AI Album**, including all descendants. Rules survive relaunch without changing photos or recognition results. AI browsing supports cached details, capture-time sorting, single-photo regeneration and Show in Folder, with independently collapsible side panels. Return to Folders for moving, deleting, grouping or Camera Raw edits. See [AI category browsing](docs/features/ai-category-browser.md) for index behavior and details.
+
 1. Open a photo folder with **⌘O**. The app scans only the current folder. Matching filenames are paired without reading every original image.
 2. Select photos in the grid or filmstrip. **Command-click** toggles selection; **Shift-click** selects a range. **Shift + Left/Right** extends or shrinks the range from its anchor.
 3. **⌘G** groups the selection. Auto Group reads metadata and proposes candidate groups. Review the actual image overlap before treating them as panorama material.
