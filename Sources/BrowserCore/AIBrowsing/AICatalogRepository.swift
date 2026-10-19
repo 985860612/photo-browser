@@ -76,7 +76,8 @@ public actor AICatalogRepository {
             let revision = try db.rows("SELECT revision FROM scope WHERE id=?", [.text(Self.scopeID(root))]).first?.first?.int ?? 0
             var other = filter; other.tags[field] = nil
             let parts = [url.path, root.path, String(revision), field, search, String(limit), other.state, other.text] + other.tags.keys.sorted().flatMap { [$0] + (other.tags[$0] ?? []).sorted() }
-            let key = String(decoding: try JSONEncoder().encode([parts, AICatalogSQL.excludedPaths(root: root, directories: directories)]), as: UTF8.self)
+            let visual = filter.similaritySeedID == nil ? "" : String(try db.rows("SELECT revision FROM visual_revision WHERE id=1")[0][0].int)
+            let key = String(decoding: try JSONEncoder().encode([parts + [filter.similaritySeedID ?? "", visual], AICatalogSQL.excludedPaths(root: root, directories: directories)]), as: UTF8.self)
             if let cached = AIFacetCache.shared.get(key) { return cached }
             let match = AICatalogSQL.match(root: root, filter: other, excluding: directories)
             let sql = match.prefix + (match.prefix.isEmpty ? "WITH " : ", ") + "matched AS MATERIALIZED (SELECT p.id " + match.from + match.whereSQL + ") " +
@@ -144,6 +145,10 @@ enum AICatalogSQL {
         values += [.text(AICatalogRepository.scopeID(root)), .text(filter.state)]
         let exclusion = exclusion(root: root, directories: directories)
         predicate += exclusion.sql; values += exclusion.values
+        if let seed = filter.similaritySeedID {
+            predicate += " AND p.key<>? AND EXISTS(SELECT 1 FROM photo_vector v WHERE v.photo_id=p.id AND v.snapshot=p.snapshot AND v.model=? AND v.data IS NOT NULL AND v.issue IS NULL)"
+            values += [.text(seed), .text(AIImageVector.model)]
+        }
         for tag in tags.dropFirst() {
             let marks = Array(repeating: "?", count: tag.value.count).joined(separator: ",")
             predicate += " AND EXISTS(SELECT 1 FROM photo_term t JOIN term d ON d.id=t.term_id WHERE t.photo_id=p.id AND d.field=? AND d.code IN (" + marks + "))"

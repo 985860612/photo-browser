@@ -24,6 +24,13 @@ public actor GeneratedRecognitionStore {
         guard files.contains(where: { identity in asset.imageFiles.contains(where: identity.matches) }) else { return nil }
         return try RecognitionContract.context().decode(data)
     }
+    func readTask(_ asset: PhotoAsset, token: String) throws -> RecognitionMetadata? {
+        guard try read(asset) != nil else { return nil }
+        let record = try object(Data(contentsOf: location(asset)))
+        guard let history = record["analyses"] as? [[String: Any]],
+              let analysis = history.last(where: { $0["task_item_id"] as? String == token }) else { return nil }
+        return try RecognitionContract.context().decode(JSONSerialization.data(withJSONObject: ["analyses": [analysis]]))
+    }
     public func save(_ asset: PhotoAsset, analysis: [String: Any]) throws -> RecognitionMetadata {
         try Task.checkCancellation()
         try Self.validateSource(asset)

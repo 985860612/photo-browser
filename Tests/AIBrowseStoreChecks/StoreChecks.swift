@@ -49,9 +49,9 @@ import BrowserCore
         try require(store.handleKeyDown(key(51), in: window) != nil, "Text editing Delete must remain available")
         window.makeFirstResponder(window); window.identifier = NSUserInterfaceItemIdentifier("PhotoBrowser.Settings")
         try require(store.handleKeyDown(key(49), in: window) != nil, "AI keyboard must not intercept settings")
-        window.identifier = nil; store.similarityPresented = true
-        try require(store.handleKeyDown(key(123), in: window) != nil, "Similar-photo sheets must not navigate the underlying photo wall")
-        store.similarityPresented = false
+        window.identifier = NSUserInterfaceItemIdentifier("PhotoBrowser.BackgroundTasks")
+        try require(store.handleKeyDown(key(123), in: window) != nil, "Task window keys must not move the photo wall")
+        window.identifier = nil
         store.persist()
         let restored = AIBrowseStore()
         try require(restored.root?.path == root.path && restored.filter == store.filter && !restored.active, "Restore scope and filters while defaulting to directory mode")

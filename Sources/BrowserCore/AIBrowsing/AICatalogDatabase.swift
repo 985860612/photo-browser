@@ -94,6 +94,11 @@ final class AICatalogDatabase {
         "CREATE UNIQUE INDEX IF NOT EXISTS member_identity ON member(scope_id,photo_id)",
         "CREATE INDEX IF NOT EXISTS member_photo ON member(photo_id)",
         "CREATE TABLE IF NOT EXISTS photo_vector(photo_id INTEGER PRIMARY KEY,snapshot TEXT NOT NULL,directory TEXT NOT NULL,model TEXT NOT NULL,data BLOB,issue TEXT)",
+        "CREATE TABLE IF NOT EXISTS visual_revision(id INTEGER PRIMARY KEY,revision INTEGER NOT NULL)",
+        "INSERT OR IGNORE INTO visual_revision VALUES(1,0)",
+        "CREATE TRIGGER IF NOT EXISTS visual_insert AFTER INSERT ON photo_vector BEGIN UPDATE visual_revision SET revision=revision+1 WHERE id=1; END",
+        "CREATE TRIGGER IF NOT EXISTS visual_update AFTER UPDATE ON photo_vector BEGIN UPDATE visual_revision SET revision=revision+1 WHERE id=1; END",
+        "CREATE TRIGGER IF NOT EXISTS visual_delete AFTER DELETE ON photo_vector BEGIN UPDATE visual_revision SET revision=revision+1 WHERE id=1; END",
         "CREATE TRIGGER IF NOT EXISTS photo_vector_changed AFTER UPDATE OF snapshot,directory ON photo WHEN OLD.snapshot<>NEW.snapshot OR OLD.directory<>NEW.directory BEGIN DELETE FROM photo_vector WHERE photo_id=NEW.id; END",
         "CREATE TRIGGER IF NOT EXISTS photo_vector_removed AFTER DELETE ON photo BEGIN DELETE FROM photo_vector WHERE photo_id=OLD.id; END"
     ]

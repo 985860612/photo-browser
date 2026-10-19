@@ -6,14 +6,17 @@ import CryptoKit
 public actor PhotoRecognitionGenerator {
     public static let shared = PhotoRecognitionGenerator()
 
-    public func generate(_ asset: PhotoAsset, configuration: AIModelConfiguration, apiKey: String) async throws -> RecognitionMetadata {
+    public func generate(_ asset: PhotoAsset, configuration: AIModelConfiguration, apiKey: String, previewURL: URL? = nil, taskItemID: String? = nil, savedPrompt: String? = nil) async throws -> RecognitionMetadata {
         try Task.checkCancellation()
+        if let taskItemID, let existing = try await GeneratedRecognitionStore.shared.readTask(asset, token: taskItemID) { return existing }
         try GeneratedRecognitionStore.validateSource(asset)
         let source = asset.preferred
-        let preview = try await ThumbnailCache.shared.image(source, maximum: 720)
+        let previewImage: NSImage
+        if let previewURL, let prepared = NSImage(contentsOf: previewURL) { previewImage = prepared }
+        else { previewImage = try await ThumbnailCache.shared.image(source, maximum: 720).image }
         try Task.checkCancellation()
-        let image = try Self.jpeg(preview.image)
-        let prompt = try RecognitionContract.prompt(), start = Date()
+        let image = try Self.jpeg(previewImage)
+        let prompt = try savedPrompt ?? RecognitionContract.prompt(), start = Date()
         let completion = try await AIModelClient.complete(configuration: configuration, apiKey: apiKey, prompt: prompt, jpeg: image.data)
         try Task.checkCancellation()
         var analysis = try RecognitionContract.analysis(completion.text)
@@ -25,6 +28,7 @@ public actor PhotoRecognitionGenerator {
                              "image_sha256": SHA256.hash(data: image.data).map { String(format: "%02x", $0) }.joined(), "jpeg_quality": 85,
                              "color_space": "sRGB", "exif_orientation_applied": true]
         analysis["prompt_sha256"] = ThumbnailCache.digest(prompt)
+        if let taskItemID { analysis["task_item_id"] = taskItemID }
         analysis["metrics"] = ["latency_ms": Date().timeIntervalSince(start) * 1000,
                                "prompt_tokens": completion.promptTokens as Any? ?? NSNull(),
                                "completion_tokens": completion.completionTokens as Any? ?? NSNull(), "finish_reason": completion.finishReason]

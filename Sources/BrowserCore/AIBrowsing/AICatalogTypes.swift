@@ -28,6 +28,7 @@ public struct AICatalogItem: Identifiable, Codable, Sendable {
 }
 
 public struct AICatalogFilter: Codable, Equatable, Sendable {
+    public var similaritySeedID: String?
     public var state = "processing.succeeded"
     public var text = ""
     public var tags: [String: Set<String>] = [:]

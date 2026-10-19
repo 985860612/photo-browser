@@ -1,0 +1,19 @@
+[
+  {"code":"task.queued","name":"排队中","en":"Queued"},
+  {"code":"task.running","name":"运行中","en":"Running"},
+  {"code":"task.pausing","name":"正在暂停","en":"Pausing"},
+  {"code":"task.paused","name":"已暂停","en":"Paused"},
+  {"code":"task.completed","name":"已完成","en":"Completed"},
+  {"code":"task.errors","name":"已完成，有失败项","en":"Completed with errors"},
+  {"code":"task.cancelled","name":"已取消","en":"Cancelled"},
+  {"code":"item.pending","name":"等待处理","en":"Pending"},
+  {"code":"item.blocked","name":"等待缩略图","en":"Waiting for thumbnail"},
+  {"code":"item.preparing","name":"准备缩略图","en":"Preparing thumbnail"},
+  {"code":"item.succeeded","name":"已完成","en":"Succeeded"},
+  {"code":"item.reused","name":"已有结果","en":"Reused"},
+  {"code":"item.failed","name":"失败","en":"Failed"},
+  {"code":"item.disabled","name":"未选择","en":"Not selected"},
+  {"code":"stage.preview","name":"缩略图","en":"Thumbnail"},
+  {"code":"stage.ai","name":"AI 识别","en":"AI recognition"},
+  {"code":"stage.vector","name":"图片向量","en":"Image vector"}
+]

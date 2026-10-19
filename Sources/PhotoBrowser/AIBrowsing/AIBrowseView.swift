@@ -5,6 +5,7 @@ import BrowserCore
 struct BrowsingWorkspaceView: View {
     @EnvironmentObject private var directory: BrowserStore
     @EnvironmentObject private var ai: AIBrowseStore
+    @ObservedObject private var tasks = BackgroundTaskStore.shared
     var body: some View {
         VStack(spacing: 0) {
             if ai.active { AIBrowseView(onDirectory: showDirectory) }
@@ -13,6 +14,14 @@ struct BrowsingWorkspaceView: View {
         }
         .toolbar {
             if !directory.isFullscreenPreview && !ai.fullscreen {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        let assets = ai.active ? ai.items.filter { ai.selection.contains($0.id) }.map(\.asset) : directory.visibleAssets.filter { directory.selection.contains($0.id) }
+                        tasks.show(root: ai.active ? ai.root : directory.directory, assets: assets, exclusions: ai.excludedDirectories)
+                    } label: {
+                        Label(tasks.activeCount > 0 ? L10n.text("后台任务 \(tasks.activeCount)") : L10n.text("后台任务"), systemImage: "list.bullet.clipboard")
+                    }.help(L10n.text("查看 AI 与向量后台任务"))
+                }
                 ToolbarItem(placement: .principal) {
                     Picker(L10n.text("浏览模式"), selection: $ai.active) {
                         Text(L10n.text("AI 分类")).tag(true)
@@ -70,7 +79,6 @@ struct AIBrowseView: View {
     @AppStorage("aiShowInformationPanel") private var showInformationPanel = true
     @State private var panelDragStart: Double?
     @FocusState private var searchFocused: Bool
-    @State private var similaritySeed: AICatalogItem?
     var body: some View {
         VStack(spacing: 0) {
             if !store.fullscreen { navigation; Divider() }
@@ -87,7 +95,7 @@ struct AIBrowseView: View {
                                      direction: 1, maximum: geometry.size.width - 550 - layout.inspector - (inspectorVisible ? 12 : 6))
                     }
                     VStack(spacing: 0) {
-                        if !store.filter.tags.values.allSatisfy(\.isEmpty), store.filter.state == "processing.succeeded" { chips; Divider() }
+                        if store.filter.similaritySeedID != nil || (!store.filter.tags.values.allSatisfy(\.isEmpty) && store.filter.state == "processing.succeeded") { chips; Divider() }
                         if store.large { AICatalogPreview(fullscreen: false) }
                         else { wall }
                     }.frame(minWidth: 550, maxWidth: .infinity, maxHeight: .infinity)
@@ -134,13 +142,6 @@ struct AIBrowseView: View {
                 }.padding(10).background(.orange.opacity(0.08))
             }
         }.background(GlassBackdrop().ignoresSafeArea()).controlSize(.small)
-            .sheet(item: $similaritySeed, onDismiss: { store.similarityPresented = false }) { item in
-                if let root = store.root, let repository = store.repository {
-                    AISimilarPhotosView(seed: item, root: root, repository: repository, exclusions: store.excludedDirectories) { selected in
-                        similaritySeed = nil; store.similarityPresented = false; onDirectory(selected)
-                    }
-                }
-            }
             .toolbar {
                 if !store.fullscreen {
                     ToolbarItem(placement: .navigation) {
@@ -183,14 +184,20 @@ struct AIBrowseView: View {
                     .strokeBorder(searchFocused ? Color.blue.opacity(0.55) : Color.white.opacity(0.12), lineWidth: 0.75))
                 .focusEffectDisabled()
                 .focused($searchFocused)
-            PhotoSortMenu(field: .constant(.captured), descending: $store.filter.descending, fields: [.captured])
+            if store.filter.similaritySeedID != nil { Label(L10n.text("相似度"), systemImage: "arrow.up.arrow.down").foregroundStyle(.secondary) }
+            else { PhotoSortMenu(field: .constant(.captured), descending: $store.filter.descending, fields: [.captured])
                 .disabled(store.loading || store.items.count < 2)
-                .help(L10n.text("排序：\(PreviewSortField.captured.title) · \(store.filter.descending ? L10n.text("降序") : L10n.text("升序"))"))
+                .help(L10n.text("排序：\(PreviewSortField.captured.title) · \(store.filter.descending ? L10n.text("降序") : L10n.text("升序"))")) }
         }.padding(12)
     }
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack {
+                if store.filter.similaritySeedID != nil {
+                    Button(action: store.clearSimilarity) {
+                        Label(L10n.text("相似图片：\(store.similarityTitle)"), systemImage: "photo.stack"); Image(systemName: "xmark").font(.system(size: 9))
+                    }.buttonStyle(.bordered).tint(.blue).help(L10n.text("清除相似筛选"))
+                }
                 ForEach(store.fields) { field in
                     ForEach(Array(store.filter.tags[field.id] ?? []).sorted(), id: \.self) { code in
                         Button { store.toggle(field.id, code: code) } label: {
@@ -212,7 +219,7 @@ struct AIBrowseView: View {
                             .onTapGesture(count: 2) { store.select(item, modifiers: []); store.large = true }
                             .onTapGesture { store.select(item) }
                             .contextMenu {
-                                Button(L10n.text("查看相似图片"), systemImage: "photo.stack") { store.similarityPresented = true; similaritySeed = item }.labelStyle(.titleAndIcon)
+                                Button(L10n.text("查看相似图片"), systemImage: "photo.stack") { store.showSimilar(item) }.labelStyle(.titleAndIcon)
                                 Divider()
                                 Button(L10n.text("在目录中查看"), systemImage: "folder") { onDirectory(item) }.labelStyle(.titleAndIcon)
                                 Button(L10n.text("在 Finder 显示"), systemImage: "arrow.up.forward.app") { NSWorkspace.shared.activateFileViewerSelecting([item.asset.preferred.url]) }.labelStyle(.titleAndIcon)
