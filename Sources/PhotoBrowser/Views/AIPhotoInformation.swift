@@ -7,31 +7,26 @@ struct AIPhotoInformation: View {
     @State private var failure: String?
     @State private var loadedRequest: String?
     @State private var loading = true
-    @State private var refreshID = UUID()
-    @State private var forceRefresh = false
     @State private var generationTask: Task<Void, Never>?
     @State private var generating = false
     @State private var generationFailure: String?
     @State private var generationID = UUID()
 
-    private var request: String { (asset.imageFiles.first?.url.deletingLastPathComponent().path ?? "") + "|" + asset.id + "|" + asset.fingerprint + "|" + refreshID.uuidString }
-    private var assetRequest: String { (asset.imageFiles.first?.url.deletingLastPathComponent().path ?? "") + "|" + asset.id + "|" + asset.fingerprint }
+    private var request: String { (asset.imageFiles.first?.url.deletingLastPathComponent().path ?? "") + "|" + asset.id + "|" + asset.fingerprint }
+    private var generationLabel: String { L10n.text(metadata?.failure == nil && metadata != nil ? "重新生成" : "生成 AI 信息") }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack {
                 Label(L10n.text("AI 照片信息"), systemImage: "sparkles").font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 0)
-                Button { forceRefresh = true; refreshID = UUID() } label: { Image(systemName: "sparkles") }
+                Button { generate() } label: { Image(systemName: "sparkles") }
                     .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
-                    .help(L10n.text("重新读取 AI 信息")).accessibilityLabel(L10n.text("重新读取 AI 信息"))
-                    .disabled(generating)
+                    .help(generationLabel).accessibilityLabel(generationLabel)
+                    .disabled(generating || loading)
             }
-            HStack(spacing: 7) {
-                Button { generate() } label: {
-                    Label(L10n.text(metadata?.failure == nil && metadata != nil ? "重新生成" : "生成 AI 信息"), systemImage: "sparkles")
-                }.disabled(generating || loading).font(.caption)
-                if generating {
+            if generating {
+                HStack(spacing: 7) {
                     ProgressView().controlSize(.mini)
                     Button(L10n.text("取消")) { generationTask?.cancel() }.font(.caption)
                 }
@@ -75,14 +70,13 @@ struct AIPhotoInformation: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onChange(of: assetRequest) { _, _ in cancelGeneration() }
+        .onChange(of: request) { _, _ in cancelGeneration() }
         .onDisappear { cancelGeneration() }
         .task(id: request) {
             let identity = request
-            let refresh = forceRefresh; forceRefresh = false
             loading = true; metadata = nil; failure = nil
             do {
-                let result = try await RecognitionReader.shared.read(asset, refresh: refresh)
+                let result = try await RecognitionReader.shared.read(asset)
                 try Task.checkCancellation()
                 guard request == identity else { return }
                 metadata = result
@@ -98,7 +92,7 @@ struct AIPhotoInformation: View {
         generationTask?.cancel(); generationID = UUID(); generating = false; generationFailure = nil
     }
     private func generate() {
-        let selected = asset, identity = assetRequest, ticket = UUID()
+        let selected = asset, identity = request, ticket = UUID()
         generationID = ticket; generating = true; generationFailure = nil
         generationTask = Task {
             do {
@@ -108,11 +102,11 @@ struct AIPhotoInformation: View {
                 }
                 let result = try await PhotoRecognitionGenerator.shared.generate(selected, configuration: configuration, apiKey: key)
                 try Task.checkCancellation()
-                guard assetRequest == identity, generationID == ticket else { return }
+                guard request == identity, generationID == ticket else { return }
                 metadata = result; failure = nil; loadedRequest = request; loading = false
             } catch is CancellationError {}
             catch {
-                guard assetRequest == identity, generationID == ticket else { return }
+                guard request == identity, generationID == ticket else { return }
                 if !Task.isCancelled { generationFailure = error.localizedDescription }
             }
             if generationID == ticket { generating = false }
