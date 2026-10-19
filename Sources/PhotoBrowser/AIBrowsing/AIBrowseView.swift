@@ -204,10 +204,10 @@ struct AIBrowseView: View {
                             .onTapGesture(count: 2) { store.select(item, modifiers: []); store.large = true }
                             .onTapGesture { store.select(item) }
                             .contextMenu {
-                                Button(L10n.text("在目录中查看")) { onDirectory(item) }
-                                Button(L10n.text("在 Finder 显示")) { NSWorkspace.shared.activateFileViewerSelecting([item.asset.preferred.url]) }
-                                Button(L10n.text("复制文件")) { store.select(item, modifiers: []); store.copyFiles() }
-                                Button(L10n.text("全屏高清预览")) { store.select(item, modifiers: []); store.fullscreen = true }
+                                Button(L10n.text("在目录中查看"), systemImage: "folder") { onDirectory(item) }.labelStyle(.titleAndIcon)
+                                Button(L10n.text("在 Finder 显示"), systemImage: "arrow.up.forward.app") { NSWorkspace.shared.activateFileViewerSelecting([item.asset.preferred.url]) }.labelStyle(.titleAndIcon)
+                                Button(L10n.text("复制文件"), systemImage: "doc.on.doc") { store.select(item, modifiers: []); store.copyFiles() }.labelStyle(.titleAndIcon)
+                                Button(L10n.text("全屏高清预览"), systemImage: "arrow.up.left.and.arrow.down.right") { store.select(item, modifiers: []); store.fullscreen = true }.labelStyle(.titleAndIcon)
                             }
                             .onAppear { if item.id == store.items.last?.id { store.loadMore() } }
                     }
