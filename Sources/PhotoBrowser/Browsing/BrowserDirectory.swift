@@ -47,7 +47,7 @@ extension BrowserStore {
     }
 
     func load(_ inputURL: URL, restoring restoredGroup: PhotoGroup? = nil,
-              restoringDeletedGroups: [PhotoGroup]? = nil, recordNavigation: Bool = true) {
+              restoringDeletedGroups: [PhotoGroup]? = nil, recordNavigation: Bool = true, knownAssets: [PhotoAsset]? = nil) {
         guard !isMoving, !isEjectingDiskImage else { return }
         if DiskImageService.supports(inputURL) && !inputURL.hasDirectoryPath {
             openDiskImage(inputURL)
@@ -57,6 +57,9 @@ extension BrowserStore {
         cancelPreviewGeneration()
         captureDates.cancel(reset: true)
         let url = inputURL.standardizedFileURL
+        if let knownAssets { directoryKnownAssets = knownAssets }
+        else if directory?.path != url.path { directoryKnownAssets = [] }
+        let known = directoryKnownAssets
         if isFullscreenPreview { closeFullscreenPreview() }
         metadataJob?.cancel(); metadataJob = nil; isReadingMetadata = false; metadataID = UUID()
         let ticket = UUID(); loadID = ticket
@@ -71,7 +74,7 @@ extension BrowserStore {
         Task {
             do {
                 let result = try await Task.detached(priority: .userInitiated) { () -> (RestoredBrowserSession, DirectorySnapshot) in
-                    let snapshot = try DirectorySnapshot.read(url)
+                    let snapshot = try DirectorySnapshot.read(url, knownAssets: known)
                     let restored = try sessions.restore(snapshot.assets, in: url)
                     return (restored, snapshot)
                 }.value

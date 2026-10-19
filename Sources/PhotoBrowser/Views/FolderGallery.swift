@@ -33,6 +33,7 @@ struct FolderGallery: View {
 
 struct FolderCard: View {
     @EnvironmentObject private var store: BrowserStore
+    @EnvironmentObject private var ai: AIBrowseStore
     let url: URL
     var thumbnailHeight: Double? = nil
     var open: () -> Void
@@ -60,12 +61,27 @@ struct FolderCard: View {
             .accessibilityAction { open() }
             .help(L10n.text("单击选择，双击打开：") + url.path)
             .contextMenu {
-                Button(L10n.text("打开目录")) { open() }
-                Button(L10n.text("在 Finder 显示")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                Button(L10n.text("打开目录"), systemImage: "folder") { open() }.labelStyle(.titleAndIcon)
+                Button(L10n.text("在 Finder 显示"), systemImage: "arrow.up.forward.app") {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }.labelStyle(.titleAndIcon)
+                Divider()
+                if ai.isDirectlyExcluded(url) {
+                    Button { ai.setExcluded(false, directory: url) } label: {
+                        Label(L10n.text("取消从 AI 相册排除"), systemImage: "eye")
+                    }.labelStyle(.titleAndIcon)
+                } else if let ancestor = ai.excludedAncestor(of: url) {
+                    Button(L10n.text("已由上级目录从 AI 相册排除"), systemImage: "eye.slash") {}
+                        .labelStyle(.titleAndIcon).disabled(true).help(ancestor.path)
+                } else {
+                    Button { ai.setExcluded(true, directory: url) } label: {
+                        Label(L10n.text("从 AI 相册排除"), systemImage: "eye.slash")
+                    }.labelStyle(.titleAndIcon).help(L10n.text("排除此文件夹及所有子文件夹，保留照片和已有 AI 信息"))
+                }
                 Divider()
                 Button(role: .destructive) { confirmDelete = true } label: {
                     Label(L10n.text("删除文件夹…"), systemImage: "trash")
-                }.disabled(!store.canDeleteFolder(url))
+                }.labelStyle(.titleAndIcon).disabled(!store.canDeleteFolder(url))
             }
             .alert(L10n.text("删除文件夹“\(url.lastPathComponent)”？"), isPresented: $confirmDelete) {
                 Button(L10n.text("取消"), role: .cancel) {}
@@ -97,6 +113,11 @@ struct FolderCard: View {
             HStack(spacing: 5) {
                 Image(systemName: "folder.fill").foregroundStyle(.blue)
                 Text(url.lastPathComponent).lineLimit(1)
+                if ai.excludedAncestor(of: url) != nil {
+                    Image(systemName: "eye.slash").foregroundStyle(.secondary)
+                        .accessibilityLabel(L10n.text("已从 AI 相册排除"))
+                        .help(L10n.text("已从 AI 相册排除"))
+                }
             }.font(.system(size: thumbnailHeight != nil ? 11 : 14, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .center)
             HStack(spacing: 4) {

@@ -10,10 +10,11 @@ public struct PhotoFile: Codable, Hashable, Sendable, Identifiable {
     public let kind: PhotoKind
     public let size: Int64
     public let modified: Date
-    public var format: String { url.pathExtension.uppercased() }
+    public let formatHint: String?
+    public var format: String { (formatHint ?? url.pathExtension).uppercased() }
     public var isLivePhoto: Bool { url.pathExtension.lowercased() == "livp" }
-    public init(url: URL, kind: PhotoKind, size: Int64 = 0, modified: Date = .distantPast) {
-        self.url = url; self.kind = kind; self.size = size; self.modified = modified
+    public init(url: URL, kind: PhotoKind, size: Int64 = 0, modified: Date = .distantPast, formatHint: String? = nil) {
+        self.url = url; self.kind = kind; self.size = size; self.modified = modified; self.formatHint = formatHint
     }
 }
 

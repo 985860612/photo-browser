@@ -3,6 +3,7 @@ import Foundation
 /// Native cloud analyses have their own envelope: hosted-model weights are unavailable, so they must
 /// not masquerade as the batch pipeline's stricter V2 provenance schema. V2 sources stay untouched.
 public actor GeneratedRecognitionStore {
+    public nonisolated static let didSave = Notification.Name("PhotoBrowser.GeneratedRecognitionSaved")
     public static let shared = GeneratedRecognitionStore()
     private let root: URL
     public init(root: URL? = nil) {
@@ -40,6 +41,7 @@ public actor GeneratedRecognitionStore {
         try Task.checkCancellation()
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: url, options: .atomic)
+        NotificationCenter.default.post(name: Self.didSave, object: nil, userInfo: ["asset": asset])
         return result
     }
     private func object(_ data: Data) throws -> [String: Any] {

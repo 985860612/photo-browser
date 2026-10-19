@@ -1,19 +1,19 @@
 import Foundation
 import CryptoKit
 
-public struct RecognitionTag: Identifiable, Equatable, Sendable {
+public struct RecognitionTag: Identifiable, Equatable, Codable, Sendable {
     public let code: String
     public let name: String
     public var id: String { code }
 }
 
-public struct RecognitionSection: Identifiable, Sendable {
+public struct RecognitionSection: Identifiable, Equatable, Codable, Sendable {
     public let id: String
     public let name: String
     public let tags: [RecognitionTag]
 }
 
-public struct RecognitionMetadata: Sendable {
+public struct RecognitionMetadata: Equatable, Codable, Sendable {
     public let title: String
     public let description: String
     public let sections: [RecognitionSection]

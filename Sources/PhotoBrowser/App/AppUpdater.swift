@@ -32,6 +32,9 @@ import Sparkle
         guard !started else { return }
         started = true
         self.fileOperationInProgress = fileOperationInProgress
+        if Bundle.main.object(forInfoDictionaryKey: "PhotoBrowserLocalPreview") as? Bool == true {
+            status = L10n.text("本地预览版不检查更新。"); return
+        }
         guard Bundle.main.bundleURL.pathExtension == "app" else {
             status = L10n.text("请使用打包后的应用检查更新。")
             return

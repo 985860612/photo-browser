@@ -563,3 +563,76 @@
 "重新生成" = "Regenerate";
 "生成 AI 信息" = "Generate AI Information";
 "正在准备 720 像素图片并生成…" = "Preparing a 720-pixel image and generating…";
+
+"AI 分类索引错误：%@" = "AI category index error: %@";
+"选择分类浏览范围" = "Choose Category Browsing Scope";
+"正在导入已有识别结果…" = "Importing existing recognition results…";
+"已核对 %@ 张照片" = "Checked %@ photos";
+"已导入 %@ 条识别结果" = "Imported %@ recognition results";
+"索引更新完成" = "Index updated";
+"索引更新未完成" = "Index update incomplete";
+"AI 信息已更新，筛选结果已刷新" = "AI information updated; filter results refreshed";
+"浏览模式" = "Browsing Mode";
+"目录浏览" = "Folders";
+"AI 分类" = "AI Categories";
+"根据已有 AI 信息跨目录筛选照片" = "Browse photos across folders using existing AI information";
+"在目录中查看" = "Show in Folder";
+"匹配 %@ 张 · 已载入 %@ 张" = "Matches: %@ · Loaded: %@";
+"总量统计中" = "Counting photos…";
+"浏览范围" = "Scope";
+"请选择目录" = "Choose a folder";
+"刷新分类索引" = "Refresh Category Index";
+"搜索描述、标签、文件名或目录" = "Search descriptions, tags, filenames or folders";
+"拍摄时间：新到旧" = "Captured: Newest First";
+"拍摄时间：旧到新" = "Captured: Oldest First";
+"清除标签" = "Clear Tags";
+"调整筛选条件，或选择其他浏览范围。首次导入期间照片会陆续出现。" = "Change the filters or choose another folder. Photos appear as the first import progresses.";
+"识别状态" = "Recognition Status";
+"已识别" = "Recognized";
+"待识别" = "Pending";
+"识别异常" = "Recognition Errors";
+"同类标签取并集，不同字段取交集" = "Any tag within a field; all selected fields";
+"搜索此字段的标签" = "Search tags in this field";
+"更多标签" = "More Tags";
+"此状态支持按文件名和目录搜索，返回已识别后恢复标签筛选。" = "Search filenames and folders in this state. Tag filters resume when you return to recognized photos.";
+"返回照片墙" = "Back to Photos";
+
+"选择已载入照片" = "Select Loaded Photos";
+
+"选中的照片已移出当前筛选结果" = "The selected photo no longer appears in these results";
+
+"本地预览版不检查更新。" = "Local previews do not check for updates.";
+
+"本地索引已就绪，刷新可检查照片变化" = "Local index ready; refresh to check for photo changes";
+
+"从 AI 相册排除" = "Exclude from AI Album";
+"取消从 AI 相册排除" = "Include in AI Album";
+"已由上级目录从 AI 相册排除" = "Excluded from AI Album by a parent folder";
+"排除此文件夹及所有子文件夹，保留照片和已有 AI 信息" = "Exclude this folder and all subfolders; keep photos and existing AI information";
+"已从 AI 相册排除" = "Excluded from AI Album";
+
+"筛选面板" = "Filter Panel";
+"收起筛选面板" = "Hide Filter Panel";
+"展开筛选面板" = "Show Filter Panel";
+
+"查看相似图片" = "Find Similar Photos";
+"相似图片" = "Similar Photos";
+"向量索引" = "Vector Index";
+"图片向量无效，请重新建立相似图片索引。" = "Invalid image vector. Rebuild the similar-photo index.";
+"无法读取图片：%@" = "Cannot read image: %@";
+"照片已变化，请刷新后重试。" = "The photo has changed. Refresh and try again.";
+"显示 %@ 张相似图片" = "Showing %@ similar photos";
+"向量距离越小，画面越相似" = "A smaller vector distance means greater visual similarity";
+"显示更多" = "Show More";
+"重试失败" = "Retry Failed Photos";
+"重新建立向量索引" = "Rebuild Vector Index";
+"返回 AI 分类" = "Back to AI Categories";
+"图片向量搜索范围：%@" = "Image vector search scope: %@";
+"已建立 %@/%@ 张 · 失败 %@ 张" = "Indexed %@/%@ photos · %@ failed";
+"暂停建立索引" = "Pause Indexing";
+"继续建立索引" = "Resume Indexing";
+"首次建立可中断，当前结果仅覆盖已完成向量的照片。" = "Initial indexing can be paused. Current results cover only photos with completed vectors.";
+"重试" = "Retry";
+"向量距离 %@" = "Vector distance %@";
+"暂无相似图片" = "No Similar Photos Yet";
+"建立更多图片向量后会出现结果；当前照片不会出现在结果中。" = "Results will appear as more image vectors are indexed. The source photo is excluded.";
