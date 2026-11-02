@@ -59,6 +59,7 @@ extension PreviewStoreChecks {
     }
 
     @MainActor static func folderDeletionChecks() async throws {
+        try await rawRetentionChecks()
         let fm = FileManager.default, root = fm.temporaryDirectory.appendingPathComponent("FolderDeletion-" + UUID().uuidString)
         let parent = root.appendingPathComponent("parent"), empty = parent.appendingPathComponent("empty")
         let content = parent.appendingPathComponent("content"), sibling = parent.appendingPathComponent("sibling")
@@ -109,6 +110,140 @@ extension PreviewStoreChecks {
             catch is BrowserFailure {}
             try expect(fm.fileExists(atPath: target.path), "invalid deletion target stays intact: " + target.lastPathComponent)
         }
+    }
+
+    @MainActor static func rawRetentionChecks() async throws {
+        let fm = FileManager.default, root = fm.temporaryDirectory.appendingPathComponent("KeepRAW-" + UUID().uuidString)
+        let parent = root.appendingPathComponent("photos"), folder = parent.appendingPathComponent("group")
+        let nested = folder.appendingPathComponent("nested"), outside = root.appendingPathComponent("outside")
+        for directory in [nested, outside, folder.appendingPathComponent("_del"), folder.appendingPathComponent(".hidden")] {
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        let bytes = Data("original photo bytes".utf8)
+        let kept = ["A.ARW", "A.xmp", "A.JPG.xmp", "B.jpg", "clip.mov", "note.txt", "nested/N.NEF", "nested/N.xmp",
+                    "_del/old.arw", "_del/old.jpg", ".hidden/H.arw", ".hidden/H.jpg"]
+        let moved = ["a.jpg", "A.HIF", "nested/n.jpeg"]
+        for name in kept + moved { try bytes.write(to: folder.appendingPathComponent(name)) }
+        for name in ["E.arw", "E.jpg"] { try bytes.write(to: outside.appendingPathComponent(name)) }
+        try fm.createSymbolicLink(at: folder.appendingPathComponent("external"), withDestinationURL: outside)
+        try fm.createSymbolicLink(at: folder.appendingPathComponent("linked.arw"), withDestinationURL: outside.appendingPathComponent("E.arw"))
+        try bytes.write(to: folder.appendingPathComponent("linked.jpg"))
+        let suite = "KeepRAW-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite); try? fm.removeItem(at: root) }
+        let store = BrowserStore(supportDirectory: root.appendingPathComponent("support"),
+                                 thumbnails: ThumbnailCache(directory: root.appendingPathComponent("thumbs")), defaults: defaults, monitoringEnabled: false)
+        defer { store.cancelPreviewGeneration() }
+        store.load(folder); try await until { !store.isLoading }
+        store.groups = [PhotoGroup(id: "original-group", name: "original", assetIDs: ["a", "b"])]; try store.saveSession()
+        store.load(parent); try await until { !store.isLoading }
+        let plan = try RawRetentionPlan.prepare(in: folder, sessions: store.sessions)
+        try expect(plan.fileCount == 3 && plan.moves.count == 2 && plan.totalBytes == Int64(bytes.count * 3),
+                   "keep RAW previews case-insensitive paired formats recursively, skipping _del, hidden folders and links")
+        let previewAssets = (1...61).map { index in
+            let file = PhotoFile(url: folder.appendingPathComponent(String(format: "DSC%05d.HIF", index)), kind: .rendered, size: 1, modified: Date())
+            return PhotoAsset(id: "preview-\(index)", name: file.url.lastPathComponent, files: [file])
+        }
+        let previewMove = try ArchivePlan.pendingDeletion(directory: folder, assets: previewAssets, groups: [])
+        let preview = RawRetentionPlan(root: folder, sourceRoot: folder.resolvingSymlinksInPath(), moves: [previewMove], rawFiles: [])
+        let confirmation = preview.confirmationPanel()
+        let scroll = confirmation.fileList
+        confirmation.window.orderFront(nil)
+        try await Task.sleep(for: .milliseconds(100))
+        confirmation.window.contentView?.layoutSubtreeIfNeeded()
+        guard let text = scroll.documentView as? NSTextView else {
+            throw BrowserFailure.message("RAW confirmation has no scrollable file list")
+        }
+        try expect(text.string.components(separatedBy: "\n").count == 61 && text.string.contains("DSC00061.HIF")
+                   && text.isSelectable && !text.isEditable && scroll.hasVerticalScroller,
+                   "RAW confirmation lists all 61 files in a selectable read-only scroll view")
+        text.scrollRangeToVisible(NSRange(location: (text.string as NSString).length - 1, length: 1))
+        try expect(scroll.contentView.bounds.minY > 0 && scroll.frame.height == 240,
+                   "RAW confirmation scrolls to the final file while keeping the list height fixed")
+        let frames = confirmation.buttons.map(\.frame)
+        try expect(confirmation.buttons.allSatisfy { $0.image != nil }
+                   && frames.allSatisfy { $0.width > 40 && $0.height > 15 }
+                   && frames.allSatisfy { abs($0.midY - frames[0].midY) < 1 }
+                   && zip(frames, frames.dropFirst()).allSatisfy { $0.maxX <= $1.minX },
+                   "RAW confirmation keeps all three icon buttons in one horizontal row")
+        if let path = ProcessInfo.processInfo.environment["PHOTO_RAW_CONFIRMATION_SNAPSHOT"],
+           let view = confirmation.window.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        }
+        confirmation.window.orderOut(nil)
+        confirmation.window.close()
+        for index in 0..<3 {
+            let dialog = preview.confirmationPanel()
+            let parentWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.titled], backing: .buffered, defer: false)
+            parentWindow.isReleasedWhenClosed = false
+            var response: NSApplication.ModalResponse?
+            dialog.present(attachedTo: parentWindow) { response = $0 }
+            dialog.buttons[index].performClick(nil)
+            try await until { response != nil }
+            try expect(response?.rawValue == NSApplication.ModalResponse.alertFirstButtonReturn.rawValue + index,
+                       "RAW confirmation button \(index) returns its original cancel/move/delete action")
+            parentWindow.close()
+        }
+        store.keepRaw(plan)
+        try expect(!store.isMoving && moved.allSatisfy { fm.fileExists(atPath: folder.appendingPathComponent($0).path) },
+                   "cancelled RAW cleanup leaves every file untouched")
+        // Changes after confirmation, including losing the RAW, must abort the entire snapshot.
+        try fm.removeItem(at: nested.appendingPathComponent("N.NEF"))
+        store.keepRaw(plan, confirmed: true); try await until { !store.isMoving }
+        try expect(store.errorMessage != nil && moved.allSatisfy { fm.fileExists(atPath: folder.appendingPathComponent($0).path) },
+                   "missing RAW aborts the full batch before any rendered companion moves")
+        try bytes.write(to: nested.appendingPathComponent("N.NEF"))
+        let fresh = try RawRetentionPlan.prepare(in: folder, sessions: store.sessions)
+        try bytes.write(to: nested.appendingPathComponent("_del"))
+        store.keepRaw(fresh, confirmed: true); try await until { !store.isMoving }
+        try expect(store.errorMessage != nil && moved.allSatisfy { fm.fileExists(atPath: folder.appendingPathComponent($0).path) },
+                   "invalid nested _del aborts before moving files in other folders")
+        try fm.removeItem(at: nested.appendingPathComponent("_del"))
+        try bytes.write(to: folder.appendingPathComponent("_del/A.JPG"))
+        store.keepRaw(fresh, confirmed: true); try await until { !store.isMoving }
+        try expect(store.errorMessage != nil && moved.allSatisfy { fm.fileExists(atPath: folder.appendingPathComponent($0).path) },
+                   "case-insensitive _del filename conflicts never overwrite or partially move the batch")
+        try fm.removeItem(at: folder.appendingPathComponent("_del/A.JPG"))
+        _ = try await store.folderSummaries.summary(of: folder)
+        store.keepRaw(fresh, confirmed: true); try await until { !store.isMoving }
+        try expect(store.errorMessage == nil && moved.allSatisfy { !fm.fileExists(atPath: folder.appendingPathComponent($0).path) }
+                   && kept.allSatisfy { fm.fileExists(atPath: folder.appendingPathComponent($0).path) }
+                   && fm.fileExists(atPath: folder.appendingPathComponent("linked.jpg").path)
+                   && fm.fileExists(atPath: outside.appendingPathComponent("E.jpg").path),
+                   "RAW cleanup moves only rendered companions and preserves RAW, all XMP, unpaired photos, videos and external targets")
+        let cached = try await store.folderSummaries.cached(of: folder)
+        try expect(cached == nil && store.history.filter { $0.state == "complete" }.count == 2,
+                   "RAW cleanup invalidates folder covers and journals each directory for undo")
+        for record in store.history where record.state == "complete" {
+            store.undo(record); try await until { !store.isMoving && !store.isLoading }
+        }
+        try expect(moved.allSatisfy { fm.fileExists(atPath: folder.appendingPathComponent($0).path) }, "move history restores every cleaned format")
+        store.load(folder); try await until { !store.isLoading }
+        try expect(store.groups.first { $0.id == "original-group" }?.assetIDs == ["a", "b"], "RAW cleanup and undo preserve original panorama membership")
+        store.load(parent); try await until { !store.isLoading }
+        let deletionPlan = try RawRetentionPlan.prepare(in: folder, sessions: store.sessions)
+        store.keepRaw(deletionPlan, action: .permanentDelete)
+        try expect(!store.isMoving && moved.allSatisfy { fm.fileExists(atPath: folder.appendingPathComponent($0).path) },
+                   "direct RAW cleanup also requires explicit confirmation")
+        try fm.removeItem(at: nested.appendingPathComponent("N.NEF"))
+        store.keepRaw(deletionPlan, action: .permanentDelete, confirmed: true); try await until { !store.isMoving }
+        try expect(store.errorMessage != nil && moved.allSatisfy { fm.fileExists(atPath: folder.appendingPathComponent($0).path) },
+                   "direct deletion checks every RAW before permanently deleting any companion")
+        try bytes.write(to: nested.appendingPathComponent("N.NEF"))
+        let finalPlan = try RawRetentionPlan.prepare(in: folder, sessions: store.sessions)
+        try bytes.write(to: folder.appendingPathComponent("_del/A.JPG"))
+        let historyCount = store.history.count
+        store.keepRaw(finalPlan, action: .permanentDelete, confirmed: true); try await until { !store.isMoving }
+        try expect(store.errorMessage == nil && moved.allSatisfy { !fm.fileExists(atPath: folder.appendingPathComponent($0).path) }
+                   && kept.allSatisfy { fm.fileExists(atPath: folder.appendingPathComponent($0).path) }
+                   && fm.fileExists(atPath: folder.appendingPathComponent("_del/A.JPG").path)
+                   && fm.fileExists(atPath: folder.appendingPathComponent("linked.jpg").path)
+                   && fm.fileExists(atPath: outside.appendingPathComponent("E.jpg").path),
+                   "direct deletion removes only confirmed companions, preserving RAW, sidecars, unpaired photos, videos, links and existing _del")
+        try expect(store.history.count == historyCount && !fm.fileExists(atPath: nested.appendingPathComponent("_del").path),
+                   "direct deletion creates neither a pending-delete directory nor an undo record")
+        store.load(folder); try await until { !store.isLoading }
+        try expect(store.groups.first { $0.id == "original-group" }?.assetIDs == ["a", "b"], "direct cleanup retains RAW panorama membership")
     }
 
 }
