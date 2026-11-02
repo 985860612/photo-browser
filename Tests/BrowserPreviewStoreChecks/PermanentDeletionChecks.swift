@@ -159,8 +159,11 @@ extension PreviewStoreChecks {
         text.scrollRangeToVisible(NSRange(location: (text.string as NSString).length - 1, length: 1))
         try expect(scroll.contentView.bounds.minY > 0 && scroll.frame.height == 240,
                    "RAW confirmation scrolls to the final file while keeping the list height fixed")
-        // AppKit may insert different stack containers across macOS versions.
-        let frames = confirmation.buttons.map { $0.convert($0.bounds, to: confirmation.window.contentView) }
+        // Native button frames include OS-specific focus/border outsets; stacks space alignment rects.
+        let frames = confirmation.buttons.map { button in
+            let aligned = button.alignmentRect(forFrame: button.frame)
+            return button.superview!.convert(aligned, to: confirmation.window.contentView)
+        }
         try expect(confirmation.buttons.allSatisfy { $0.image != nil }
                    && frames.allSatisfy { $0.width > 40 && $0.height > 15 }
                    && frames.allSatisfy { abs($0.midY - frames[0].midY) < 1 }
