@@ -159,12 +159,13 @@ extension PreviewStoreChecks {
         text.scrollRangeToVisible(NSRange(location: (text.string as NSString).length - 1, length: 1))
         try expect(scroll.contentView.bounds.minY > 0 && scroll.frame.height == 240,
                    "RAW confirmation scrolls to the final file while keeping the list height fixed")
-        let frames = confirmation.buttons.map(\.frame)
+        // AppKit may insert different stack containers across macOS versions.
+        let frames = confirmation.buttons.map { $0.convert($0.bounds, to: confirmation.window.contentView) }
         try expect(confirmation.buttons.allSatisfy { $0.image != nil }
                    && frames.allSatisfy { $0.width > 40 && $0.height > 15 }
                    && frames.allSatisfy { abs($0.midY - frames[0].midY) < 1 }
                    && zip(frames, frames.dropFirst()).allSatisfy { $0.maxX <= $1.minX },
-                   "RAW confirmation keeps all three icon buttons in one horizontal row")
+                   "RAW confirmation keeps all three icon buttons in one horizontal row; images=\(confirmation.buttons.map { $0.image != nil }), frames=\(frames)")
         if let path = ProcessInfo.processInfo.environment["PHOTO_RAW_CONFIRMATION_SNAPSHOT"],
            let view = confirmation.window.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
             view.cacheDisplay(in: view.bounds, to: bitmap)

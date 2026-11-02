@@ -375,7 +375,7 @@ extension RawRetentionPlan {
         row.orientation = .horizontal
         row.spacing = 12
         row.alignment = .centerY
-        for (index, symbol) in ["xmark", "folder.badge.minus", "trash"].enumerated() {
+        for (index, symbol) in ["xmark", "folder", "trash"].enumerated() {
             let button = buttons[index]
             button.bezelStyle = .rounded
             button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: button.title)
