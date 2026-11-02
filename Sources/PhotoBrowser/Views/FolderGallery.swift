@@ -79,6 +79,9 @@ struct FolderCard: View {
                     }.labelStyle(.titleAndIcon).help(L10n.text("排除此文件夹及所有子文件夹，保留照片和已有 AI 信息"))
                 }
                 Divider()
+                Button(L10n.text("仅保留 RAW…"), systemImage: "camera") {
+                    store.confirmKeepRaw(in: url)
+                }.labelStyle(.titleAndIcon).disabled(!store.canKeepRaw(in: url))
                 Button(role: .destructive) { confirmDelete = true } label: {
                     Label(L10n.text("删除文件夹…"), systemImage: "trash")
                 }.labelStyle(.titleAndIcon).disabled(!store.canDeleteFolder(url))

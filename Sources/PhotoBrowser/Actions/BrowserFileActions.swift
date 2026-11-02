@@ -187,3 +187,306 @@ extension BrowserStore {
     }
 
 }
+
+/// A confirmed snapshot: only rendered companions of an existing RAW are eligible.
+enum RawRetentionAction: Sendable {
+    case moveToDel
+    case permanentDelete
+}
+
+struct RawRetentionPlan: Sendable {
+    let root: URL
+    let sourceRoot: URL
+    let moves: [ArchivePlan]
+    let rawFiles: [PhotoFile]
+    var fileCount: Int { moves.reduce(0) { $0 + $1.fileCount } }
+    var totalBytes: Int64 { moves.reduce(0) { $0 + $1.totalBytes } }
+
+    static func prepare(in folder: URL, sessions: BrowserSessionRepository) throws -> Self {
+        let root = folder.standardizedFileURL
+        try validateDirectory(root, under: root)
+        let sourceRoot = root.resolvingSymlinksInPath()
+        var moves: [ArchivePlan] = [], rawFiles: [PhotoFile] = []
+        var pending = [sourceRoot]
+        while let directory = pending.popLast() {
+            try validateDirectory(directory, under: sourceRoot)
+            let assets = try DirectoryScanner.scan(directory)
+            var companions: [PhotoAsset] = []
+            for asset in assets {
+                let regular = try asset.files.filter {
+                    try FileManager.default.attributesOfItem(atPath: $0.url.path)[.type] as? FileAttributeType == .typeRegular
+                }
+                let raws = regular.filter { $0.kind == .raw }
+                let rendered = regular.filter { $0.kind == .rendered }
+                guard !raws.isEmpty, !rendered.isEmpty else { continue }
+                // Scanner families are case insensitive, but links must never qualify as RAW originals.
+                for file in raws + rendered { try validate(file) }
+                rawFiles.append(contentsOf: raws)
+                companions.append(PhotoAsset(id: asset.id, name: asset.name, files: rendered))
+            }
+            if !companions.isEmpty {
+                let groups = try sessions.restore(assets, in: directory).groups
+                moves.append(try ArchivePlan.pendingDeletion(directory: directory, assets: companions, groups: groups))
+            }
+            for child in try FileManager.default.contentsOfDirectory(at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], options: [.skipsHiddenFiles]) {
+                let values = try child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                if values.isDirectory == true, values.isSymbolicLink != true, child.lastPathComponent.lowercased() != "_del" {
+                    pending.append(child)
+                }
+            }
+        }
+        return Self(root: root, sourceRoot: sourceRoot, moves: moves, rawFiles: rawFiles)
+    }
+
+    func execute(using engine: ArchiveEngine, action: RawRetentionAction = .moveToDel) throws {
+        // Check the entire confirmed batch before changing its first file.
+        try Self.validateDirectory(root, under: root)
+        guard root.resolvingSymlinksInPath() == sourceRoot else {
+            throw BrowserFailure.message(L10n.text("只能处理所选文件夹内的普通目录。"))
+        }
+        for move in moves {
+            try Self.validateDirectory(move.record.sourceDirectory, under: sourceRoot)
+            if action == .moveToDel {
+                let destination = move.record.destination
+                let destinationAttributes: [FileAttributeKey: Any]?
+                do { destinationAttributes = try FileManager.default.attributesOfItem(atPath: destination.path) }
+                catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
+                    destinationAttributes = nil
+                }
+                if let destinationAttributes {
+                    guard destinationAttributes[.type] as? FileAttributeType == .typeDirectory else {
+                        throw BrowserFailure.message(L10n.text("_del 必须是当前目录下的普通文件夹，不能是文件或符号链接。"))
+                    }
+                    let names = Set(try FileManager.default.contentsOfDirectory(atPath: destination.path).map { $0.lowercased() })
+                    guard move.record.entries.allSatisfy({ !names.contains($0.destination.lastPathComponent.lowercased()) }) else {
+                        throw BrowserFailure.message(L10n.text("目标文件已存在：\(destination.path)"))
+                    }
+                }
+            }
+            for entry in move.record.entries {
+                try Self.validate(PhotoFile(url: entry.source, kind: .rendered, size: entry.size, modified: entry.modified))
+            }
+        }
+        for file in rawFiles { try Self.validate(file) }
+        let originalsByDirectory = Dictionary(grouping: rawFiles) { $0.url.deletingLastPathComponent().standardizedFileURL }
+        for move in moves {
+            try Self.validateDirectory(move.record.sourceDirectory, under: sourceRoot)
+            for file in originalsByDirectory[move.record.sourceDirectory] ?? [] {
+                try Self.validate(file)
+            }
+            switch action {
+            case .moveToDel:
+                _ = try engine.archive(move)
+            case .permanentDelete:
+                let files = move.record.entries.map { PhotoFile(url: $0.source, kind: .rendered, size: $0.size, modified: $0.modified) }
+                try FileDeletionService.removeMedia(files, from: move.record.sourceDirectory)
+            }
+        }
+    }
+
+    private static func validate(_ file: PhotoFile) throws {
+        let attributes = try FileManager.default.attributesOfItem(atPath: file.url.path)
+        guard attributes[.type] as? FileAttributeType == .typeRegular,
+              (attributes[.size] as? NSNumber)?.int64Value == file.size,
+              let date = attributes[.modificationDate] as? Date, abs(date.timeIntervalSince(file.modified)) < 1 else {
+            throw BrowserFailure.message(L10n.text("文件已变化或不是普通文件，请重新扫描：\(file.url.lastPathComponent)"))
+        }
+    }
+
+    private static func validateDirectory(_ directory: URL, under root: URL) throws {
+        var current = directory.standardizedFileURL
+        guard current == root || current.path.hasPrefix(root.path + "/") else {
+            throw BrowserFailure.message(L10n.text("只能处理所选文件夹内的普通目录。"))
+        }
+        while true {
+            let attributes = try FileManager.default.attributesOfItem(atPath: current.path)
+            guard attributes[.type] as? FileAttributeType == .typeDirectory,
+                  current.lastPathComponent.lowercased() != "_del",
+                  !current.lastPathComponent.hasPrefix(".") else {
+                throw BrowserFailure.message(L10n.text("只能处理所选文件夹内的普通目录。"))
+            }
+            if current == root { break }
+            current.deleteLastPathComponent()
+        }
+    }
+}
+
+extension RawRetentionPlan {
+    @MainActor func confirmationPanel() -> RawRetentionConfirmation {
+        let title = L10n.text("仅保留“\(root.lastPathComponent)”中的 RAW？")
+        let message = L10n.text("将递归清理此文件夹中有同名 RAW 的 JPG、HIF 等照片。\n移到 _del：可在移动记录中撤销。\n直接删除：永久删除，不经过废纸篓，无法撤销。\n保留 RAW、XMP、视频和没有 RAW 的照片，跳过 _del、隐藏目录及符号链接。\n文件：\(fileCount) 个 · \(ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file))\n路径：\(root.path)")
+
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 580, height: 240))
+        scroll.borderType = .bezelBorder
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.autohidesScrollers = false
+        let width = scroll.contentSize.width
+        let text = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: 240))
+        text.isEditable = false
+        text.isSelectable = true
+        text.isRichText = false
+        text.isVerticallyResizable = true
+        text.isHorizontallyResizable = false
+        text.autoresizingMask = [.width]
+        text.minSize = NSSize(width: 0, height: 240)
+        text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        text.textContainerInset = NSSize(width: 8, height: 8)
+        text.textContainer?.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+        text.textContainer?.widthTracksTextView = true
+        text.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        text.textColor = .labelColor
+        text.backgroundColor = .textBackgroundColor
+        text.setAccessibilityLabel(L10n.text("待清理文件列表"))
+        text.string = moves.flatMap { $0.record.entries }.map { $0.source.path }.joined(separator: "\n")
+        scroll.documentView = text
+        if let container = text.textContainer, let layout = text.layoutManager {
+            layout.ensureLayout(for: container)
+            text.setFrameSize(NSSize(width: width, height: max(240, ceil(layout.usedRect(for: container).height) + 16)))
+        }
+        return RawRetentionConfirmation(title: title, message: message, fileList: scroll)
+    }
+}
+
+@MainActor final class RawRetentionConfirmation: NSObject, NSWindowDelegate {
+    let window: NSPanel
+    let fileList: NSScrollView
+    let buttons: [NSButton]
+
+    init(title: String, message: String, fileList: NSScrollView) {
+        window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 620, height: 600),
+                         styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        self.fileList = fileList
+        let cancel = NSButton(title: L10n.text("取消"), target: nil, action: nil)
+        let move = NSButton(title: L10n.text("移到 _del"), target: nil, action: nil)
+        let delete = NSButton(title: L10n.text("直接删除（不可撤销）"), target: nil, action: nil)
+        buttons = [cancel, move, delete]
+        super.init()
+        window.title = L10n.text("仅保留 RAW…")
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        let heading = NSTextField(wrappingLabelWithString: title)
+        heading.font = .boldSystemFont(ofSize: 15)
+        let explanation = NSTextField(wrappingLabelWithString: message)
+        explanation.font = .systemFont(ofSize: 13)
+        explanation.isSelectable = true
+        let row = NSStackView(views: [NSView(), cancel, move, delete])
+        row.orientation = .horizontal
+        row.spacing = 12
+        row.alignment = .centerY
+        for (index, symbol) in ["xmark", "folder.badge.minus", "trash"].enumerated() {
+            let button = buttons[index]
+            button.bezelStyle = .rounded
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: button.title)
+            button.imagePosition = .imageLeading
+            button.imageHugsTitle = true
+            button.tag = index
+            button.target = self
+            button.action = #selector(choose(_:))
+            button.setContentHuggingPriority(.required, for: .horizontal)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        }
+        cancel.keyEquivalent = "\u{1b}"
+        cancel.keyEquivalentModifierMask = []
+        move.contentTintColor = .systemBlue
+        delete.contentTintColor = .systemRed
+        let content = NSStackView(views: [heading, explanation, fileList, row])
+        content.orientation = .vertical
+        content.alignment = .leading
+        content.spacing = 16
+        content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        for view in [heading, explanation, fileList, row] {
+            view.widthAnchor.constraint(equalToConstant: 580).isActive = true
+        }
+        fileList.heightAnchor.constraint(equalToConstant: 240).isActive = true
+        window.contentView = content
+        window.setContentSize(content.fittingSize)
+        content.layoutSubtreeIfNeeded()
+    }
+
+    func present(attachedTo parent: NSWindow?, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+        if let parent, parent.attachedSheet == nil {
+            parent.beginSheet(window) { [self] response in
+                window.orderOut(nil)
+                completion(response)
+            }
+        } else {
+            window.center()
+            let response = NSApp.runModal(for: window)
+            window.orderOut(nil)
+            completion(response)
+        }
+    }
+
+    @objc private func choose(_ sender: NSButton) {
+        finish(NSApplication.ModalResponse(rawValue: NSApplication.ModalResponse.alertFirstButtonReturn.rawValue + sender.tag))
+    }
+
+    private func finish(_ response: NSApplication.ModalResponse) {
+        if let parent = window.sheetParent { parent.endSheet(window, returnCode: response) }
+        else { NSApp.stopModal(withCode: response) }
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        finish(.alertFirstButtonReturn)
+        return false
+    }
+}
+
+extension BrowserStore {
+    func canKeepRaw(in folder: URL) -> Bool {
+        canDeleteFolder(folder) && !folder.pathComponents.contains { $0.lowercased() == "_del" }
+    }
+
+    func confirmKeepRaw(in folder: URL) {
+        guard canKeepRaw(in: folder) else { return }
+        isMoving = true; errorMessage = nil
+        status = L10n.text("正在检查 RAW 配套文件…")
+        let repository = sessions
+        Task {
+            do {
+                let plan = try await Task.detached(priority: .userInitiated) {
+                    try RawRetentionPlan.prepare(in: folder, sessions: repository)
+                }.value
+                isMoving = false
+                guard plan.fileCount > 0 else { status = L10n.text("没有可清理的 RAW 配套照片。"); return }
+                let confirmation = plan.confirmationPanel()
+                let commit: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+                    if response == .alertSecondButtonReturn { self?.keepRaw(plan, confirmed: true) }
+                    else if response == .alertThirdButtonReturn { self?.keepRaw(plan, action: .permanentDelete, confirmed: true) }
+                    else { self?.status = L10n.text("已取消。") }
+                }
+                confirmation.present(attachedTo: NSApp.keyWindow, completion: commit)
+            } catch { isMoving = false; status = L10n.text("RAW 配套文件检查失败。"); report(error) }
+        }
+    }
+
+    func keepRaw(_ plan: RawRetentionPlan, action: RawRetentionAction = .moveToDel, confirmed: Bool = false) {
+        guard confirmed else { return }
+        guard canKeepRaw(in: plan.root) else {
+            report(BrowserFailure.message(L10n.text("当前无法处理该文件夹，请刷新后重试。"))); return
+        }
+        cancelPreviewGeneration(stopVideo: false); stopDirectoryObservation()
+        isMoving = true; errorMessage = nil
+        status = action == .moveToDel ? L10n.text("正在移到 _del，请勿退出…") : L10n.text("正在永久删除文件，请勿退出…")
+        let worker = engine
+        Task {
+            var failure: Error?
+            do { try await Task.detached(priority: .userInitiated) { try plan.execute(using: worker, action: action) }.value }
+            catch { failure = error }
+            await invalidateFolderCaches([plan.root], descendants: true)
+            refreshHistory(); isMoving = false
+            if let failure {
+                status = action == .moveToDel ? L10n.text("RAW 清理未全部完成，请检查文件和移动记录。")
+                    : L10n.text("RAW 清理未全部完成，请检查剩余文件。")
+                report(failure)
+            } else {
+                status = action == .moveToDel ? L10n.text("已将 \(plan.fileCount) 个 RAW 配套照片移到 _del，可在移动记录中撤销")
+                    : L10n.text("已永久删除 \(plan.fileCount) 个 RAW 配套照片")
+            }
+            if monitoringEnabled { startDirectoryObservation() }
+            startPreviewGeneration()
+        }
+    }
+}
